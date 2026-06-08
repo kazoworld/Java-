@@ -21,10 +21,15 @@ Pods/
 # macOS
 .DS_Store
 
-# Fastlane
+# Fastlane / Ruby
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
+fastlane/.env*
+vendor/bundle/
+.bundle/
+*.ipa
+*.dSYM.zip
 
 # Misc
 *.log

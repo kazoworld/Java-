@@ -1,5 +1,7 @@
 # Ultrafin
 
+[![CI](https://github.com/kazoworld/Java-/actions/workflows/ci.yml/badge.svg)](https://github.com/kazoworld/Java-/actions/workflows/ci.yml)
+
 An ultra-modern, buttery-smooth **Jellyfin** client for **iOS** and **tvOS**.
 
 Ultrafin pairs a clean SwiftUI interface with a **hybrid playback core** —
@@ -85,10 +87,10 @@ open Ultrafin.xcodeproj
 #    then select the Ultrafin-iOS or Ultrafin-tvOS scheme and run.
 ```
 
-Swift Package dependencies (`jellyfin-sdk-swift`, `VLCKit`) resolve on first
-build. If you build **without** VLCKit, the app still compiles and runs on the
-native AVPlayer path — the hybrid coordinator detects VLCKit's absence and stays
-on AVPlayer.
+The project builds with **no external dependencies** by default, so a clean
+checkout compiles immediately. The VLCKit fallback engine is an opt-in (see
+below); without it the hybrid player runs on the native AVPlayer path — the
+coordinator detects VLCKit's absence and stays on AVPlayer.
 
 ### On first launch
 
@@ -106,6 +108,50 @@ Settings → live, app-wide:
 | Appearance | Theme (system/dark/light), rich motion & parallax, 5 accent colors |
 | Playback | Engine policy (Hybrid/Native/VLCKit), auto-resume, skip interval, max buffer |
 | Account | Signed-in user, server info, sign out |
+
+## Continuous integration
+
+`.github/workflows/ci.yml` builds **both** the iOS and tvOS targets on every
+push and PR (simulator builds, no signing/secrets). It generates the project
+with XcodeGen and runs `xcodebuild` per platform, so compile breakage is caught
+automatically — including on the open PR.
+
+## Shipping to TestFlight
+
+Release automation lives in `fastlane/` and `.github/workflows/testflight.yml`
+(a manual **workflow_dispatch** — choose iOS, tvOS, or both). Both apps ship
+under one App Store Connect record (shared bundle id `com.ultrafin.app`).
+
+It uses an **App Store Connect API key** for auth (no Apple ID/2FA in CI) and
+[`match`](https://docs.fastlane.tools/actions/match/) for code signing. Add
+these as repository secrets to arm it:
+
+| Secret | Purpose |
+|--------|---------|
+| `APP_STORE_CONNECT_KEY_ID` / `APP_STORE_CONNECT_ISSUER_ID` / `APP_STORE_CONNECT_KEY_CONTENT` | App Store Connect API key (`.p8` base64-encoded) |
+| `MATCH_GIT_URL` / `MATCH_PASSWORD` / `MATCH_GIT_BASIC_AUTHORIZATION` | `match` certificate repo + access |
+| `DEVELOPMENT_TEAM` / `APP_STORE_CONNECT_TEAM_ID` / `FASTLANE_APPLE_ID` | Team + account identifiers |
+
+One-time setup on a Mac:
+
+```bash
+bundle install
+bundle exec fastlane match appstore        # create signing assets
+# Create the app record (iOS + tvOS) in App Store Connect, then:
+bundle exec fastlane ios beta              # or: tvos beta
+```
+
+## Enabling the VLCKit fallback
+
+The hybrid player's VLCKit path is gated behind `#if canImport(VLCKit)`, so it
+activates automatically once the package is linked — no code changes:
+
+1. In `project.yml`, uncomment the `packages:` block and the per-target
+   `dependencies:` entries (confirm the VLCKit package URL/version for your
+   Xcode toolchain first).
+2. `xcodegen generate` and rebuild.
+
+Settings → Playback then offers the full Hybrid / Native / VLCKit policy.
 
 ## Notes & next steps
 

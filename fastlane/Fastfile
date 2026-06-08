@@ -1,0 +1,89 @@
+default_platform(:ios)
+
+# Ultrafin release automation.
+#
+# Both apps (iOS + tvOS) build from the XcodeGen-generated project and upload to
+# the same TestFlight app record. Authentication uses an App Store Connect API
+# key (no Apple ID password / 2FA needed in CI), and code signing uses `match`.
+#
+# Required environment / CI secrets:
+#   APP_STORE_CONNECT_KEY_ID          App Store Connect API key id
+#   APP_STORE_CONNECT_ISSUER_ID       API key issuer id
+#   APP_STORE_CONNECT_KEY_CONTENT     base64-encoded .p8 key contents
+#   MATCH_GIT_URL                     git repo holding signing certs/profiles
+#   MATCH_PASSWORD                    passphrase for the match repo
+#   MATCH_GIT_BASIC_AUTHORIZATION     base64 "user:token" for the match repo
+#   DEVELOPMENT_TEAM                  Apple Developer Team ID
+#
+# Usage:
+#   bundle exec fastlane ios beta
+#   bundle exec fastlane tvos beta
+
+PROJECT = "Ultrafin.xcodeproj".freeze
+BUNDLE_ID = ENV["ULTRAFIN_BUNDLE_ID"] || "com.ultrafin.app"
+
+def app_store_api_key
+  app_store_connect_api_key(
+    key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+    issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+    key_content: ENV["APP_STORE_CONNECT_KEY_CONTENT"],
+    is_key_content_base64: true,
+    in_house: false
+  )
+end
+
+# Regenerate the Xcode project so the lane is reproducible from a clean checkout.
+def regenerate_project
+  sh("command -v xcodegen >/dev/null 2>&1 || brew install xcodegen")
+  sh("cd .. && xcodegen generate")
+end
+
+before_all do
+  regenerate_project
+end
+
+platform :ios do
+  desc "Build and upload the iOS app to TestFlight"
+  lane :beta do
+    api_key = app_store_api_key
+
+    match(type: "appstore", app_identifier: BUNDLE_ID, readonly: true, platform: "ios")
+
+    increment_build_number(
+      build_number: ENV["GITHUB_RUN_NUMBER"] || Time.now.strftime("%Y%m%d%H%M"),
+      xcodeproj: PROJECT
+    )
+
+    build_app(
+      project: PROJECT,
+      scheme: "Ultrafin-iOS",
+      export_method: "app-store",
+      destination: "generic/platform=iOS"
+    )
+
+    upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
+  end
+end
+
+platform :tvos do
+  desc "Build and upload the tvOS app to TestFlight"
+  lane :beta do
+    api_key = app_store_api_key
+
+    match(type: "appstore", app_identifier: BUNDLE_ID, readonly: true, platform: "tvos")
+
+    increment_build_number(
+      build_number: ENV["GITHUB_RUN_NUMBER"] || Time.now.strftime("%Y%m%d%H%M"),
+      xcodeproj: PROJECT
+    )
+
+    build_app(
+      project: PROJECT,
+      scheme: "Ultrafin-tvOS",
+      export_method: "app-store",
+      destination: "generic/platform=tvOS"
+    )
+
+    upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
+  end
+end

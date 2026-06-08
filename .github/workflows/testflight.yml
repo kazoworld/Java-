@@ -1,0 +1,52 @@
+name: TestFlight
+
+# Manual release to TestFlight. Pick iOS, tvOS, or both. This workflow is inert
+# until the signing + App Store Connect secrets below are configured in the
+# repository settings (see README "Shipping to TestFlight").
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Which app(s) to release"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - ios
+          - tvos
+
+jobs:
+  deploy:
+    name: Deploy ${{ matrix.platform }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ github.event.inputs.platform == 'both' && fromJSON('["ios","tvos"]') || fromJSON(format('["{0}"]', github.event.inputs.platform)) }}
+    env:
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+      DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+      FASTLANE_APPLE_ID: ${{ secrets.FASTLANE_APPLE_ID }}
+      APP_STORE_CONNECT_TEAM_ID: ${{ secrets.APP_STORE_CONNECT_TEAM_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Release ${{ matrix.platform }} to TestFlight
+        run: bundle exec fastlane ${{ matrix.platform }} beta
