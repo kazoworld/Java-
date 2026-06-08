@@ -17,24 +17,47 @@ struct MediaRail: View {
                 .padding(.horizontal, Spacing.lg)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: Spacing.md) {
+                LazyHStack(spacing: railSpacing) {
                     ForEach(items) { item in
                         NavigationLink(value: item) {
                             MediaCard(item: item, style: style)
                         }
-                        .buttonStyle(.plain)
+                        .mediaCardButtonStyle()
                     }
                 }
                 .padding(.horizontal, Spacing.lg)
+                // Breathing room so focus-scaled cards never clip on tvOS.
+                .padding(.vertical, focusInset)
             }
             .scrollClipDisabled()
         }
+    }
+
+    // tvOS focus scaling needs extra spacing/padding so neighbouring cards and
+    // row edges don't clip the lifted card.
+    private var railSpacing: CGFloat {
+        #if os(tvOS)
+        Spacing.xl
+        #else
+        Spacing.md
+        #endif
+    }
+
+    private var focusInset: CGFloat {
+        #if os(tvOS)
+        Spacing.xl
+        #else
+        0
+        #endif
     }
 }
 
 /// A single tappable media card with artwork, title, and resume progress.
 struct MediaCard: View {
     @Environment(AppState.self) private var appState
+    // On tvOS this reflects the focus of the enclosing card button, so the card
+    // can light up under the focus engine. Always false on iOS.
+    @Environment(\.isFocused) private var isFocused
 
     let item: MediaItem
     var style: MediaRail.Style = .poster
@@ -68,22 +91,24 @@ struct MediaCard: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                    .strokeBorder(isFocused ? UltrafinColors.accent : Color.white.opacity(0.06),
+                                  lineWidth: isFocused ? 3 : 1)
             )
 
             Text(item.name)
                 .font(Typography.cardTitle)
-                .foregroundStyle(UltrafinColors.primaryText)
+                .foregroundStyle(isFocused ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
                 .lineLimit(1)
             if let subtitle {
                 Text(subtitle)
                     .font(Typography.caption)
-                    .foregroundStyle(UltrafinColors.secondaryText)
+                    .foregroundStyle(UltrafinColors.tertiaryText)
                     .lineLimit(1)
             }
         }
         .frame(width: width)
         .contentShape(Rectangle())
+        .animation(.smooth(duration: 0.2), value: isFocused)
     }
 
     private var subtitle: String? {

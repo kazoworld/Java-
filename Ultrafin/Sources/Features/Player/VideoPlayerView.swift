@@ -14,6 +14,13 @@ struct VideoPlayerView: View {
     @State private var model: VideoPlayerViewModel?
     @State private var controlsVisible = true
     @State private var hideTask: Task<Void, Never>?
+    /// Transient skip amount for the tvOS scrub feedback chip.
+    @State private var skipFeedback: Int?
+    @State private var skipFeedbackTask: Task<Void, Never>?
+
+    #if os(tvOS)
+    @FocusState private var surfaceFocused: Bool
+    #endif
 
     var body: some View {
         ZStack {
@@ -28,19 +35,25 @@ struct VideoPlayerView: View {
                 if let error = model.errorMessage {
                     errorOverlay(error)
                 } else if controlsVisible {
-                    PlayerControlsView(model: model, onClose: close)
+                    PlayerControlsView(model: model, onClose: close, skipFeedback: skipFeedback)
                         .transition(.opacity)
                 }
             } else {
                 ProgressView().tint(.white)
             }
         }
-        #if os(iOS)
-        .statusBarHidden()
-        .persistentSystemOverlays(.hidden)
+        .modifier(PlayerInteraction(
+            seekInterval: seekInterval,
+            onTap: { toggleControls() },
+            onPlayPause: { togglePlayPause() },
+            onExit: { close() },
+            onSkip: { seconds in scrub(by: seconds) }
+        ))
+        #if os(tvOS)
+        .focusable()
+        .focused($surfaceFocused)
+        .onAppear { surfaceFocused = true }
         #endif
-        .contentShape(Rectangle())
-        .onTapGesture { toggleControls() }
         .task { await startIfNeeded() }
         .onChange(of: model?.state.status) { _, status in
             if status == .ended { close() }
@@ -48,6 +61,29 @@ struct VideoPlayerView: View {
         .onAppear { scheduleHide() }
         .onDisappear { model?.stop() }
         .animation(.smooth(duration: 0.25), value: controlsVisible)
+        .animation(.smooth(duration: 0.2), value: skipFeedback)
+    }
+
+    private func togglePlayPause() {
+        model?.togglePlayPause()
+        showControlsTemporarily()
+    }
+
+    /// Skips and flashes the feedback chip (used by the tvOS remote).
+    private func scrub(by seconds: Double) {
+        model?.skip(by: seconds)
+        showControlsTemporarily()
+        skipFeedback = Int(seconds)
+        skipFeedbackTask?.cancel()
+        skipFeedbackTask = Task {
+            try? await Task.sleep(for: .seconds(1))
+            if !Task.isCancelled { skipFeedback = nil }
+        }
+    }
+
+    private func showControlsTemporarily() {
+        controlsVisible = true
+        scheduleHide()
     }
 
     /// Builds the view model once, using the live client from the environment,
@@ -79,6 +115,8 @@ struct VideoPlayerView: View {
         .padding(Spacing.xl)
     }
 
+    private var seekInterval: Double { model?.seekInterval ?? 15 }
+
     private func toggleControls() {
         controlsVisible.toggle()
         if controlsVisible { scheduleHide() }
@@ -97,6 +135,45 @@ struct VideoPlayerView: View {
     private func close() {
         model?.stop()
         dismiss()
+    }
+}
+
+/// Platform-specific player input.
+///
+/// - **tvOS:** maps the Siri Remote to playback — Play/Pause button toggles,
+///   the Menu button exits, left/right swipes scrub, and a click toggles
+///   playback. This is the focus-engine-native model that makes Apple TV
+///   playback feel right (and that touch-port clients get wrong).
+/// - **iOS:** a tap toggles the controls; the on-screen buttons/scrubber do the
+///   rest. Also hides the status bar and home indicator during playback.
+private struct PlayerInteraction: ViewModifier {
+    let seekInterval: Double
+    let onTap: () -> Void
+    let onPlayPause: () -> Void
+    let onExit: () -> Void
+    let onSkip: (Double) -> Void
+
+    func body(content: Content) -> some View {
+        #if os(tvOS)
+        content
+            .contentShape(Rectangle())
+            .onTapGesture { onTap() }
+            .onPlayPauseCommand { onPlayPause() }
+            .onExitCommand { onExit() }
+            .onMoveCommand { direction in
+                switch direction {
+                case .left: onSkip(-seekInterval)
+                case .right: onSkip(seekInterval)
+                default: break
+                }
+            }
+        #else
+        content
+            .contentShape(Rectangle())
+            .onTapGesture { onTap() }
+            .statusBarHidden()
+            .persistentSystemOverlays(.hidden)
+        #endif
     }
 }
 

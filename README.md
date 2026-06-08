@@ -26,7 +26,12 @@ playback engine policy.
 - **Core flows** — server discovery → sign in → Home (Continue Watching /
   Recently Added / Libraries) → library browse → item detail → playback with
   resume + progress reporting.
-- **iOS + tvOS** from one shared codebase.
+- **tvOS focus-engine native** — focusable poster cards that lift/scale/glow
+  under the Siri Remote, and a player driven entirely by the remote (Play/Pause
+  toggles, Menu exits, swipe ◀ ▶ scrubs, click toggles). The thing Swiftfin
+  does well and touch-port clients get wrong — plus the customization Swiftfin
+  lacks.
+- **iOS + tvOS** from one shared codebase with per-platform interaction models.
 
 ## Architecture
 
@@ -106,8 +111,9 @@ Settings → live, app-wide:
 
 - **App icons** are placeholders (empty image slots). Drop artwork into
   `Ultrafin/Resources/Assets.xcassets` before shipping.
-- **tvOS controls** currently use the touch/drag scrubber; focus-engine
-  remote navigation for the transport is a natural follow-up.
+- **tvOS** uses the focus engine for browsing and the Siri Remote for playback
+  (Play/Pause, Menu, swipe-to-scrub, click). Continuous hold-to-scrub with a
+  thumbnail preview is a nice future enhancement.
 - Episode/season hierarchy, search, subtitle/audio track selection, and
   Chromecast are scoped for future iterations.
 

@@ -32,7 +32,7 @@ struct LibraryRootView: View {
                     NavigationLink(value: library) {
                         MediaCard(item: library, style: .poster)
                     }
-                    .buttonStyle(.plain)
+                    .mediaCardButtonStyle()
                 }
             }
             .padding(Spacing.lg)
@@ -78,7 +78,7 @@ struct LibraryContentsView: View {
                         NavigationLink(value: item) {
                             MediaCard(item: item, style: .poster)
                         }
-                        .buttonStyle(.plain)
+                        .mediaCardButtonStyle()
                     }
                 }
                 .padding(Spacing.lg)

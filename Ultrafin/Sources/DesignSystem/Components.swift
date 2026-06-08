@@ -48,7 +48,7 @@ struct PrimaryButton: View {
             .background(settings.theme.accent.color, in: RoundedRectangle(cornerRadius: Spacing.md, style: .continuous))
             .foregroundStyle(.white)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
         .disabled(isLoading)
     }
 }
