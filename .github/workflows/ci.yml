@@ -16,7 +16,8 @@ concurrency:
 jobs:
   build:
     name: Build ${{ matrix.platform }}
-    runs-on: macos-14
+    # macos-15 ships Xcode 16, which can read the project format XcodeGen emits.
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
