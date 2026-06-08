@@ -55,6 +55,7 @@ struct MediaRail: View {
 /// A single tappable media card with artwork, title, and resume progress.
 struct MediaCard: View {
     @Environment(AppState.self) private var appState
+    @Environment(SettingsStore.self) private var settings
     // On tvOS this reflects the focus of the enclosing card button, so the card
     // can light up under the focus engine. Always false on iOS.
     @Environment(\.isFocused) private var isFocused
@@ -64,7 +65,10 @@ struct MediaCard: View {
 
     @ScaledMetric private var posterWidth: CGFloat = 130
 
-    private var width: CGFloat { style == .poster ? posterWidth : posterWidth * 1.6 }
+    private var width: CGFloat {
+        let base = style == .poster ? posterWidth : posterWidth * 1.6
+        return base * settings.appearance.cardDensity.scale
+    }
     private var height: CGFloat { style == .poster ? width * 1.5 : width * 9 / 16 }
 
     var body: some View {

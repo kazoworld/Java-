@@ -18,17 +18,35 @@ final class SettingsStore {
     var playback: PlaybackPreferences {
         didSet { persist(playback, key: Keys.playback) }
     }
+    var homeLayout: HomeLayoutPreferences {
+        didSet { persist(homeLayout, key: Keys.homeLayout) }
+    }
 
     private enum Keys {
         static let theme = "settings.theme"
         static let appearance = "settings.appearance"
         static let playback = "settings.playback"
+        static let homeLayout = "settings.homeLayout"
     }
 
     private init() {
         theme = Self.load(Keys.theme) ?? ThemePreferences()
         appearance = Self.load(Keys.appearance) ?? AppearancePreferences()
         playback = Self.load(Keys.playback) ?? PlaybackPreferences()
+        var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
+        layout.normalize() // pick up any rows added in newer versions
+        homeLayout = layout
+    }
+
+    // MARK: - Home layout mutations
+
+    /// Moves a row up or down in the Home order (used by the reorder controls,
+    /// which work on tvOS where drag-to-reorder isn't available).
+    func moveHomeRow(_ kind: HomeRowKind, up: Bool) {
+        guard let i = homeLayout.rows.firstIndex(where: { $0.kind == kind }) else { return }
+        let j = up ? i - 1 : i + 1
+        guard homeLayout.rows.indices.contains(j) else { return }
+        homeLayout.rows.swapAt(i, j)
     }
 
     private func persist<T: Encodable>(_ value: T, key: String) {
@@ -61,11 +79,84 @@ struct AppearancePreferences: Codable {
     /// prefer reduced motion or want maximum battery/perf headroom.
     var richMotion: Bool = true
 
+    /// Controls how large poster/landscape cards render across the app.
+    var cardDensity: CardDensity = .regular
+
     var colorScheme: ColorScheme? {
         switch mode {
         case .system: nil
         case .dark: .dark
         case .light: .light
+        }
+    }
+}
+
+/// Relative sizing for media cards, applied app-wide.
+enum CardDensity: String, Codable, CaseIterable, Identifiable {
+    case compact, regular, large
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+    /// Multiplier applied to the base card width.
+    var scale: CGFloat {
+        switch self {
+        case .compact: 0.82
+        case .regular: 1.0
+        case .large: 1.22
+        }
+    }
+}
+
+// MARK: - Home layout
+
+/// The kinds of rows that can appear on Home, in their default order.
+enum HomeRowKind: String, Codable, CaseIterable, Identifiable {
+    case featured
+    case continueWatching
+    case recentlyAdded
+    case libraries
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .featured: "Featured Banner"
+        case .continueWatching: "Continue Watching"
+        case .recentlyAdded: "Recently Added"
+        case .libraries: "Your Libraries"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .featured: "rectangle.on.rectangle.angled"
+        case .continueWatching: "play.circle"
+        case .recentlyAdded: "sparkles"
+        case .libraries: "square.stack"
+        }
+    }
+}
+
+struct HomeRowConfig: Codable, Identifiable, Equatable {
+    var kind: HomeRowKind
+    var isEnabled: Bool
+    var id: HomeRowKind { kind }
+}
+
+/// Ordered, toggleable set of Home rows.
+struct HomeLayoutPreferences: Codable {
+    var rows: [HomeRowConfig]
+
+    init() {
+        rows = HomeRowKind.allCases.map { HomeRowConfig(kind: $0, isEnabled: true) }
+    }
+
+    /// Ensures the stored list contains every known row exactly once, appending
+    /// any newly-added kinds and dropping unknown ones (forward/backward compat).
+    mutating func normalize() {
+        var seen = Set<HomeRowKind>()
+        rows = rows.filter { seen.insert($0.kind).inserted }
+        for kind in HomeRowKind.allCases where !seen.contains(kind) {
+            rows.append(HomeRowConfig(kind: kind, isEnabled: true))
         }
     }
 }

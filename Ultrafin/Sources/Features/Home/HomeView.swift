@@ -59,17 +59,12 @@ struct HomeView: View {
                 if model.isLoading {
                     loadingRows
                 } else {
-                    if !featured.isEmpty {
-                        FeaturedHero(items: featured) { item in playingItem = item }
-                    }
-                    if !model.resume.isEmpty {
-                        MediaRail(title: "Continue Watching", items: model.resume, style: .landscape)
-                    }
-                    if !model.latest.isEmpty {
-                        MediaRail(title: "Recently Added", items: model.latest, style: .poster)
-                    }
-                    if !model.libraries.isEmpty {
-                        MediaRail(title: "Your Libraries", items: model.libraries, style: .poster)
+                    // Rows render in the user's configured order, skipping any
+                    // they've disabled or that have no content.
+                    ForEach(settings.homeLayout.rows) { config in
+                        if config.isEnabled {
+                            row(for: config.kind)
+                        }
                     }
                     if let error = model.errorMessage {
                         Text(error)
@@ -99,6 +94,30 @@ struct HomeView: View {
         .task {
             guard let session, let client = appState.client else { return }
             await model.load(client: client, userID: session.userID)
+        }
+    }
+
+    /// Renders the content for a configured Home row, or nothing if there's no
+    /// data for it yet.
+    @ViewBuilder
+    private func row(for kind: HomeRowKind) -> some View {
+        switch kind {
+        case .featured:
+            if !featured.isEmpty {
+                FeaturedHero(items: featured) { item in playingItem = item }
+            }
+        case .continueWatching:
+            if !model.resume.isEmpty {
+                MediaRail(title: "Continue Watching", items: model.resume, style: .landscape)
+            }
+        case .recentlyAdded:
+            if !model.latest.isEmpty {
+                MediaRail(title: "Recently Added", items: model.latest, style: .poster)
+            }
+        case .libraries:
+            if !model.libraries.isEmpty {
+                MediaRail(title: "Your Libraries", items: model.libraries, style: .poster)
+            }
         }
     }
 

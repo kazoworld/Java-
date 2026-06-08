@@ -14,9 +14,24 @@ struct SettingsView: View {
                 Picker("Theme", selection: $settings.appearance.mode) {
                     ForEach(AppearancePreferences.Mode.allCases) { Text($0.label).tag($0) }
                 }
+                Picker("Card size", selection: $settings.appearance.cardDensity) {
+                    ForEach(CardDensity.allCases) { Text($0.label).tag($0) }
+                }
                 Toggle("Rich motion & parallax", isOn: $settings.appearance.richMotion)
 
                 accentPicker
+            }
+
+            Section {
+                NavigationLink {
+                    HomeLayoutEditorView()
+                } label: {
+                    Label("Home Layout", systemImage: "rectangle.3.group")
+                }
+            } header: {
+                Text("Home")
+            } footer: {
+                Text("Reorder and show/hide the rows on your Home screen.")
             }
 
             Section("Playback") {
