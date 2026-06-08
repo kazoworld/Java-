@@ -132,8 +132,12 @@ struct MediaCard: View {
     }
 
     private var artworkURL: URL? {
-        let kind: JellyfinClient.ImageKind = style == .landscape ? .backdrop : .primary
-        let tag = style == .landscape ? item.backdropImageTags?.first : item.imageTags?["Primary"]
-        return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: Int(width * 2))
+        // Wide cards prefer a backdrop, but libraries/episodes often only have a
+        // Primary image — fall back to it so cards aren't blank placeholders.
+        if style == .landscape, let tag = item.backdropImageTags?.first {
+            return appState.client?.imageURL(itemID: item.id, kind: .backdrop, tag: tag, maxWidth: Int(width * 2))
+        }
+        let tag = item.imageTags?["Primary"]
+        return appState.client?.imageURL(itemID: item.id, kind: .primary, tag: tag, maxWidth: Int(width * 2))
     }
 }

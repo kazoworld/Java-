@@ -37,10 +37,15 @@ struct HomeView: View {
         return nil
     }
 
-    /// Up to five items with artwork for the hero "media bar", drawn from
-    /// resume + recently-added and de-duplicated.
+    /// Items with artwork for the hero "media bar", drawn from the configured
+    /// source and capped at the configured count.
     private var featured: [MediaItem] {
-        let pool = model.resume + model.latest
+        let pool: [MediaItem]
+        switch settings.featured.source {
+        case .recentlyAdded: pool = model.latest
+        case .continueWatching: pool = model.resume
+        case .both: pool = model.resume + model.latest
+        }
         let withArt = pool.filter { $0.backdropImageTags?.isEmpty == false }
         let chosen = withArt.isEmpty ? pool : withArt
         var seen = Set<String>()
@@ -48,7 +53,7 @@ struct HomeView: View {
         for item in chosen where !seen.contains(item.id) {
             seen.insert(item.id)
             out.append(item)
-            if out.count == 5 { break }
+            if out.count == settings.featured.maxItems { break }
         }
         return out
     }
@@ -80,7 +85,7 @@ struct HomeView: View {
         // Full-bleed so the hero media bar reaches every edge; rails self-pad
         // to stay within the tvOS title-safe area.
         .ignoresSafeArea()
-        .background(UltrafinColors.background.ignoresSafeArea())
+        .background(AmbientBackground())
         .navigationDestination(for: MediaItem.self) { item in
             ItemDetailView(item: item)
         }
@@ -106,7 +111,9 @@ struct HomeView: View {
         switch kind {
         case .featured:
             if !featured.isEmpty {
-                FeaturedHero(items: featured) { item in playingItem = item }
+                FeaturedHero(items: featured, rotationSeconds: settings.featured.rotationSeconds) { item in
+                    playingItem = item
+                }
             }
         case .continueWatching:
             if !model.resume.isEmpty {
@@ -118,7 +125,9 @@ struct HomeView: View {
             }
         case .libraries:
             if !model.libraries.isEmpty {
-                MediaRail(title: "Your Libraries", items: model.libraries, style: .poster)
+                // Libraries read as wide banners (their art is landscape and the
+                // names need room), not tall posters.
+                MediaRail(title: "Your Libraries", items: model.libraries, style: .landscape)
             }
         }
     }

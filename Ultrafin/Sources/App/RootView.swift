@@ -9,7 +9,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            UltrafinColors.background.ignoresSafeArea()
+            AmbientBackground()
 
             switch appState.phase {
             case .launching:

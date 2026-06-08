@@ -40,7 +40,7 @@ struct ItemDetailView: View {
             }
             .padding(.bottom, Spacing.xxl)
         }
-        .background(UltrafinColors.background.ignoresSafeArea())
+        .background(AmbientBackground())
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

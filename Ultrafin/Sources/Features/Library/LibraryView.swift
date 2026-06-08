@@ -24,10 +24,11 @@ struct LibraryRootView: View {
         return nil
     }
 
-    // Grid sizing tracks the Card size setting so the whole grid grows/shrinks.
+    // Library cards are wide banners, so the grid uses wider columns that still
+    // track the Card size setting.
     private var columns: [GridItem] {
         let scale = settings.appearance.cardDensity.scale
-        return [GridItem(.adaptive(minimum: 150 * scale, maximum: 200 * scale), spacing: Spacing.md)]
+        return [GridItem(.adaptive(minimum: 240 * scale, maximum: 320 * scale), spacing: Spacing.md)]
     }
 
     var body: some View {
@@ -35,14 +36,14 @@ struct LibraryRootView: View {
             LazyVGrid(columns: columns, spacing: Spacing.lg) {
                 ForEach(model.libraries) { library in
                     NavigationLink(value: library) {
-                        MediaCard(item: library, style: .poster)
+                        MediaCard(item: library, style: .landscape)
                     }
                     .mediaCardButtonStyle()
                 }
             }
             .padding(Spacing.lg)
         }
-        .background(UltrafinColors.background.ignoresSafeArea())
+        .background(AmbientBackground())
         .navigationTitle("Library")
         .navigationDestination(for: MediaItem.self) { item in
             if item.type == .collectionFolder || item.type == .folder {
@@ -93,7 +94,7 @@ struct LibraryContentsView: View {
                 .padding(Spacing.lg)
             }
         }
-        .background(UltrafinColors.background.ignoresSafeArea())
+        .background(AmbientBackground())
         .navigationTitle(library.name)
         .task {
             guard let session, let client = appState.client else { return }

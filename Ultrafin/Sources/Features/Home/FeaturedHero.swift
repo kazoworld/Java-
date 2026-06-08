@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// A large, auto-rotating hero banner for the top of Home — the "media bar".
 ///
@@ -19,7 +20,14 @@ struct FeaturedHero: View {
 
     private enum HeroFocus: Hashable { case play, info }
 
-    private let rotation = Timer.publish(every: 8, on: .main, in: .common).autoconnect()
+    private let rotation: Publishers.Autoconnect<Timer.TimerPublisher>
+
+    init(items: [MediaItem], rotationSeconds: Int = 8, onPlay: @escaping (MediaItem) -> Void) {
+        self.items = items
+        self.onPlay = onPlay
+        self.rotation = Timer.publish(every: TimeInterval(max(3, rotationSeconds)), on: .main, in: .common)
+            .autoconnect()
+    }
 
     private var current: MediaItem? {
         guard items.indices.contains(index) else { return items.first }

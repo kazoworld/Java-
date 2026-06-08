@@ -20,7 +20,7 @@ struct HomeLayoutEditorView: View {
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
-        .background(UltrafinColors.background.ignoresSafeArea())
+        .background(AmbientBackground())
         .navigationTitle("Home Layout")
     }
 

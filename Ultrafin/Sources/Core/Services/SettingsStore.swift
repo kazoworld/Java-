@@ -21,18 +21,23 @@ final class SettingsStore {
     var homeLayout: HomeLayoutPreferences {
         didSet { persist(homeLayout, key: Keys.homeLayout) }
     }
+    var featured: FeaturedPreferences {
+        didSet { persist(featured, key: Keys.featured) }
+    }
 
     private enum Keys {
         static let theme = "settings.theme"
         static let appearance = "settings.appearance"
         static let playback = "settings.playback"
         static let homeLayout = "settings.homeLayout"
+        static let featured = "settings.featured"
     }
 
     private init() {
         theme = Self.load(Keys.theme) ?? ThemePreferences()
         appearance = Self.load(Keys.appearance) ?? AppearancePreferences()
         playback = Self.load(Keys.playback) ?? PlaybackPreferences()
+        featured = Self.load(Keys.featured) ?? FeaturedPreferences()
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout
@@ -47,6 +52,17 @@ final class SettingsStore {
         let j = up ? i - 1 : i + 1
         guard homeLayout.rows.indices.contains(j) else { return }
         homeLayout.rows.swapAt(i, j)
+    }
+
+    /// Visibility of the featured media bar, mirrored to its Home Layout row so
+    /// there's a single source of truth.
+    var isFeaturedEnabled: Bool {
+        get { homeLayout.rows.first(where: { $0.kind == .featured })?.isEnabled ?? true }
+        set {
+            if let i = homeLayout.rows.firstIndex(where: { $0.kind == .featured }) {
+                homeLayout.rows[i].isEnabled = newValue
+            }
+        }
     }
 
     private func persist<T: Encodable>(_ value: T, key: String) {
@@ -73,7 +89,8 @@ struct AppearancePreferences: Codable {
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
     }
-    var mode: Mode = .dark
+    /// Light by default — the app's airy frosted-glass look is designed for it.
+    var mode: Mode = .light
 
     /// When false, large hero/parallax animations are disabled for users who
     /// prefer reduced motion or want maximum battery/perf headroom.
@@ -140,6 +157,25 @@ struct HomeRowConfig: Codable, Identifiable, Equatable {
     var kind: HomeRowKind
     var isEnabled: Bool
     var id: HomeRowKind { kind }
+}
+
+/// Settings for the featured media bar (the big rotating hero on Home).
+struct FeaturedPreferences: Codable {
+    enum Source: String, Codable, CaseIterable, Identifiable {
+        case recentlyAdded, continueWatching, both
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .recentlyAdded: "Recently Added"
+            case .continueWatching: "Continue Watching"
+            case .both: "Both"
+            }
+        }
+    }
+
+    var source: Source = .both
+    var rotationSeconds: Int = 8
+    var maxItems: Int = 5
 }
 
 /// Ordered, toggleable set of Home rows.
