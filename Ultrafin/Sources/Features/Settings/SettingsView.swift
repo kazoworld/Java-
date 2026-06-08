@@ -24,10 +24,13 @@ struct SettingsView: View {
                     ForEach(PlaybackPreferences.EnginePolicy.allCases) { Text($0.label).tag($0) }
                 }
                 Toggle("Auto-resume", isOn: $settings.playback.autoResume)
-                Stepper("Skip interval: \(settings.playback.seekInterval)s",
-                        value: $settings.playback.seekInterval, in: 5...60, step: 5)
-                Stepper("Max buffer: \(settings.playback.maxBufferSeconds)s",
-                        value: $settings.playback.maxBufferSeconds, in: 10...120, step: 10)
+                // Pickers (not Steppers) so the control works on tvOS too.
+                Picker("Skip interval", selection: $settings.playback.seekInterval) {
+                    ForEach([5, 10, 15, 30, 45, 60], id: \.self) { Text("\($0)s").tag($0) }
+                }
+                Picker("Max buffer", selection: $settings.playback.maxBufferSeconds) {
+                    ForEach([10, 30, 60, 90, 120], id: \.self) { Text("\($0)s").tag($0) }
+                }
             }
 
             Section("Account") {
@@ -54,7 +57,9 @@ struct SettingsView: View {
                 Text("Ultrafin is a Jellyfin client. Jellyfin and the Swiftfin media core are open source.")
             }
         }
-        .scrollContentBackground(.hidden)
+        #if !os(tvOS)
+        .scrollContentBackground(.hidden) // unavailable on tvOS
+        #endif
         .background(UltrafinColors.background.ignoresSafeArea())
         .navigationTitle("Settings")
         .tint(settings.theme.accent.color)
