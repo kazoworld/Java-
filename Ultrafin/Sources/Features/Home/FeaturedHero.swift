@@ -51,6 +51,18 @@ struct FeaturedHero: View {
 
     // MARK: - Layers
 
+    private var accent: Color { settings.theme.accent.color }
+
+    /// Opaque at the top, transparent at the bottom — used to dissolve the hero
+    /// into the page so there's no hard seam against the rows below.
+    private var bottomFade: LinearGradient {
+        LinearGradient(stops: [
+            .init(color: .black, location: 0.0),
+            .init(color: .black, location: 0.6),
+            .init(color: .clear, location: 1.0)
+        ], startPoint: .top, endPoint: .bottom)
+    }
+
     @ViewBuilder
     private var backdrop: some View {
         if let current {
@@ -60,17 +72,32 @@ struct FeaturedHero: View {
                 .clipped()
                 .id(current.id) // drive the cross-fade
                 .transition(.opacity)
+                .mask(bottomFade) // fade the artwork into the page at the bottom
         } else {
-            UltrafinColors.elevatedSurface
+            UltrafinColors.elevatedSurface.mask(bottomFade)
         }
     }
 
     private var scrim: some View {
         ZStack {
-            LinearGradient(colors: [UltrafinColors.background.opacity(0.05), UltrafinColors.background],
-                           startPoint: .top, endPoint: .bottom)
-            LinearGradient(colors: [UltrafinColors.background.opacity(0.85), .clear],
+            // Vertical legibility backing that also fades to clear at the very
+            // bottom, so the hero blends seamlessly into the content below.
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: UltrafinColors.background.opacity(0.0), location: 0.35),
+                .init(color: UltrafinColors.background.opacity(0.6), location: 0.82),
+                .init(color: .clear, location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+
+            // Left-side contrast for the text, faded at the bottom edge.
+            LinearGradient(colors: [UltrafinColors.background.opacity(0.7), .clear],
                            startPoint: .leading, endPoint: .trailing)
+                .mask(bottomFade)
+
+            // Accent wash so the media bar re-tints when the theme changes.
+            LinearGradient(colors: [.clear, accent.opacity(0.28)],
+                           startPoint: .center, endPoint: .bottom)
+                .mask(bottomFade)
         }
     }
 
