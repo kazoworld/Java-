@@ -4,7 +4,7 @@ import SwiftUI
 
 /// A frosted, slightly elevated container used for cards, sheets and controls.
 /// The material + thin stroke reads as "glass" without expensive blur on tvOS.
-struct GlassCard<Content: View>: ViewModifier {
+struct GlassCard: ViewModifier {
     var cornerRadius: CGFloat = Spacing.cornerRadius
 
     func body(content: Content) -> some View {
