@@ -30,10 +30,27 @@ struct HomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
     @State private var model = HomeViewModel()
+    @State private var playingItem: MediaItem?
 
     private var session: UserSession? {
         if case .authenticated(let session) = appState.phase { return session }
         return nil
+    }
+
+    /// Up to five items with artwork for the hero "media bar", drawn from
+    /// resume + recently-added and de-duplicated.
+    private var featured: [MediaItem] {
+        let pool = model.resume + model.latest
+        let withArt = pool.filter { $0.backdropImageTags?.isEmpty == false }
+        let chosen = withArt.isEmpty ? pool : withArt
+        var seen = Set<String>()
+        var out: [MediaItem] = []
+        for item in chosen where !seen.contains(item.id) {
+            seen.insert(item.id)
+            out.append(item)
+            if out.count == 5 { break }
+        }
+        return out
     }
 
     var body: some View {
@@ -42,6 +59,9 @@ struct HomeView: View {
                 if model.isLoading {
                     loadingRows
                 } else {
+                    if !featured.isEmpty {
+                        FeaturedHero(items: featured) { item in playingItem = item }
+                    }
                     if !model.resume.isEmpty {
                         MediaRail(title: "Continue Watching", items: model.resume, style: .landscape)
                     }
@@ -60,11 +80,17 @@ struct HomeView: View {
                     }
                 }
             }
-            .padding(.vertical, Spacing.lg)
+            .padding(.bottom, Spacing.lg)
         }
+        .ignoresSafeArea(edges: .top)
         .background(UltrafinColors.background.ignoresSafeArea())
         .navigationDestination(for: MediaItem.self) { item in
             ItemDetailView(item: item)
+        }
+        .fullScreenCover(item: $playingItem) { item in
+            if let session {
+                VideoPlayerView(item: item, userID: session.userID)
+            }
         }
         .navigationTitle("Ultrafin")
         #if os(iOS)

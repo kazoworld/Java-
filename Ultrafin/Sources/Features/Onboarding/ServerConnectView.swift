@@ -7,16 +7,31 @@ final class ServerConnectViewModel {
     var isConnecting = false
     var errorMessage: String?
 
+    var discovered: [DiscoveredServer] = []
+    var isScanning = false
+
     private let service = ServerService()
+    private let discovery = ServerDiscovery()
 
     var canConnect: Bool { !address.trimmingCharacters(in: .whitespaces).isEmpty && !isConnecting }
 
-    func connect() async -> ServerConnection? {
+    /// Scans the local network for Jellyfin servers so the user often doesn't
+    /// have to type an address at all.
+    func scan() async {
+        isScanning = true
+        defer { isScanning = false }
+        discovered = await discovery.discover()
+    }
+
+    /// Connects to `address` (defaults to the typed field) and returns a
+    /// verified server.
+    func connect(to overrideAddress: String? = nil) async -> ServerConnection? {
+        let target = overrideAddress ?? address
         isConnecting = true
         errorMessage = nil
         defer { isConnecting = false }
         do {
-            return try await service.connect(to: address)
+            return try await service.connect(to: target)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             return nil
@@ -48,6 +63,8 @@ struct ServerConnectView: View {
             }
 
             VStack(spacing: Spacing.md) {
+                discoverySection
+
                 TextField("media.example.com", text: $model.address)
                     .textFieldStyle(.plain)
                     .padding(Spacing.md)
@@ -76,18 +93,66 @@ struct ServerConnectView: View {
                 .disabled(!model.canConnect)
                 .opacity(model.canConnect ? 1 : 0.5)
             }
-            .frame(maxWidth: 460)
+            .frame(maxWidth: 520)
 
             Spacer()
             Spacer()
         }
         .padding(Spacing.xl)
         .animation(.smooth, value: model.errorMessage)
+        .animation(.smooth, value: model.discovered)
+        .task { await model.scan() }
         .onAppear { addressFocused = true }
     }
 
-    private func attemptConnect() async {
-        guard let server = await model.connect() else { return }
+    /// Discovered servers on the LAN, shown above manual entry so the user can
+    /// connect with a single click instead of typing an address.
+    @ViewBuilder
+    private var discoverySection: some View {
+        if model.isScanning && model.discovered.isEmpty {
+            HStack(spacing: Spacing.sm) {
+                ProgressView()
+                Text("Looking for servers on your network…")
+                    .font(Typography.caption)
+                    .foregroundStyle(UltrafinColors.secondaryText)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else if !model.discovered.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("Found on your network")
+                    .font(Typography.caption)
+                    .foregroundStyle(UltrafinColors.secondaryText)
+                ForEach(model.discovered) { server in
+                    Button {
+                        Task { await attemptConnect(address: server.address) }
+                    } label: {
+                        HStack(spacing: Spacing.md) {
+                            Image(systemName: "server.rack")
+                                .foregroundStyle(UltrafinColors.accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(server.name)
+                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(UltrafinColors.primaryText)
+                                Text(server.address)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(UltrafinColors.secondaryText)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(UltrafinColors.tertiaryText)
+                        }
+                        .padding(Spacing.md)
+                        .glassCard(cornerRadius: Spacing.md)
+                    }
+                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.03, lift: false))
+                }
+            }
+        }
+    }
+
+    private func attemptConnect(address: String? = nil) async {
+        guard let server = await model.connect(to: address) else { return }
         appState.didConnect(to: server)
     }
 }
