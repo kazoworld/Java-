@@ -12,7 +12,7 @@ struct GlassCard: ViewModifier {
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                    .strokeBorder(UltrafinColors.separator, lineWidth: 1)
             )
     }
 }

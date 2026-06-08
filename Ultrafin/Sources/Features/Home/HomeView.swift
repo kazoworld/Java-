@@ -77,7 +77,9 @@ struct HomeView: View {
             }
             .padding(.bottom, Spacing.lg)
         }
-        .ignoresSafeArea(edges: .top)
+        // Full-bleed so the hero media bar reaches every edge; rails self-pad
+        // to stay within the tvOS title-safe area.
+        .ignoresSafeArea()
         .background(UltrafinColors.background.ignoresSafeArea())
         .navigationDestination(for: MediaItem.self) { item in
             ItemDetailView(item: item)
@@ -87,8 +89,8 @@ struct HomeView: View {
                 VideoPlayerView(item: item, userID: session.userID)
             }
         }
-        .navigationTitle("Ultrafin")
         #if os(iOS)
+        .navigationTitle("Ultrafin")
         .navigationBarTitleDisplayMode(.large)
         #endif
         .task {

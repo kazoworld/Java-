@@ -16,6 +16,7 @@ final class LibraryViewModel {
 /// Top-level libraries grid; tapping one drills into its contents.
 struct LibraryRootView: View {
     @Environment(AppState.self) private var appState
+    @Environment(SettingsStore.self) private var settings
     @State private var model = LibraryViewModel()
 
     private var session: UserSession? {
@@ -23,7 +24,11 @@ struct LibraryRootView: View {
         return nil
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 150, maximum: 200), spacing: Spacing.md)]
+    // Grid sizing tracks the Card size setting so the whole grid grows/shrinks.
+    private var columns: [GridItem] {
+        let scale = settings.appearance.cardDensity.scale
+        return [GridItem(.adaptive(minimum: 150 * scale, maximum: 200 * scale), spacing: Spacing.md)]
+    }
 
     var body: some View {
         ScrollView {
@@ -56,6 +61,7 @@ struct LibraryRootView: View {
 /// Contents of a single library, rendered as an adaptive poster grid.
 struct LibraryContentsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(SettingsStore.self) private var settings
     let library: MediaItem
 
     @State private var items: [MediaItem] = []
@@ -66,7 +72,10 @@ struct LibraryContentsView: View {
         return nil
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 130, maximum: 180), spacing: Spacing.md)]
+    private var columns: [GridItem] {
+        let scale = settings.appearance.cardDensity.scale
+        return [GridItem(.adaptive(minimum: 130 * scale, maximum: 180 * scale), spacing: Spacing.md)]
+    }
 
     var body: some View {
         ScrollView {

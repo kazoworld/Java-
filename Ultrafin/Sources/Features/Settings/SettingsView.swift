@@ -91,7 +91,7 @@ struct SettingsView: View {
                         .fill(accent.color)
                         .frame(width: 34, height: 34)
                         .overlay(
-                            Circle().strokeBorder(.white, lineWidth: settings.theme.accent == accent ? 3 : 0)
+                            Circle().strokeBorder(UltrafinColors.primaryText, lineWidth: settings.theme.accent == accent ? 3 : 0)
                         )
                         .scaleEffect(settings.theme.accent == accent ? 1.1 : 1)
                         .onTapGesture {

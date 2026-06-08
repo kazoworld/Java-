@@ -14,7 +14,7 @@ struct MediaRail: View {
             Text(title)
                 .font(Typography.sectionTitle)
                 .foregroundStyle(UltrafinColors.primaryText)
-                .padding(.horizontal, Spacing.lg)
+                .padding(.horizontal, edgePadding)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: railSpacing) {
@@ -25,12 +25,22 @@ struct MediaRail: View {
                         .mediaCardButtonStyle()
                     }
                 }
-                .padding(.horizontal, Spacing.lg)
+                .padding(.horizontal, edgePadding)
                 // Breathing room so focus-scaled cards never clip on tvOS.
                 .padding(.vertical, focusInset)
             }
             .scrollClipDisabled()
         }
+    }
+
+    /// Leading/trailing inset. Larger on tvOS to stay inside the title-safe
+    /// area now that Home is laid out full-bleed for the hero.
+    private var edgePadding: CGFloat {
+        #if os(tvOS)
+        56
+        #else
+        Spacing.lg
+        #endif
     }
 
     // tvOS focus scaling needs extra spacing/padding so neighbouring cards and
@@ -95,7 +105,7 @@ struct MediaCard: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                    .strokeBorder(isFocused ? UltrafinColors.accent : Color.white.opacity(0.06),
+                    .strokeBorder(isFocused ? UltrafinColors.accent : UltrafinColors.separator,
                                   lineWidth: isFocused ? 3 : 1)
             )
 
