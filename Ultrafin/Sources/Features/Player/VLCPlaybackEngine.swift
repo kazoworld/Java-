@@ -2,8 +2,20 @@ import Foundation
 import Combine
 import UIKit
 
-#if canImport(VLCKit)
+// Import whichever VLCKit module is linked. `tylerjonesio/vlckit-spm` exposes a
+// unified `VLCKitSPM` module for iOS + tvOS; the other names cover alternative
+// distributions (3.x MobileVLCKit/TVVLCKit, or the 4.x unified `VLCKit`).
+#if canImport(VLCKitSPM)
+import VLCKitSPM
+#elseif canImport(MobileVLCKit)
+import MobileVLCKit
+#elseif canImport(TVVLCKit)
+import TVVLCKit
+#elseif canImport(VLCKit)
 import VLCKit
+#endif
+
+#if canImport(VLCKitSPM) || canImport(MobileVLCKit) || canImport(TVVLCKit) || canImport(VLCKit)
 
 /// VLCKit-backed engine — the same media core Swiftfin relies on. Handles the
 /// long tail of codecs/containers (MKV, HEVC variants, exotic audio) that
@@ -11,6 +23,8 @@ import VLCKit
 /// transcode. Used as the fallback in the hybrid policy.
 @MainActor
 final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate {
+    static let isAvailable = true
+
     private let mediaPlayer = VLCMediaPlayer()
     private let videoView = UIView()
     private let subject = CurrentValueSubject<PlaybackState, Never>(PlaybackState())
@@ -56,8 +70,19 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
     }
 
     // MARK: - VLCMediaPlayerDelegate
+    //
+    // VLCKit invokes these on its own thread, so they're `nonisolated` and hop
+    // to the main actor before touching player state.
 
-    func mediaPlayerStateChanged(_ aNotification: Notification) {
+    nonisolated func mediaPlayerStateChanged(_ aNotification: Notification!) {
+        Task { @MainActor in self.syncState() }
+    }
+
+    nonisolated func mediaPlayerTimeChanged(_ aNotification: Notification!) {
+        Task { @MainActor in self.syncTime() }
+    }
+
+    private func syncState() {
         switch mediaPlayer.state {
         case .playing:
             subject.value.status = .playing
@@ -75,7 +100,7 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         }
     }
 
-    func mediaPlayerTimeChanged(_ aNotification: Notification) {
+    private func syncTime() {
         var state = subject.value
         state.currentTime = Double(mediaPlayer.time.intValue) / 1000.0
         if let length = mediaPlayer.media?.length.intValue, length > 0 {
@@ -87,9 +112,9 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
 
 #else
 
-/// Stub used when VLCKit isn't linked, so the project still compiles. The hybrid
-/// coordinator detects this via `VLCPlaybackEngine.isAvailable` and stays on
-/// AVPlayer rather than handing playback to a no-op.
+/// Stub used when no VLCKit module is linked, so the project still compiles. The
+/// hybrid coordinator detects this via `VLCPlaybackEngine.isAvailable` and stays
+/// on AVPlayer rather than handing playback to a no-op.
 @MainActor
 final class VLCPlaybackEngine: PlaybackEngine {
     static let isAvailable = false
@@ -108,10 +133,4 @@ final class VLCPlaybackEngine: PlaybackEngine {
     func teardown() {}
 }
 
-#endif
-
-#if canImport(VLCKit)
-extension VLCPlaybackEngine {
-    static let isAvailable = true
-}
 #endif

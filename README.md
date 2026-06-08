@@ -87,10 +87,11 @@ open Ultrafin.xcodeproj
 #    then select the Ultrafin-iOS or Ultrafin-tvOS scheme and run.
 ```
 
-The project builds with **no external dependencies** by default, so a clean
-checkout compiles immediately. The VLCKit fallback engine is an opt-in (see
-below); without it the hybrid player runs on the native AVPlayer path — the
-coordinator detects VLCKit's absence and stays on AVPlayer.
+The project's one external dependency is **VLCKit** (via the
+[`vlckit-spm`](https://github.com/tylerjonesio/vlckit-spm) wrapper), which Xcode
+resolves on first build. It powers the hybrid player's fallback engine. The
+integration is gated behind `canImport`, so if you ever remove the package the
+app still compiles and runs on the native AVPlayer path.
 
 ### On first launch
 
@@ -141,17 +142,20 @@ bundle exec fastlane match appstore        # create signing assets
 bundle exec fastlane ios beta              # or: tvos beta
 ```
 
-## Enabling the VLCKit fallback
+## The VLCKit media core
 
-The hybrid player's VLCKit path is gated behind `#if canImport(VLCKit)`, so it
-activates automatically once the package is linked — no code changes:
+The hybrid player resolves each stream and picks an engine:
 
-1. In `project.yml`, uncomment the `packages:` block and the per-target
-   `dependencies:` entries (confirm the VLCKit package URL/version for your
-   Xcode toolchain first).
-2. `xcodegen generate` and rebuild.
+- **AVPlayer** for direct-play/HLS the OS decodes natively — the smoothest,
+  hardware-accelerated 60fps path.
+- **VLCKit** for everything AVFoundation refuses (MKV, exotic codecs/audio),
+  decoding the original file without forcing a server transcode.
 
-Settings → Playback then offers the full Hybrid / Native / VLCKit policy.
+VLCKit is wired in by default through [`vlckit-spm`](https://github.com/tylerjonesio/vlckit-spm)
+(`VLCKitSPM` module, one import for iOS + tvOS). The engine code lives in
+`VLCPlaybackEngine.swift` behind a `canImport` guard, so the package is the only
+thing to swap if you ever change VLCKit distributions. Settings → Playback
+exposes the full **Hybrid / Native / VLCKit** policy.
 
 ## Notes & next steps
 
