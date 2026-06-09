@@ -210,13 +210,16 @@ actor JellyfinClient {
 
     /// Resolves the best playback URL for an item, deciding direct-play vs.
     /// transcode. AVFoundation handles direct-play/HLS; the rest falls to VLCKit.
-    func resolvePlayback(for item: MediaItem, userID: String) async throws -> PlaybackResolution {
-        let info = try await get(PlaybackInfoResponse.self, path: "/Items/\(item.id)/PlaybackInfo", query: [
-            .init(name: "userId", value: userID)
-        ])
+    /// Passing `maxBitrate` forces an HLS transcode capped at that bitrate (used
+    /// by the in-player Quality selector); `nil` means automatic.
+    func resolvePlayback(for item: MediaItem, userID: String, maxBitrate: Int? = nil) async throws -> PlaybackResolution {
+        var infoQuery: [URLQueryItem] = [.init(name: "userId", value: userID)]
+        if let maxBitrate { infoQuery.append(.init(name: "maxStreamingBitrate", value: String(maxBitrate))) }
+        let info = try await get(PlaybackInfoResponse.self, path: "/Items/\(item.id)/PlaybackInfo", query: infoQuery)
         let source = info.mediaSources.first
 
-        if let source, source.supportsDirectPlay == true, let token = accessToken {
+        // Auto quality can direct-play; a chosen quality always transcodes.
+        if maxBitrate == nil, let source, source.supportsDirectPlay == true, let token = accessToken {
             // Direct stream the original file.
             var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false)!
             components.path += "/Videos/\(item.id)/stream"
@@ -237,11 +240,16 @@ actor JellyfinClient {
         guard let token = accessToken else { throw APIError.unauthorized }
         var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false)!
         components.path += "/Videos/\(item.id)/master.m3u8"
-        components.queryItems = [
+        var query: [URLQueryItem] = [
             .init(name: "mediaSourceId", value: source?.id ?? item.id),
             .init(name: "api_key", value: token),
             .init(name: "playSessionId", value: info.playSessionID ?? UUID().uuidString)
         ]
+        if let maxBitrate {
+            query.append(.init(name: "maxStreamingBitrate", value: String(maxBitrate)))
+            query.append(.init(name: "videoBitRate", value: String(maxBitrate)))
+        }
+        components.queryItems = query
         return PlaybackResolution(
             streamURL: components.url!,
             isDirectPlay: false, // HLS — AVPlayer handles this well

@@ -1,26 +1,50 @@
 import SwiftUI
 
+/// Which selection panel (if any) is open over the player.
+enum PlayerPanel: Equatable { case none, captions, quality }
+
+/// A request to open the player on a queue of items at a starting index — used
+/// by screens that present playback (e.g. a season of episodes).
+struct PlaybackRequest: Identifiable {
+    let id = UUID()
+    let queue: [MediaItem]
+    let index: Int
+}
+
 /// Full-screen player. Hosts the active engine's video output and overlays
-/// custom, auto-hiding controls. The overlay is the only thing that animates
-/// during playback so the video stays at full frame rate.
+/// custom, auto-hiding controls. Supports a queue (episodes), captions, and a
+/// quality selector.
 struct VideoPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SettingsStore.self) private var settings
     @Environment(AppState.self) private var appState
 
-    let item: MediaItem
+    let queue: [MediaItem]
+    let startIndex: Int
     let userID: String
 
     @State private var model: VideoPlayerViewModel?
     @State private var controlsVisible = true
     @State private var hideTask: Task<Void, Never>?
-    /// Transient skip amount for the tvOS scrub feedback chip.
     @State private var skipFeedback: Int?
     @State private var skipFeedbackTask: Task<Void, Never>?
+    @State private var panel: PlayerPanel = .none
 
     #if os(tvOS)
     @FocusState private var surfaceFocused: Bool
     #endif
+
+    init(item: MediaItem, userID: String) {
+        self.queue = [item]
+        self.startIndex = 0
+        self.userID = userID
+    }
+
+    init(queue: [MediaItem], startIndex: Int, userID: String) {
+        self.queue = queue
+        self.startIndex = startIndex
+        self.userID = userID
+    }
 
     var body: some View {
         ZStack {
@@ -29,50 +53,96 @@ struct VideoPlayerView: View {
             if let model {
                 if let engine = model.engine {
                     PlayerSurface(view: engine.playerLayerView)
+                        .id(ObjectIdentifier(engine)) // swap cleanly when the engine changes
                         .ignoresSafeArea()
+                        #if os(tvOS)
+                        .focusable(!controlsVisible)
+                        .focused($surfaceFocused)
+                        .onMoveCommand { direction in
+                            switch direction {
+                            case .left: scrub(by: -seekInterval)
+                            case .right: scrub(by: seekInterval)
+                            default: break
+                            }
+                        }
+                        .onTapGesture { revealControls() }
+                        #else
+                        .onTapGesture { if controlsVisible { hideControls() } else { revealControls() } }
+                        #endif
                 }
 
                 if let error = model.errorMessage {
                     errorOverlay(error)
                 } else if controlsVisible {
-                    PlayerControlsView(model: model, onClose: close, skipFeedback: skipFeedback)
-                        .transition(.opacity)
+                    PlayerControlsView(
+                        model: model,
+                        skipFeedback: skipFeedback,
+                        panel: $panel,
+                        onPlayPause: { togglePlayPause() },
+                        onSkip: { scrub(by: $0) },
+                        onSeekProgress: { model.seek(toProgress: $0); resetHide() },
+                        onNext: { Task { await model.playNext() }; resetHide() },
+                        onPrevious: { Task { await model.playPrevious() }; resetHide() },
+                        onInteraction: { resetHide() }
+                    )
+                    .transition(.opacity)
                 }
             } else {
                 ProgressView().tint(.white)
             }
         }
-        .modifier(PlayerInteraction(
-            seekInterval: seekInterval,
-            onSelect: { handleSelect() },
-            onPlayPause: { togglePlayPause() },
-            onExit: { handleBack() },
-            onSkip: { seconds in scrub(by: seconds) }
-        ))
         #if os(tvOS)
-        .focusable()
-        .focused($surfaceFocused)
-        .onAppear { surfaceFocused = true }
+        .onPlayPauseCommand { togglePlayPause() }
+        .onExitCommand { handleBack() }
+        #endif
+        #if os(iOS)
+        .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
         #endif
         .task { await startIfNeeded() }
         .onChange(of: model?.state.status) { _, status in
-            if status == .ended { close() }
+            if status == .ended { handleEnded() }
         }
+        #if os(tvOS)
+        .onChange(of: controlsVisible) { _, visible in
+            if !visible { surfaceFocused = true }
+        }
+        #endif
         .onAppear { scheduleHide() }
         .onDisappear { model?.stop() }
         .animation(.smooth(duration: 0.25), value: controlsVisible)
+        .animation(.smooth(duration: 0.2), value: panel)
         .animation(.smooth(duration: 0.2), value: skipFeedback)
     }
 
-    private func togglePlayPause() {
-        model?.togglePlayPause()
-        showControlsTemporarily()
+    // MARK: - Start
+
+    private func startIfNeeded() async {
+        guard model == nil, let client = appState.client else { return }
+        let vm = VideoPlayerViewModel(
+            queue: queue,
+            startIndex: startIndex,
+            userID: userID,
+            client: client,
+            settings: settings.playback,
+            captionMode: settings.subtitles.captionMode
+        )
+        model = vm
+        await vm.start()
     }
 
-    /// Skips and flashes the feedback chip (used by the tvOS remote).
+    // MARK: - Transport
+
+    private var seekInterval: Double { model?.seekInterval ?? 15 }
+
+    private func togglePlayPause() {
+        model?.togglePlayPause()
+        resetHide()
+    }
+
     private func scrub(by seconds: Double) {
         model?.skip(by: seconds)
-        showControlsTemporarily()
+        resetHide()
         skipFeedback = Int(seconds)
         skipFeedbackTask?.cancel()
         skipFeedbackTask = Task {
@@ -81,23 +151,47 @@ struct VideoPlayerView: View {
         }
     }
 
-    private func showControlsTemporarily() {
+    private func handleEnded() {
+        guard let model else { close(); return }
+        Task {
+            let advanced = await model.handlePlaybackEnded()
+            if !advanced { close() }
+        }
+    }
+
+    // MARK: - Controls visibility
+
+    /// Back/Menu: close a panel first, then hide controls, then exit.
+    private func handleBack() {
+        if panel != .none { panel = .none; return }
+        if controlsVisible { hideControls() } else { close() }
+    }
+
+    private func revealControls() {
         controlsVisible = true
         scheduleHide()
     }
 
-    /// Builds the view model once, using the live client from the environment,
-    /// then begins playback.
-    private func startIfNeeded() async {
-        guard model == nil, let client = appState.client else { return }
-        let vm = VideoPlayerViewModel(
-            item: item,
-            userID: userID,
-            client: client,
-            settings: settings.playback
-        )
-        model = vm
-        await vm.start()
+    private func resetHide() {
+        controlsVisible = true
+        scheduleHide()
+    }
+
+    private func hideControls() {
+        hideTask?.cancel()
+        controlsVisible = false
+    }
+
+    private func scheduleHide() {
+        hideTask?.cancel()
+        hideTask = Task {
+            try? await Task.sleep(for: .seconds(3.5))
+            guard !Task.isCancelled, panel == .none else { return }
+            let status = model?.state.status
+            if status == .playing || status == .paused {
+                controlsVisible = false
+            }
+        }
     }
 
     private func errorOverlay(_ message: String) -> some View {
@@ -115,99 +209,14 @@ struct VideoPlayerView: View {
         .padding(Spacing.xl)
     }
 
-    private var seekInterval: Double { model?.seekInterval ?? 15 }
-
-    /// Clicking the remote / tapping the screen.
-    private func handleSelect() {
-        #if os(tvOS)
-        // Reveal if hidden, otherwise toggle playback — a "wake up" click never
-        // accidentally pauses.
-        if controlsVisible { togglePlayPause() } else { revealControls() }
-        #else
-        // Touch: tap shows or hides the overlay.
-        if controlsVisible { hideControls() } else { revealControls() }
-        #endif
-    }
-
-    /// Back/Menu: first press hides the controls; a second press exits.
-    private func handleBack() {
-        if controlsVisible {
-            hideControls()
-        } else {
-            close()
-        }
-    }
-
-    private func revealControls() {
-        controlsVisible = true
-        scheduleHide()
-    }
-
-    private func hideControls() {
-        hideTask?.cancel()
-        controlsVisible = false
-    }
-
-    private func scheduleHide() {
-        hideTask?.cancel()
-        hideTask = Task {
-            try? await Task.sleep(for: .seconds(3.5))
-            // Auto-hide once playing or paused — but stay up while buffering or
-            // showing an error so the user always has feedback.
-            let status = model?.state.status
-            if !Task.isCancelled, status == .playing || status == .paused {
-                controlsVisible = false
-            }
-        }
-    }
-
     private func close() {
         model?.stop()
         dismiss()
     }
 }
 
-/// Platform-specific player input.
-///
-/// - **tvOS:** maps the Siri Remote to playback — Play/Pause button toggles,
-///   the Menu button exits, left/right swipes scrub, and a click toggles
-///   playback. This is the focus-engine-native model that makes Apple TV
-///   playback feel right (and that touch-port clients get wrong).
-/// - **iOS:** a tap toggles the controls; the on-screen buttons/scrubber do the
-///   rest. Also hides the status bar and home indicator during playback.
-private struct PlayerInteraction: ViewModifier {
-    let seekInterval: Double
-    let onSelect: () -> Void
-    let onPlayPause: () -> Void
-    let onExit: () -> Void
-    let onSkip: (Double) -> Void
-
-    func body(content: Content) -> some View {
-        #if os(tvOS)
-        content
-            .contentShape(Rectangle())
-            .onTapGesture { onSelect() }
-            .onPlayPauseCommand { onPlayPause() }
-            .onExitCommand { onExit() }
-            .onMoveCommand { direction in
-                switch direction {
-                case .left: onSkip(-seekInterval)
-                case .right: onSkip(seekInterval)
-                default: break
-                }
-            }
-        #else
-        content
-            .contentShape(Rectangle())
-            .onTapGesture { onSelect() }
-            .statusBarHidden()
-            .persistentSystemOverlays(.hidden)
-        #endif
-    }
-}
-
-/// Bridges the engine's native video view into SwiftUI without recreating it
-/// on every state change (which would stutter playback).
+/// Bridges the engine's native video view into SwiftUI without recreating it on
+/// every state change (which would stutter playback).
 struct PlayerSurface: UIViewRepresentable {
     let view: PlatformView
     func makeUIView(context: Context) -> PlatformView { view }

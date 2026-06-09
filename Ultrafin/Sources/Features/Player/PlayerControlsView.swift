@@ -1,38 +1,49 @@
 import SwiftUI
 
-/// Transport HUD overlaid on the video. The interaction model is deliberately
-/// different per platform:
-///
-/// - **iOS:** touch — tappable transport buttons and a draggable scrubber.
-/// - **tvOS:** the Siri Remote drives everything (handled in `VideoPlayerView`),
-///   so here the overlay is an *informational* HUD: state, progress, time, and a
-///   subtle hint. No focus-trapping buttons fighting the remote.
+/// Transport overlay: title, progress, a focusable button bar (play/pause,
+/// skip, previous/next episode, captions, quality), and the selection panels.
+/// On tvOS the bar is driven by the focus engine; on iOS by touch.
 struct PlayerControlsView: View {
     @Bindable var model: VideoPlayerViewModel
-    let onClose: () -> Void
-    /// Transient "+15s / −15s" feedback shown while scrubbing on tvOS.
-    var skipFeedback: Int? = nil
+    var skipFeedback: Int?
+    @Binding var panel: PlayerPanel
 
+    let onPlayPause: () -> Void
+    let onSkip: (Double) -> Void
+    let onSeekProgress: (Double) -> Void
+    let onNext: () -> Void
+    let onPrevious: () -> Void
+    let onInteraction: () -> Void
+
+    @Environment(SettingsStore.self) private var settings
+    @FocusState private var focused: Control?
     @State private var isScrubbing = false
     @State private var scrubProgress: Double = 0
 
+    enum Control: Hashable { case previous, back, playPause, forward, next, captions, quality }
+
+    private var accent: Color { settings.theme.accent.color }
+
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [.black.opacity(0.65), .clear, .black.opacity(0.75)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            LinearGradient(colors: [.black.opacity(0.7), .clear, .black.opacity(0.85)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                topBar
-                Spacer()
-                centerState
-                Spacer()
-                bottomBar
+            if panel == .none {
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer()
+                    centerState
+                    Spacer()
+                    bottomBar
+                }
+                .padding(platformPadding)
+            } else {
+                selectionPanel
             }
-            .padding(platformPadding)
         }
+        .onChange(of: focused) { _, _ in onInteraction() }
     }
 
     private var platformPadding: CGFloat {
@@ -48,35 +59,18 @@ struct PlayerControlsView: View {
     private var topBar: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(model.item.name)
+                Text(model.currentItem?.name ?? "")
                     .font(.system(size: titleSize, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
-                if !model.activeEngineName.isEmpty {
-                    Label(model.activeEngineName, systemImage: "cpu")
-                        .font(Typography.caption)
-                        .foregroundStyle(.white.opacity(0.6))
+                if let tag = model.currentItem?.episodeTag {
+                    Text(tag).font(Typography.caption).foregroundStyle(.white.opacity(0.7))
                 }
             }
             Spacer()
-            #if !os(tvOS)
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(Spacing.sm)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .buttonStyle(.plain)
-            #endif
+            Label(model.activeEngineName, systemImage: "cpu")
+                .font(Typography.caption)
+                .foregroundStyle(.white.opacity(0.6))
         }
-    }
-
-    private var titleSize: CGFloat {
-        #if os(tvOS)
-        34
-        #else
-        18
-        #endif
     }
 
     // MARK: - Center
@@ -86,24 +80,13 @@ struct PlayerControlsView: View {
         if model.state.status == .buffering {
             ProgressView().tint(.white).scaleEffect(centerScale)
         } else if let skipFeedback {
-            // tvOS scrub feedback
             Label("\(skipFeedback > 0 ? "+" : "")\(skipFeedback)s",
                   systemImage: skipFeedback > 0 ? "goforward" : "gobackward")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(Spacing.lg)
                 .background(.ultraThinMaterial, in: Capsule())
                 .transition(.scale.combined(with: .opacity))
-        } else {
-            #if os(tvOS)
-            // Big state glyph; the remote (not a button) drives playback.
-            Image(systemName: model.state.status == .playing ? "play.fill" : "pause.fill")
-                .font(.system(size: 64, weight: .bold))
-                .foregroundStyle(.white.opacity(model.state.status == .playing ? 0 : 0.9))
-                .animation(.smooth, value: model.state.status)
-            #else
-            iOSTransport
-            #endif
         }
     }
 
@@ -115,68 +98,119 @@ struct PlayerControlsView: View {
         #endif
     }
 
-    #if !os(tvOS)
-    private var iOSTransport: some View {
-        HStack(spacing: Spacing.xxl) {
-            transportButton("gobackward.\(Int(model.seekInterval))") { model.skip(by: -model.seekInterval) }
-            Button(action: { model.togglePlayPause() }) {
-                Image(systemName: model.state.status == .playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 44, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .buttonStyle(.plain)
-            transportButton("goforward.\(Int(model.seekInterval))") { model.skip(by: model.seekInterval) }
-        }
-    }
-
-    private func transportButton(_ system: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: system)
-                .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.white)
-        }
-        .buttonStyle(.plain)
-    }
-    #endif
-
-    // MARK: - Bottom
+    // MARK: - Bottom (progress + buttons)
 
     private var bottomBar: some View {
-        VStack(spacing: Spacing.sm) {
+        VStack(spacing: Spacing.md) {
             #if os(tvOS)
-            ProgressTrack(progress: model.state.progress,
-                          buffered: bufferedFraction,
-                          height: 8)
+            ProgressTrack(progress: model.state.progress, buffered: bufferedFraction, height: 8)
             #else
-            Scrubber(
-                progress: isScrubbing ? scrubProgress : model.state.progress,
-                buffered: bufferedFraction,
-                onScrubChanged: { value in isScrubbing = true; scrubProgress = value },
-                onScrubEnded: { value in model.seek(toProgress: value); isScrubbing = false }
-            )
+            Scrubber(progress: isScrubbing ? scrubProgress : model.state.progress,
+                     buffered: bufferedFraction,
+                     onScrubChanged: { isScrubbing = true; scrubProgress = $0 },
+                     onScrubEnded: { onSeekProgress($0); isScrubbing = false })
             #endif
 
             HStack {
-                Text(timecode(currentTime))
+                Text(timecode(model.state.currentTime))
                 Spacer()
-                #if os(tvOS)
-                Text("Swipe ◀ ▶ skip · Click play/pause · Menu exit")
-                    .foregroundStyle(.white.opacity(0.5))
-                Spacer()
-                #endif
-                Text("-" + timecode(max(0, model.state.duration - currentTime)))
+                Text("-" + timecode(max(0, model.state.duration - model.state.currentTime)))
             }
             .font(Typography.monoTimecode)
             .foregroundStyle(.white.opacity(0.8))
+
+            buttonBar
         }
     }
 
-    private var bufferedFraction: Double {
-        model.state.duration > 0 ? model.state.bufferedTime / model.state.duration : 0
+    private var buttonBar: some View {
+        HStack(spacing: buttonSpacing) {
+            if model.hasPrevious {
+                controlButton("backward.end.fill", focus: .previous) { onPrevious() }
+            }
+            controlButton("gobackward", focus: .back) { onSkip(-model.seekInterval) }
+            controlButton(model.state.status == .playing ? "pause.fill" : "play.fill",
+                          focus: .playPause, prominent: true) { onPlayPause() }
+            controlButton("goforward", focus: .forward) { onSkip(model.seekInterval) }
+            if model.hasNext {
+                controlButton("forward.end.fill", focus: .next) { onNext() }
+            }
+
+            Spacer()
+
+            controlButton(model.currentSubtitleID == nil ? "captions.bubble" : "captions.bubble.fill",
+                          focus: .captions) { panel = .captions }
+            controlButton("slider.horizontal.3", focus: .quality) { panel = .quality }
+        }
+        .padding(.top, Spacing.xs)
     }
 
-    private var currentTime: Double {
-        isScrubbing ? scrubProgress * model.state.duration : model.state.currentTime
+    private func controlButton(_ system: String, focus: Control, prominent: Bool = false,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: prominent ? buttonSize + 8 : buttonSize, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: buttonDiameter, height: buttonDiameter)
+                .background(prominent ? AnyShapeStyle(accent) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.18, lift: false))
+        .focused($focused, equals: focus)
+    }
+
+    // MARK: - Selection panel (captions / quality)
+
+    private var selectionPanel: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text(panel == .captions ? "Subtitles & CC" : "Quality")
+                .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+
+            if panel == .captions {
+                panelRow(title: "Off", selected: model.currentSubtitleID == nil) {
+                    model.setSubtitle(id: nil); panel = .none
+                }
+                ForEach(model.subtitleTracks) { track in
+                    panelRow(title: track.name, selected: model.currentSubtitleID == track.id) {
+                        model.setSubtitle(id: track.id); panel = .none
+                    }
+                }
+            } else {
+                ForEach(QualityOption.allCases) { option in
+                    panelRow(title: option.label, selected: model.quality == option) {
+                        Task { await model.setQuality(option) }
+                        panel = .none
+                    }
+                }
+            }
+        }
+        .padding(Spacing.xl)
+        .frame(maxWidth: 520, alignment: .leading)
+        .glassCard()
+    }
+
+    private func panelRow(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 22, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white)
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark").foregroundStyle(accent).font(.system(size: 20, weight: .bold))
+                }
+            }
+            .padding(.vertical, Spacing.sm)
+            .padding(.horizontal, Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.04, lift: false))
+    }
+
+    // MARK: - Helpers
+
+    private var bufferedFraction: Double {
+        model.state.duration > 0 ? model.state.bufferedTime / model.state.duration : 0
     }
 
     private func timecode(_ seconds: Double) -> String {
@@ -185,10 +219,41 @@ struct PlayerControlsView: View {
         let h = total / 3600, m = (total % 3600) / 60, s = total % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
+
+    // MARK: - Metrics
+
+    private var titleSize: CGFloat {
+        #if os(tvOS)
+        32
+        #else
+        18
+        #endif
+    }
+    private var buttonSize: CGFloat {
+        #if os(tvOS)
+        28
+        #else
+        20
+        #endif
+    }
+    private var buttonDiameter: CGFloat {
+        #if os(tvOS)
+        64
+        #else
+        46
+        #endif
+    }
+    private var buttonSpacing: CGFloat {
+        #if os(tvOS)
+        Spacing.lg
+        #else
+        Spacing.md
+        #endif
+    }
 }
 
-/// Display-only progress bar with a buffered track (tvOS, and reused by the
-/// interactive iOS scrubber).
+/// Display-only progress bar with a buffered track (tvOS, and reused by the iOS
+/// scrubber).
 struct ProgressTrack: View {
     let progress: Double
     let buffered: Double
@@ -212,8 +277,7 @@ struct ProgressTrack: View {
 }
 
 #if !os(tvOS)
-/// A draggable progress bar for touch platforms. Pure SwiftUI so it stays at
-/// 60fps and matches the app's accent.
+/// A draggable progress bar for touch platforms.
 private struct Scrubber: View {
     let progress: Double
     let buffered: Double
@@ -229,9 +293,7 @@ private struct Scrubber: View {
                 Capsule().fill(Color.white.opacity(0.2))
                 Capsule().fill(Color.white.opacity(0.3)).frame(width: width * buffered.clamped01())
                 Capsule().fill(settings.theme.accent.color).frame(width: width * progress.clamped01())
-                Circle()
-                    .fill(.white)
-                    .frame(width: 14, height: 14)
+                Circle().fill(.white).frame(width: 14, height: 14)
                     .offset(x: width * progress.clamped01() - 7)
             }
             .frame(height: 6)
@@ -239,8 +301,8 @@ private struct Scrubber: View {
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { value in onScrubChanged((value.location.x / width).clamped01()) }
-                    .onEnded { value in onScrubEnded((value.location.x / width).clamped01()) }
+                    .onChanged { onScrubChanged(($0.location.x / width).clamped01()) }
+                    .onEnded { onScrubEnded(($0.location.x / width).clamped01()) }
             )
         }
         .frame(height: 28)

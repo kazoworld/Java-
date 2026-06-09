@@ -79,6 +79,27 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         mediaPlayer.media = nil
     }
 
+    // MARK: - Subtitles
+
+    var subtitleTracks: [MediaTrack] {
+        let indexes = (mediaPlayer.videoSubTitlesIndexes as? [NSNumber])?.map(\.intValue) ?? []
+        let names = (mediaPlayer.videoSubTitlesNames as? [String]) ?? []
+        var tracks: [MediaTrack] = []
+        for (i, idx) in indexes.enumerated() where idx >= 0 { // -1 is VLC's "Disable"
+            tracks.append(MediaTrack(id: idx, name: i < names.count ? names[i] : "Subtitle \(idx)"))
+        }
+        return tracks
+    }
+
+    var currentSubtitleID: Int? {
+        let current = Int(mediaPlayer.currentVideoSubTitleIndex)
+        return current >= 0 ? current : nil
+    }
+
+    func selectSubtitle(id: Int?) {
+        mediaPlayer.currentVideoSubTitleIndex = Int32(id ?? -1)
+    }
+
     // MARK: - VLCMediaPlayerDelegate
     //
     // VLCKit invokes these on its own thread, so they're `nonisolated` and hop

@@ -115,6 +115,33 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif
     }
+
+    // MARK: - Subtitles (legible media selection)
+
+    private var legibleGroup: AVMediaSelectionGroup? {
+        player.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .legible)
+    }
+
+    var subtitleTracks: [MediaTrack] {
+        guard let group = legibleGroup else { return [] }
+        return group.options.enumerated().map { MediaTrack(id: $0.offset, name: $0.element.displayName) }
+    }
+
+    var currentSubtitleID: Int? {
+        guard let group = legibleGroup, let item = player.currentItem,
+              let selected = item.currentMediaSelection.selectedMediaOption(in: group)
+        else { return nil }
+        return group.options.firstIndex(of: selected)
+    }
+
+    func selectSubtitle(id: Int?) {
+        guard let group = legibleGroup, let item = player.currentItem else { return }
+        if let id, group.options.indices.contains(id) {
+            item.select(group.options[id], in: group)
+        } else {
+            item.select(nil, in: group)
+        }
+    }
 }
 
 /// A `UIView` whose backing layer is an `AVPlayerLayer`, giving us GPU-composited

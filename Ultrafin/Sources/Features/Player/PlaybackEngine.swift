@@ -12,6 +12,12 @@ struct PlaybackState: Equatable {
     var progress: Double { duration > 0 ? min(1, currentTime / duration) : 0 }
 }
 
+/// A selectable subtitle (or audio) track exposed by an engine.
+struct MediaTrack: Identifiable, Equatable, Sendable {
+    let id: Int
+    let name: String
+}
+
 /// Abstraction over a concrete media backend (AVFoundation or VLCKit). The view
 /// model talks only to this protocol, so the hybrid coordinator can pick the
 /// best engine per item without the UI knowing or caring which is in use.
@@ -28,6 +34,20 @@ protocol PlaybackEngine: AnyObject {
     func pause()
     func seek(to seconds: Double)
     func teardown()
+
+    /// Subtitle/closed-caption tracks for the loaded media.
+    var subtitleTracks: [MediaTrack] { get }
+    /// The selected subtitle track id, or `nil` when captions are off.
+    var currentSubtitleID: Int? { get }
+    /// Select a subtitle track, or `nil` to turn captions off.
+    func selectSubtitle(id: Int?)
+}
+
+// Default (no-op) track support so engines without subtitles still conform.
+extension PlaybackEngine {
+    var subtitleTracks: [MediaTrack] { [] }
+    var currentSubtitleID: Int? { nil }
+    func selectSubtitle(id: Int?) {}
 }
 
 #if canImport(UIKit)

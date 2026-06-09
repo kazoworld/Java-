@@ -65,7 +65,7 @@ struct SeriesDetailView: View {
     let series: MediaItem
 
     @State private var model: SeriesDetailViewModel?
-    @State private var playingItem: MediaItem?
+    @State private var playback: PlaybackRequest?
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -91,10 +91,21 @@ struct SeriesDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task { await loadIfNeeded() }
-        .fullScreenCover(item: $playingItem) { item in
+        .fullScreenCover(item: $playback) { request in
             if let session {
-                VideoPlayerView(item: item, userID: session.userID)
+                VideoPlayerView(queue: request.queue, startIndex: request.index, userID: session.userID)
             }
+        }
+    }
+
+    /// Plays `episode` within the current season as a queue, so the in-player
+    /// Next/Previous controls and auto-advance work across the season.
+    private func play(_ episode: MediaItem) {
+        guard let model else { return }
+        if let idx = model.episodes.firstIndex(where: { $0.id == episode.id }) {
+            playback = PlaybackRequest(queue: model.episodes, index: idx)
+        } else {
+            playback = PlaybackRequest(queue: [episode], index: 0)
         }
     }
 
@@ -152,7 +163,7 @@ struct SeriesDetailView: View {
     @ViewBuilder
     private var playButton: some View {
         if let model, let target = model.playTarget {
-            Button { playingItem = target } label: {
+            Button { play(target) } label: {
                 Label(model.playLabel, systemImage: "play.fill")
                     .font(.system(size: actionFont, weight: .semibold, design: .rounded))
                     .padding(.horizontal, Spacing.lg)
@@ -201,7 +212,7 @@ struct SeriesDetailView: View {
     private func episodeList(_ model: SeriesDetailViewModel) -> some View {
         LazyVStack(spacing: Spacing.md) {
             ForEach(model.episodes) { episode in
-                Button { playingItem = episode } label: {
+                Button { play(episode) } label: {
                     EpisodeRow(episode: episode, imageURL: episodeImageURL(episode))
                 }
                 .buttonStyle(UltrafinButtonStyle(focusScale: 1.03, lift: true))

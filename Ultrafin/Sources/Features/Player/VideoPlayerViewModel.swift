@@ -2,9 +2,32 @@ import Foundation
 import Combine
 import Observation
 
-/// Drives the player screen. Resolves the stream, picks the engine per the
-/// user's policy, mirrors engine state for the UI, and reports progress back to
-/// the server on a throttled cadence.
+/// A user-selectable streaming quality. `auto` direct-plays when possible; the
+/// rest force a server transcode capped at the given bitrate.
+enum QualityOption: String, CaseIterable, Identifiable {
+    case auto, high, medium, low
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .auto: "Auto"
+        case .high: "High · 1080p"
+        case .medium: "Medium · 720p"
+        case .low: "Low · 480p"
+        }
+    }
+    var bitrate: Int? {
+        switch self {
+        case .auto: nil
+        case .high: 8_000_000
+        case .medium: 4_000_000
+        case .low: 1_500_000
+        }
+    }
+}
+
+/// Drives the player screen. Owns a queue of items (so episodes can advance),
+/// resolves each stream, picks the engine per policy, mirrors engine state, and
+/// reports progress back to the server.
 @Observable
 @MainActor
 final class VideoPlayerViewModel {
@@ -13,42 +36,74 @@ final class VideoPlayerViewModel {
     private(set) var activeEngineName = ""
     var errorMessage: String?
 
-    let item: MediaItem
+    /// Bumped whenever the engine/track/quality selection changes, so SwiftUI
+    /// panels re-read live values from the engine.
+    private(set) var revision = 0
+
+    private(set) var queue: [MediaItem]
+    private(set) var index: Int
+    private(set) var quality: QualityOption = .auto
+
     private let userID: String
     private let client: JellyfinClient
     private let settings: PlaybackPreferences
+    private let captionMode: SubtitlePreferences.CaptionMode
 
     private var cancellable: AnyCancellable?
     private var resolution: PlaybackResolution?
     private var lastReportedSecond: Int = -1
+    private var appliedCaptions = false
+    private var captionDisengageTask: Task<Void, Never>?
 
-    init(item: MediaItem, userID: String, client: JellyfinClient, settings: PlaybackPreferences) {
-        self.item = item
+    init(queue: [MediaItem], startIndex: Int, userID: String, client: JellyfinClient,
+         settings: PlaybackPreferences, captionMode: SubtitlePreferences.CaptionMode) {
+        self.queue = queue.isEmpty ? [] : queue
+        self.index = min(max(0, startIndex), max(0, queue.count - 1))
         self.userID = userID
         self.client = client
         self.settings = settings
+        self.captionMode = captionMode
     }
 
+    // MARK: - Derived
+
+    var currentItem: MediaItem? { queue.indices.contains(index) ? queue[index] : nil }
+    var hasNext: Bool { index < queue.count - 1 }
+    var hasPrevious: Bool { index > 0 }
     var seekInterval: Double { Double(settings.seekInterval) }
 
+    var subtitleTracks: [MediaTrack] { engine?.subtitleTracks ?? [] }
+    var currentSubtitleID: Int? { engine?.currentSubtitleID }
+
+    // MARK: - Lifecycle
+
     func start() async {
+        await loadCurrent(startAt: resumeSeconds())
+    }
+
+    /// Tears down any current engine and (re)loads the current queue item.
+    private func loadCurrent(startAt seconds: Double) async {
+        guard let item = currentItem else { return }
+        engine?.teardown()
+        cancellable?.cancel()
+        appliedCaptions = false
+        errorMessage = nil
+        state = PlaybackState()
+
         do {
-            let resolution = try await client.resolvePlayback(for: item, userID: userID)
+            let resolution = try await client.resolvePlayback(for: item, userID: userID, maxBitrate: quality.bitrate)
             self.resolution = resolution
             let engine = makeEngine(for: resolution)
             bind(to: engine)
             self.engine = engine
-
-            let startSeconds = resumeSeconds()
-            engine.load(url: resolution.streamURL, startAt: startSeconds)
+            revision += 1
+            engine.load(url: resolution.streamURL, startAt: seconds)
             engine.play()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? "Couldn't start playback."
         }
     }
 
-    /// Chooses the concrete engine based on the user's policy and whether the
-    /// resolved source is something AVFoundation can actually direct-play.
     private func makeEngine(for resolution: PlaybackResolution) -> PlaybackEngine {
         switch settings.enginePolicy {
         case .nativeOnly:
@@ -74,9 +129,16 @@ final class VideoPlayerViewModel {
             .sink { [weak self] newState in
                 guard let self else { return }
                 self.state = newState
+                // Subtitle tracks are only known once playback starts.
+                if newState.status == .playing, !self.appliedCaptions {
+                    self.appliedCaptions = true
+                    self.applyCaptionDefault()
+                }
                 self.reportProgressIfNeeded(newState)
             }
     }
+
+    // MARK: - Transport
 
     func togglePlayPause() {
         guard let engine else { return }
@@ -86,28 +148,94 @@ final class VideoPlayerViewModel {
     func skip(by seconds: Double) {
         let target = max(0, min(state.duration, state.currentTime + seconds))
         engine?.seek(to: target)
+        engageCaptionsIfNeeded()
     }
 
     func seek(toProgress progress: Double) {
         engine?.seek(to: progress * state.duration)
+        engageCaptionsIfNeeded()
+    }
+
+    func playNext() async {
+        guard hasNext else { return }
+        await reportStopped()
+        index += 1
+        await loadCurrent(startAt: 0)
+    }
+
+    func playPrevious() async {
+        guard hasPrevious else { return }
+        await reportStopped()
+        index -= 1
+        await loadCurrent(startAt: 0)
+    }
+
+    /// Called when the current item ends — advance, or report end-of-queue.
+    /// Returns true if it advanced.
+    func handlePlaybackEnded() async -> Bool {
+        if hasNext {
+            await playNext()
+            return true
+        }
+        return false
     }
 
     func stop() {
+        captionDisengageTask?.cancel()
         engine?.teardown()
         cancellable?.cancel()
         Task { await reportStopped() }
     }
 
+    // MARK: - Quality & subtitles
+
+    func setQuality(_ option: QualityOption) async {
+        guard option != quality else { return }
+        quality = option
+        await loadCurrent(startAt: state.currentTime)
+    }
+
+    func setSubtitle(id: Int?) {
+        engine?.selectSubtitle(id: id)
+        revision += 1
+    }
+
+    private func applyCaptionDefault() {
+        guard let engine else { return }
+        switch captionMode {
+        case .off, .whenEngaged:
+            engine.selectSubtitle(id: nil)
+        case .always:
+            if let first = engine.subtitleTracks.first { engine.selectSubtitle(id: first.id) }
+        }
+        revision += 1
+    }
+
+    /// "Off unless engaged": briefly enable captions while scrubbing, then hide.
+    private func engageCaptionsIfNeeded() {
+        guard captionMode == .whenEngaged, let engine,
+              let first = engine.subtitleTracks.first else { return }
+        engine.selectSubtitle(id: first.id)
+        revision += 1
+        captionDisengageTask?.cancel()
+        captionDisengageTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            self?.engine?.selectSubtitle(id: nil)
+            self?.revision += 1
+        }
+    }
+
     // MARK: - Progress reporting
 
     private func resumeSeconds() -> Double {
-        guard settings.autoResume, let ticks = item.userData?.playbackPositionTicks, ticks > 0 else { return 0 }
+        guard settings.autoResume, let ticks = currentItem?.userData?.playbackPositionTicks, ticks > 0 else { return 0 }
         return Double(ticks) / 10_000_000.0
     }
 
     private func reportProgressIfNeeded(_ state: PlaybackState) {
+        guard let item = currentItem else { return }
         let second = Int(state.currentTime)
-        // Report roughly once every 5s of playback to keep the server in sync.
         guard second != lastReportedSecond, second % 5 == 0, state.status == .playing else { return }
         lastReportedSecond = second
         let ticks = Int64(state.currentTime * 10_000_000)
@@ -119,6 +247,7 @@ final class VideoPlayerViewModel {
     }
 
     private func reportStopped() async {
+        guard let item = currentItem else { return }
         let ticks = Int64(state.currentTime * 10_000_000)
         await client.reportPlaybackProgress(
             itemID: item.id, positionTicks: ticks, isPaused: true, playSessionID: resolution?.playSessionID
