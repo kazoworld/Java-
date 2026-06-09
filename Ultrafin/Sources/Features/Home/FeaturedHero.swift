@@ -9,6 +9,7 @@ import Combine
 /// moves out from under the remote.
 struct FeaturedHero: View {
     let items: [MediaItem]
+    let autoAdvance: Bool
     let onPlay: (MediaItem) -> Void
 
     @Environment(AppState.self) private var appState
@@ -22,8 +23,10 @@ struct FeaturedHero: View {
 
     private let rotation: Publishers.Autoconnect<Timer.TimerPublisher>
 
-    init(items: [MediaItem], rotationSeconds: Int = 8, onPlay: @escaping (MediaItem) -> Void) {
+    init(items: [MediaItem], rotationSeconds: Int = 8, autoAdvance: Bool = true,
+         onPlay: @escaping (MediaItem) -> Void) {
         self.items = items
+        self.autoAdvance = autoAdvance
         self.onPlay = onPlay
         self.rotation = Timer.publish(every: TimeInterval(max(3, rotationSeconds)), on: .main, in: .common)
             .autoconnect()
@@ -182,7 +185,7 @@ struct FeaturedHero: View {
     // MARK: - Behavior
 
     private func advance() {
-        guard items.count > 1, !isFocused else { return }
+        guard autoAdvance, items.count > 1, !isFocused else { return }
         withAnimation(.easeInOut(duration: 0.6)) {
             index = (index + 1) % items.count
         }

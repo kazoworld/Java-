@@ -6,10 +6,12 @@ final class HomeViewModel {
     var resume: [MediaItem] = []
     var latest: [MediaItem] = []
     var libraries: [MediaItem] = []
+    /// Latest items from the media bar's chosen libraries (when not "all").
+    var featuredPool: [MediaItem] = []
     var isLoading = true
     var errorMessage: String?
 
-    func load(client: JellyfinClient, userID: String) async {
+    func load(client: JellyfinClient, userID: String, featured: FeaturedPreferences) async {
         isLoading = true
         defer { isLoading = false }
         // Fetch the three home rails concurrently so the screen paints fast.
@@ -19,6 +21,20 @@ final class HomeViewModel {
         resume = await resumeTask ?? []
         latest = await latestTask ?? []
         libraries = await viewsTask ?? []
+
+        // When the media bar is scoped to specific libraries, pull their latest.
+        if !featured.sourceLibraryIDs.isEmpty {
+            var pool: [MediaItem] = []
+            for libraryID in featured.sourceLibraryIDs {
+                if let items = try? await client.latestItems(userID: userID, parentID: libraryID) {
+                    pool.append(contentsOf: items)
+                }
+            }
+            featuredPool = pool
+        } else {
+            featuredPool = []
+        }
+
         if resume.isEmpty && latest.isEmpty && libraries.isEmpty {
             errorMessage = "Couldn't load your library."
         }
@@ -37,23 +53,35 @@ struct HomeView: View {
         return nil
     }
 
-    /// Items with artwork for the hero "media bar", drawn from the configured
-    /// source and capped at the configured count.
+    /// Items for the hero "media bar", honoring the source, content-type,
+    /// library scope and item-count preferences.
     private var featured: [MediaItem] {
+        let prefs = settings.featured
         let pool: [MediaItem]
-        switch settings.featured.source {
-        case .recentlyAdded: pool = model.latest
-        case .continueWatching: pool = model.resume
-        case .both: pool = model.resume + model.latest
+        if !prefs.sourceLibraryIDs.isEmpty {
+            pool = model.featuredPool
+        } else {
+            switch prefs.source {
+            case .recentlyAdded: pool = model.latest
+            case .continueWatching: pool = model.resume
+            case .both: pool = model.resume + model.latest
+            }
         }
-        let withArt = pool.filter { $0.backdropImageTags?.isEmpty == false }
-        let chosen = withArt.isEmpty ? pool : withArt
+        let typed = pool.filter { item in
+            switch prefs.contentType {
+            case .all: return true
+            case .movies: return item.type == .movie
+            case .shows: return item.type == .series || item.type == .episode
+            }
+        }
+        let withArt = typed.filter { $0.backdropImageTags?.isEmpty == false }
+        let chosen = withArt.isEmpty ? typed : withArt
         var seen = Set<String>()
         var out: [MediaItem] = []
         for item in chosen where !seen.contains(item.id) {
             seen.insert(item.id)
             out.append(item)
-            if out.count == settings.featured.maxItems { break }
+            if out.count == prefs.itemCount { break }
         }
         return out
     }
@@ -104,7 +132,7 @@ struct HomeView: View {
         #endif
         .task {
             guard let session, let client = appState.client else { return }
-            await model.load(client: client, userID: session.userID)
+            await model.load(client: client, userID: session.userID, featured: settings.featured)
         }
     }
 
@@ -115,7 +143,9 @@ struct HomeView: View {
         switch kind {
         case .featured:
             if !featured.isEmpty {
-                FeaturedHero(items: featured, rotationSeconds: settings.featured.rotationSeconds) { item in
+                FeaturedHero(items: featured,
+                             rotationSeconds: settings.featured.rotationSeconds,
+                             autoAdvance: settings.featured.autoAdvance) { item in
                     playingItem = item
                 }
             }

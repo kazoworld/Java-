@@ -141,12 +141,15 @@ actor JellyfinClient {
         ]).items
     }
 
-    /// Recently added across the user's libraries.
-    func latestItems(userID: String) async throws -> [MediaItem] {
-        try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: [
+    /// Recently added across the user's libraries, or within one library when
+    /// `parentID` is given.
+    func latestItems(userID: String, parentID: String? = nil) async throws -> [MediaItem] {
+        var query: [URLQueryItem] = [
             .init(name: "limit", value: "24"),
             .init(name: "fields", value: "Overview")
-        ])
+        ]
+        if let parentID { query.append(.init(name: "parentId", value: parentID)) }
+        return try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: query)
     }
 
     /// Children of a library or container (movies in a library, episodes in a season, …).

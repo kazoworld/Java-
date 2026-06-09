@@ -225,6 +225,7 @@ struct HomeRowConfig: Codable, Identifiable, Equatable {
 
 /// Settings for the featured media bar (the big rotating hero on Home).
 struct FeaturedPreferences: Codable {
+    /// Where the featured items are drawn from.
     enum Source: String, Codable, CaseIterable, Identifiable {
         case recentlyAdded, continueWatching, both
         var id: String { rawValue }
@@ -237,9 +238,28 @@ struct FeaturedPreferences: Codable {
         }
     }
 
+    /// Which media types are eligible for the media bar.
+    enum ContentType: String, Codable, CaseIterable, Identifiable {
+        case all, movies, shows
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .all: "Movies & TV"
+            case .movies: "Movies"
+            case .shows: "TV Shows"
+            }
+        }
+    }
+
+    var contentType: ContentType = .all
     var source: Source = .both
+    var itemCount: Int = 5
+    /// Libraries that feed the bar. Empty means all libraries.
+    var sourceLibraryIDs: [String] = []
+    /// Automatically rotate through items.
+    var autoAdvance: Bool = true
+    /// Seconds between rotations.
     var rotationSeconds: Int = 8
-    var maxItems: Int = 5
 }
 
 /// Ordered, toggleable set of Home rows.
