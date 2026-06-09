@@ -33,6 +33,9 @@ final class SettingsStore {
     var subtitles: SubtitlePreferences {
         didSet { persist(subtitles, key: Keys.subtitles) }
     }
+    var downloads: DownloadPreferences {
+        didSet { persist(downloads, key: Keys.downloads) }
+    }
 
     private enum Keys {
         static let theme = "settings.theme"
@@ -43,6 +46,7 @@ final class SettingsStore {
         static let audio = "settings.audio"
         static let video = "settings.video"
         static let subtitles = "settings.subtitles"
+        static let downloads = "settings.downloads"
     }
 
     private init() {
@@ -53,6 +57,7 @@ final class SettingsStore {
         audio = Self.load(Keys.audio) ?? AudioPreferences()
         video = Self.load(Keys.video) ?? VideoPreferences()
         subtitles = Self.load(Keys.subtitles) ?? SubtitlePreferences()
+        downloads = Self.load(Keys.downloads) ?? DownloadPreferences()
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout
@@ -158,6 +163,12 @@ struct AudioPreferences: Codable {
         var label: String { self == .off ? "Off" : rawValue.capitalized }
     }
     var dialogueEnhancement: DialogueEnhancement = .off
+
+    /// Pass surround audio (Dolby/DTS) straight to the receiver/TV untouched.
+    var passthrough: Bool = false
+
+    /// Preferred audio language (ISO code), or empty for the server default.
+    var preferredLanguage: String = ""
 }
 
 struct VideoPreferences: Codable {
@@ -185,6 +196,62 @@ struct SubtitlePreferences: Codable {
         }
     }
     var captionMode: CaptionMode = .whenEngaged
+
+    enum Size: String, Codable, CaseIterable, Identifiable {
+        case small, medium, large
+        var id: String { rawValue }
+        var label: String { rawValue.capitalized }
+        /// VLC text-scale percentage.
+        var scalePercent: Int { switch self { case .small: 75; case .medium: 100; case .large: 150 } }
+    }
+    var size: Size = .medium
+
+    enum TextColor: String, Codable, CaseIterable, Identifiable {
+        case white, yellow
+        var id: String { rawValue }
+        var label: String { rawValue.capitalized }
+        /// VLC RGB integer.
+        var vlcColor: Int { switch self { case .white: 16_777_215; case .yellow: 16_776_960 } }
+    }
+    var textColor: TextColor = .white
+
+    /// Preferred subtitle language (ISO code), or empty for none/auto.
+    var preferredLanguage: String = ""
+}
+
+/// Offline download preferences. (The download engine itself is a separate,
+/// upcoming feature; these settings persist your choices for it.)
+struct DownloadPreferences: Codable {
+    enum Quality: String, Codable, CaseIterable, Identifiable {
+        case original, high, medium
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .original: "Original"
+            case .high: "High · 1080p"
+            case .medium: "Medium · 720p"
+            }
+        }
+    }
+    var quality: Quality = .high
+    var maxStorageGB: Int = 10
+    var allowCellular: Bool = false
+}
+
+/// Common languages offered in audio/subtitle pickers (ISO 639-2 codes).
+enum MediaLanguage {
+    static let options: [(code: String, label: String)] = [
+        ("", "Default"),
+        ("eng", "English"),
+        ("spa", "Spanish"),
+        ("fre", "French"),
+        ("ger", "German"),
+        ("ita", "Italian"),
+        ("por", "Portuguese"),
+        ("jpn", "Japanese"),
+        ("kor", "Korean"),
+        ("chi", "Chinese")
+    ]
 }
 
 // MARK: - Home layout

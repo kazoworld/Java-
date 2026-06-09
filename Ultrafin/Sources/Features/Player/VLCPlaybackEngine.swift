@@ -51,10 +51,23 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         media.addOption(":clock-jitter=0")
         media.addOption(":clock-synchro=0")
         // Loudness normalization evens out loud/quiet passages (VLC volnorm).
-        if SettingsStore.shared.audio.loudnessNormalization {
+        let audio = SettingsStore.shared.audio
+        if audio.loudnessNormalization {
             media.addOption(":audio-filter=normvol")
             media.addOption(":norm-max-level=2.0")
         }
+        if !audio.preferredLanguage.isEmpty {
+            media.addOption(":audio-language=\(audio.preferredLanguage)")
+        }
+
+        // Subtitle appearance + language.
+        let subs = SettingsStore.shared.subtitles
+        media.addOption(":sub-text-scale=\(subs.size.scalePercent)")
+        media.addOption(":freetype-color=\(subs.textColor.vlcColor)")
+        if !subs.preferredLanguage.isEmpty {
+            media.addOption(":sub-language=\(subs.preferredLanguage)")
+        }
+
         mediaPlayer.media = media
         subject.value.status = .buffering
     }
