@@ -44,9 +44,9 @@ struct VideoPlayerView: View {
         }
         .modifier(PlayerInteraction(
             seekInterval: seekInterval,
-            onTap: { toggleControls() },
+            onSelect: { handleSelect() },
             onPlayPause: { togglePlayPause() },
-            onExit: { close() },
+            onExit: { handleBack() },
             onSkip: { seconds in scrub(by: seconds) }
         ))
         #if os(tvOS)
@@ -117,16 +117,45 @@ struct VideoPlayerView: View {
 
     private var seekInterval: Double { model?.seekInterval ?? 15 }
 
-    private func toggleControls() {
-        controlsVisible.toggle()
-        if controlsVisible { scheduleHide() }
+    /// Clicking the remote / tapping the screen.
+    private func handleSelect() {
+        #if os(tvOS)
+        // Reveal if hidden, otherwise toggle playback — a "wake up" click never
+        // accidentally pauses.
+        if controlsVisible { togglePlayPause() } else { revealControls() }
+        #else
+        // Touch: tap shows or hides the overlay.
+        if controlsVisible { hideControls() } else { revealControls() }
+        #endif
+    }
+
+    /// Back/Menu: first press hides the controls; a second press exits.
+    private func handleBack() {
+        if controlsVisible {
+            hideControls()
+        } else {
+            close()
+        }
+    }
+
+    private func revealControls() {
+        controlsVisible = true
+        scheduleHide()
+    }
+
+    private func hideControls() {
+        hideTask?.cancel()
+        controlsVisible = false
     }
 
     private func scheduleHide() {
         hideTask?.cancel()
         hideTask = Task {
-            try? await Task.sleep(for: .seconds(4))
-            if !Task.isCancelled, model?.state.status == .playing {
+            try? await Task.sleep(for: .seconds(3.5))
+            // Auto-hide once playing or paused — but stay up while buffering or
+            // showing an error so the user always has feedback.
+            let status = model?.state.status
+            if !Task.isCancelled, status == .playing || status == .paused {
                 controlsVisible = false
             }
         }
@@ -148,7 +177,7 @@ struct VideoPlayerView: View {
 ///   rest. Also hides the status bar and home indicator during playback.
 private struct PlayerInteraction: ViewModifier {
     let seekInterval: Double
-    let onTap: () -> Void
+    let onSelect: () -> Void
     let onPlayPause: () -> Void
     let onExit: () -> Void
     let onSkip: (Double) -> Void
@@ -157,7 +186,7 @@ private struct PlayerInteraction: ViewModifier {
         #if os(tvOS)
         content
             .contentShape(Rectangle())
-            .onTapGesture { onTap() }
+            .onTapGesture { onSelect() }
             .onPlayPauseCommand { onPlayPause() }
             .onExitCommand { onExit() }
             .onMoveCommand { direction in
@@ -170,7 +199,7 @@ private struct PlayerInteraction: ViewModifier {
         #else
         content
             .contentShape(Rectangle())
-            .onTapGesture { onTap() }
+            .onTapGesture { onSelect() }
             .statusBarHidden()
             .persistentSystemOverlays(.hidden)
         #endif

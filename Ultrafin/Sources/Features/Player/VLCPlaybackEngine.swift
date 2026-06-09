@@ -111,6 +111,11 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         if let length = mediaPlayer.media?.length.intValue, length > 0 {
             state.duration = Double(length) / 1000.0
         }
+        // If time is advancing the stream is really playing — clear any stuck
+        // buffering spinner even if a state-change callback was missed.
+        if mediaPlayer.isPlaying, state.status == .buffering {
+            state.status = .playing
+        }
         subject.value = state
     }
 }

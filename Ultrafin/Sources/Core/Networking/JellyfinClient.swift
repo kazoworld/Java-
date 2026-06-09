@@ -163,6 +163,34 @@ actor JellyfinClient {
         try await get(MediaItem.self, path: "/Users/\(userID)/Items/\(itemID)")
     }
 
+    // MARK: - Series (seasons / episodes / next up)
+
+    /// Seasons of a series, ordered.
+    func seasons(seriesID: String, userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Shows/\(seriesID)/Seasons", query: [
+            .init(name: "userId", value: userID),
+            .init(name: "fields", value: "Overview")
+        ]).items
+    }
+
+    /// Episodes in a season of a series, ordered.
+    func episodes(seriesID: String, seasonID: String, userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Shows/\(seriesID)/Episodes", query: [
+            .init(name: "seasonId", value: seasonID),
+            .init(name: "userId", value: userID),
+            .init(name: "fields", value: "Overview")
+        ]).items
+    }
+
+    /// The next episode the user should watch for a series (resume or unwatched).
+    func nextUp(seriesID: String, userID: String) async throws -> MediaItem? {
+        try await get(ItemsResponse.self, path: "/Shows/NextUp", query: [
+            .init(name: "seriesId", value: seriesID),
+            .init(name: "userId", value: userID),
+            .init(name: "fields", value: "Overview")
+        ]).items.first
+    }
+
     // MARK: - Images & streaming URLs
 
     /// Builds a primary/backdrop image URL with an optional pixel width so the

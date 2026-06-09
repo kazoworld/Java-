@@ -12,7 +12,7 @@ struct MediaRail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             Text(title)
-                .font(Typography.sectionTitle)
+                .font(sectionTitleFont)
                 .foregroundStyle(UltrafinColors.primaryText)
                 .padding(.horizontal, edgePadding)
 
@@ -31,6 +31,14 @@ struct MediaRail: View {
             }
             .scrollClipDisabled()
         }
+    }
+
+    private var sectionTitleFont: Font {
+        #if os(tvOS)
+        .system(size: 30, weight: .bold, design: .rounded)
+        #else
+        Typography.sectionTitle
+        #endif
     }
 
     /// Leading/trailing inset. Larger on tvOS to stay inside the title-safe
@@ -73,10 +81,18 @@ struct MediaCard: View {
     let item: MediaItem
     var style: MediaRail.Style = .poster
 
-    @ScaledMetric private var posterWidth: CGFloat = 130
+    // TVs are viewed from across the room, so cards are far larger there than
+    // on a phone. Density then scales these bases up/down.
+    private var basePosterWidth: CGFloat {
+        #if os(tvOS)
+        240
+        #else
+        130
+        #endif
+    }
 
     private var width: CGFloat {
-        let base = style == .poster ? posterWidth : posterWidth * 1.6
+        let base = style == .poster ? basePosterWidth : basePosterWidth * 1.62
         return base * settings.appearance.cardDensity.scale
     }
     private var height: CGFloat { style == .poster ? width * 1.5 : width * 9 / 16 }
@@ -110,12 +126,12 @@ struct MediaCard: View {
             )
 
             Text(item.name)
-                .font(Typography.cardTitle)
+                .font(titleFont)
                 .foregroundStyle(isFocused ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
                 .lineLimit(1)
             if let subtitle {
                 Text(subtitle)
-                    .font(Typography.caption)
+                    .font(subtitleFont)
                     .foregroundStyle(UltrafinColors.tertiaryText)
                     .lineLimit(1)
             }
@@ -123,6 +139,21 @@ struct MediaCard: View {
         .frame(width: width)
         .contentShape(Rectangle())
         .animation(.smooth(duration: 0.2), value: isFocused)
+    }
+
+    private var titleFont: Font {
+        #if os(tvOS)
+        .system(size: 22, weight: .semibold, design: .rounded)
+        #else
+        Typography.cardTitle
+        #endif
+    }
+    private var subtitleFont: Font {
+        #if os(tvOS)
+        .system(size: 17, weight: .medium)
+        #else
+        Typography.caption
+        #endif
     }
 
     private var subtitle: String? {

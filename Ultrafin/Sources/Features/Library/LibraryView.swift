@@ -48,6 +48,8 @@ struct LibraryRootView: View {
         .navigationDestination(for: MediaItem.self) { item in
             if item.type == .collectionFolder || item.type == .folder {
                 LibraryContentsView(library: item)
+            } else if item.type == .series {
+                SeriesDetailView(series: item)
             } else {
                 ItemDetailView(item: item)
             }

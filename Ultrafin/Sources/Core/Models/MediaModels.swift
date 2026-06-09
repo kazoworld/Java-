@@ -16,6 +16,8 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let imageTags: [String: String]?
     let backdropImageTags: [String]?
     let seriesName: String?
+    let seriesId: String?
+    let seasonId: String?
     let indexNumber: Int?
     let parentIndexNumber: Int?
 
@@ -32,8 +34,18 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case imageTags = "ImageTags"
         case backdropImageTags = "BackdropImageTags"
         case seriesName = "SeriesName"
+        case seriesId = "SeriesId"
+        case seasonId = "SeasonId"
         case indexNumber = "IndexNumber"
         case parentIndexNumber = "ParentIndexNumber"
+    }
+
+    /// Compact episode tag like "S1·E4" for episodes.
+    var episodeTag: String? {
+        guard type == .episode else { return nil }
+        let s = parentIndexNumber.map { "S\($0)" } ?? ""
+        let e = indexNumber.map { "E\($0)" } ?? ""
+        return [s, e].filter { !$0.isEmpty }.joined(separator: "·")
     }
 
     /// Human-friendly runtime, e.g. "1h 47m".

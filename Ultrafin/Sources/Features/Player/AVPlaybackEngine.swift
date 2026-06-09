@@ -76,6 +76,16 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
                 state.duration = duration
             }
             state.bufferedTime = item.loadedTimeRanges.first.map { CMTimeRangeGetEnd($0.timeRangeValue).seconds } ?? 0
+            // Derive play/buffer state from the player itself so the loading
+            // spinner can never get stuck once playback is actually running.
+            // Pause/end are set explicitly, so we only clear buffering here.
+            if state.status != .ended, state.status != .paused {
+                switch self.player.timeControlStatus {
+                case .playing: state.status = .playing
+                case .waitingToPlayAtSpecifiedRate: state.status = .buffering
+                default: break
+                }
+            }
             self.subject.value = state
         }
 

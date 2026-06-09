@@ -87,7 +87,11 @@ struct HomeView: View {
         .ignoresSafeArea()
         .background(AmbientBackground())
         .navigationDestination(for: MediaItem.self) { item in
-            ItemDetailView(item: item)
+            if item.type == .series {
+                SeriesDetailView(series: item)
+            } else {
+                ItemDetailView(item: item)
+            }
         }
         .fullScreenCover(item: $playingItem) { item in
             if let session {
