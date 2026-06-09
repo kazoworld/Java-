@@ -165,6 +165,9 @@ struct VideoPreferences: Codable {
     var allowHDR: Bool = true
     /// Match the TV's refresh rate and dynamic range to the content.
     var matchContent: Bool = true
+    /// Starting quality for new playback (the in-player Quality menu can still
+    /// override per-session).
+    var defaultQuality: QualityOption = .auto
 }
 
 struct SubtitlePreferences: Codable {

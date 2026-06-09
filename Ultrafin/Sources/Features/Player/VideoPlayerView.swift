@@ -125,7 +125,8 @@ struct VideoPlayerView: View {
             userID: userID,
             client: client,
             settings: settings.playback,
-            captionMode: settings.subtitles.captionMode
+            captionMode: settings.subtitles.captionMode,
+            defaultQuality: settings.video.defaultQuality
         )
         model = vm
         await vm.start()

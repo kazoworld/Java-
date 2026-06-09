@@ -3,22 +3,24 @@ import Combine
 import Observation
 
 /// A user-selectable streaming quality. `auto` direct-plays when possible; the
-/// rest force a server transcode capped at the given bitrate.
-enum QualityOption: String, CaseIterable, Identifiable {
-    case auto, high, medium, low
+/// rest cap the stream at the given bitrate (transcoding when needed).
+enum QualityOption: String, CaseIterable, Identifiable, Codable {
+    case auto, highest, high, medium, low
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .auto: "Auto"
-        case .high: "High · 1080p"
-        case .medium: "Medium · 720p"
-        case .low: "Low · 480p"
+        case .auto: "Auto · Recommended"
+        case .highest: "4K · Highest"
+        case .high: "1080p · High"
+        case .medium: "720p · Medium"
+        case .low: "480p · Data Saver"
         }
     }
     var bitrate: Int? {
         switch self {
-        case .auto: nil
-        case .high: 8_000_000
+        case .auto: nil               // adaptive / direct play
+        case .highest: 120_000_000    // 4K, effectively uncapped
+        case .high: 20_000_000
         case .medium: 4_000_000
         case .low: 1_500_000
         }
@@ -56,13 +58,15 @@ final class VideoPlayerViewModel {
     private var captionDisengageTask: Task<Void, Never>?
 
     init(queue: [MediaItem], startIndex: Int, userID: String, client: JellyfinClient,
-         settings: PlaybackPreferences, captionMode: SubtitlePreferences.CaptionMode) {
+         settings: PlaybackPreferences, captionMode: SubtitlePreferences.CaptionMode,
+         defaultQuality: QualityOption = .auto) {
         self.queue = queue.isEmpty ? [] : queue
         self.index = min(max(0, startIndex), max(0, queue.count - 1))
         self.userID = userID
         self.client = client
         self.settings = settings
         self.captionMode = captionMode
+        self.quality = defaultQuality
     }
 
     // MARK: - Derived

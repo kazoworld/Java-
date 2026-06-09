@@ -27,12 +27,15 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
+                Picker("Default quality", selection: $settings.video.defaultQuality) {
+                    ForEach(QualityOption.allCases) { Text($0.label).tag($0) }
+                }
                 Toggle("HDR & Dolby Vision", isOn: $settings.video.allowHDR)
                 Toggle("Match content frame rate & range", isOn: $settings.video.matchContent)
             } header: {
                 Text("Video")
             } footer: {
-                Text("Pass through HDR10/Dolby Vision and match your TV to the show when supported.")
+                Text("Default quality applies to new playback; the in-player Quality menu can override it. “4K · Highest” streams the best available.")
             }
 
             Section {
