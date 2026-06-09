@@ -18,8 +18,20 @@ struct AppearanceSettingsView: View {
                 Toggle("Rich motion & parallax", isOn: $settings.appearance.richMotion)
             }
 
-            Section("Accent") {
+            Section {
                 accentPicker
+            } header: {
+                Text("Accent")
+            }
+
+            Section {
+                Toggle("OLED mode", isOn: $settings.appearance.oledMode)
+                Toggle("Ambient background", isOn: $settings.appearance.ambientBackground)
+                    .disabled(settings.appearance.oledMode)
+            } header: {
+                Text("Display")
+            } footer: {
+                Text("OLED mode uses true black for deeper contrast and lower power. Turn off the ambient background to reduce on-screen effects.")
             }
         }
         #if !os(tvOS)

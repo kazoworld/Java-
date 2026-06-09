@@ -50,6 +50,11 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         media.addOption(":file-caching=3500")
         media.addOption(":clock-jitter=0")
         media.addOption(":clock-synchro=0")
+        // Loudness normalization evens out loud/quiet passages (VLC volnorm).
+        if SettingsStore.shared.audio.loudnessNormalization {
+            media.addOption(":audio-filter=normvol")
+            media.addOption(":norm-max-level=2.0")
+        }
         mediaPlayer.media = media
         subject.value.status = .buffering
     }

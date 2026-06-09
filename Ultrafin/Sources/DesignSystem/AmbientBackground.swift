@@ -12,21 +12,29 @@ struct AmbientBackground: View {
 
     private var accent: Color { settings.theme.accent.color }
 
+    /// Show the colorful wash only when enabled and not in OLED mode (OLED wants
+    /// true black for deeper contrast and lower power).
+    private var showsWash: Bool {
+        settings.appearance.ambientBackground && !settings.appearance.oledMode
+    }
+
     var body: some View {
         ZStack {
-            UltrafinColors.background
+            (settings.appearance.oledMode ? Color.black : UltrafinColors.background)
 
-            GeometryReader { geo in
-                let w = geo.size.width
-                let h = geo.size.height
-                ZStack {
-                    blob(accent, center: UnitPoint(x: 0.05, y: 0.0), radius: w * 0.75)
-                    blob(accent.complement, center: UnitPoint(x: 1.0, y: 0.15), radius: w * 0.6)
-                    blob(accent.analogous, center: UnitPoint(x: 0.85, y: 1.0), radius: w * 0.8)
-                    blob(accent, center: UnitPoint(x: 0.1, y: 1.05), radius: h * 0.7)
+            if showsWash {
+                GeometryReader { geo in
+                    let w = geo.size.width
+                    let h = geo.size.height
+                    ZStack {
+                        blob(accent, center: UnitPoint(x: 0.05, y: 0.0), radius: w * 0.75)
+                        blob(accent.complement, center: UnitPoint(x: 1.0, y: 0.15), radius: w * 0.6)
+                        blob(accent.analogous, center: UnitPoint(x: 0.85, y: 1.0), radius: w * 0.8)
+                        blob(accent, center: UnitPoint(x: 0.1, y: 1.05), radius: h * 0.7)
+                    }
                 }
+                .opacity(0.5)
             }
-            .opacity(0.5)
         }
         .ignoresSafeArea()
     }

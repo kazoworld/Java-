@@ -24,6 +24,15 @@ final class SettingsStore {
     var featured: FeaturedPreferences {
         didSet { persist(featured, key: Keys.featured) }
     }
+    var audio: AudioPreferences {
+        didSet { persist(audio, key: Keys.audio) }
+    }
+    var video: VideoPreferences {
+        didSet { persist(video, key: Keys.video) }
+    }
+    var subtitles: SubtitlePreferences {
+        didSet { persist(subtitles, key: Keys.subtitles) }
+    }
 
     private enum Keys {
         static let theme = "settings.theme"
@@ -31,6 +40,9 @@ final class SettingsStore {
         static let playback = "settings.playback"
         static let homeLayout = "settings.homeLayout"
         static let featured = "settings.featured"
+        static let audio = "settings.audio"
+        static let video = "settings.video"
+        static let subtitles = "settings.subtitles"
     }
 
     private init() {
@@ -38,6 +50,9 @@ final class SettingsStore {
         appearance = Self.load(Keys.appearance) ?? AppearancePreferences()
         playback = Self.load(Keys.playback) ?? PlaybackPreferences()
         featured = Self.load(Keys.featured) ?? FeaturedPreferences()
+        audio = Self.load(Keys.audio) ?? AudioPreferences()
+        video = Self.load(Keys.video) ?? VideoPreferences()
+        subtitles = Self.load(Keys.subtitles) ?? SubtitlePreferences()
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout
@@ -99,6 +114,13 @@ struct AppearancePreferences: Codable {
     /// Controls how large poster/landscape cards render across the app.
     var cardDensity: CardDensity = .regular
 
+    /// True-black surfaces for OLED panels (deeper blacks, less burn-in, lower
+    /// power) — also implies a quieter background.
+    var oledMode: Bool = false
+
+    /// The colorful ambient wash. Turn off to reduce GPU/screen usage.
+    var ambientBackground: Bool = true
+
     var colorScheme: ColorScheme? {
         switch mode {
         case .system: nil
@@ -121,6 +143,45 @@ enum CardDensity: String, Codable, CaseIterable, Identifiable {
         case .large: 1.22
         }
     }
+}
+
+// MARK: - Audio / Video / Subtitles
+
+struct AudioPreferences: Codable {
+    /// Even out loud and quiet passages (great for late-night viewing).
+    var loudnessNormalization: Bool = false
+
+    /// Boost the center/dialogue channel — like Sonos Speech Enhancement.
+    enum DialogueEnhancement: String, Codable, CaseIterable, Identifiable {
+        case off, low, medium, high
+        var id: String { rawValue }
+        var label: String { self == .off ? "Off" : rawValue.capitalized }
+    }
+    var dialogueEnhancement: DialogueEnhancement = .off
+}
+
+struct VideoPreferences: Codable {
+    /// Allow HDR10 / Dolby Vision passthrough when the show and TV support it.
+    var allowHDR: Bool = true
+    /// Match the TV's refresh rate and dynamic range to the content.
+    var matchContent: Bool = true
+}
+
+struct SubtitlePreferences: Codable {
+    /// Closed-caption behavior. "Off unless engaged" briefly shows captions when
+    /// you skip/rewind, then hides them — the default.
+    enum CaptionMode: String, Codable, CaseIterable, Identifiable {
+        case off, whenEngaged, always
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .off: "Off"
+            case .whenEngaged: "Off unless engaged"
+            case .always: "Always on"
+            }
+        }
+    }
+    var captionMode: CaptionMode = .whenEngaged
 }
 
 // MARK: - Home layout
