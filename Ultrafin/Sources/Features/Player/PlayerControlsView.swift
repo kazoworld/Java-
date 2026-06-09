@@ -1,32 +1,31 @@
 import SwiftUI
 
-/// Transport overlay: title, progress, a focusable button bar (play/pause,
-/// skip, previous/next episode, captions, quality), and the selection panels.
-/// On tvOS the bar is driven by the focus engine; on iOS by touch.
+/// Transport overlay: title, progress, a focusable liquid-glass button bar
+/// (play/pause, skip, previous/next episode, captions, quality), and the
+/// selection panels. Focus is shared with the host view so the remote can move
+/// between the video and the controls reliably on tvOS.
 struct PlayerControlsView: View {
     @Bindable var model: VideoPlayerViewModel
     var skipFeedback: Int?
     @Binding var panel: PlayerPanel
+    var focus: FocusState<PlayerFocusTarget?>.Binding
 
     let onPlayPause: () -> Void
     let onSkip: (Double) -> Void
     let onSeekProgress: (Double) -> Void
     let onNext: () -> Void
     let onPrevious: () -> Void
-    let onInteraction: () -> Void
 
     @Environment(SettingsStore.self) private var settings
-    @FocusState private var focused: Control?
+    @FocusState private var panelFocus: Int?
     @State private var isScrubbing = false
     @State private var scrubProgress: Double = 0
-
-    enum Control: Hashable { case previous, back, playPause, forward, next, captions, quality }
 
     private var accent: Color { settings.theme.accent.color }
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [.black.opacity(0.7), .clear, .black.opacity(0.85)],
+            LinearGradient(colors: [.black.opacity(0.55), .clear, .black.opacity(0.75)],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
 
@@ -36,19 +35,18 @@ struct PlayerControlsView: View {
                     Spacer()
                     centerState
                     Spacer()
-                    bottomBar
+                    glassBar
                 }
                 .padding(platformPadding)
             } else {
                 selectionPanel
             }
         }
-        .onChange(of: focused) { _, _ in onInteraction() }
     }
 
     private var platformPadding: CGFloat {
         #if os(tvOS)
-        Spacing.xxl
+        Spacing.xl
         #else
         Spacing.lg
         #endif
@@ -60,7 +58,7 @@ struct PlayerControlsView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.currentItem?.name ?? "")
-                    .font(.system(size: titleSize, weight: .semibold, design: .rounded))
+                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 if let tag = model.currentItem?.episodeTag {
                     Text(tag).font(Typography.caption).foregroundStyle(.white.opacity(0.7))
@@ -69,7 +67,7 @@ struct PlayerControlsView: View {
             Spacer()
             Label(model.activeEngineName, systemImage: "cpu")
                 .font(Typography.caption)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(.white.opacity(0.55))
         }
     }
 
@@ -86,6 +84,7 @@ struct PlayerControlsView: View {
                 .foregroundStyle(.white)
                 .padding(Spacing.lg)
                 .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 1))
                 .transition(.scale.combined(with: .opacity))
         }
     }
@@ -98,9 +97,9 @@ struct PlayerControlsView: View {
         #endif
     }
 
-    // MARK: - Bottom (progress + buttons)
+    // MARK: - Bottom: liquid glass control bar
 
-    private var bottomBar: some View {
+    private var glassBar: some View {
         VStack(spacing: Spacing.md) {
             #if os(tvOS)
             ProgressTrack(progress: model.state.progress, buffered: bufferedFraction, height: 8)
@@ -117,67 +116,85 @@ struct PlayerControlsView: View {
                 Text("-" + timecode(max(0, model.state.duration - model.state.currentTime)))
             }
             .font(Typography.monoTimecode)
-            .foregroundStyle(.white.opacity(0.8))
+            .foregroundStyle(.white.opacity(0.85))
 
             buttonBar
         }
+        .padding(barPadding)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: barRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: barRadius, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
     }
 
     private var buttonBar: some View {
         HStack(spacing: buttonSpacing) {
             if model.hasPrevious {
-                controlButton("backward.end.fill", focus: .previous) { onPrevious() }
+                glassButton("backward.end.fill", target: .previous) { onPrevious() }
             }
-            controlButton("gobackward", focus: .back) { onSkip(-model.seekInterval) }
-            controlButton(model.state.status == .playing ? "pause.fill" : "play.fill",
-                          focus: .playPause, prominent: true) { onPlayPause() }
-            controlButton("goforward", focus: .forward) { onSkip(model.seekInterval) }
+            glassButton("gobackward", target: .back) { onSkip(-model.seekInterval) }
+            glassButton(model.state.status == .playing ? "pause.fill" : "play.fill",
+                        target: .playPause, prominent: true) { onPlayPause() }
+            glassButton("goforward", target: .forward) { onSkip(model.seekInterval) }
             if model.hasNext {
-                controlButton("forward.end.fill", focus: .next) { onNext() }
+                glassButton("forward.end.fill", target: .next) { onNext() }
             }
 
             Spacer()
 
-            controlButton(model.currentSubtitleID == nil ? "captions.bubble" : "captions.bubble.fill",
-                          focus: .captions) { panel = .captions }
-            controlButton("slider.horizontal.3", focus: .quality) { panel = .quality }
+            glassButton(model.currentSubtitleID == nil ? "captions.bubble" : "captions.bubble.fill",
+                        target: .captions) { panel = .captions }
+            glassButton("slider.horizontal.3", target: .quality) { panel = .quality }
         }
         .padding(.top, Spacing.xs)
     }
 
-    private func controlButton(_ system: String, focus: Control, prominent: Bool = false,
-                               action: @escaping () -> Void) -> some View {
+    private func glassButton(_ system: String, target: PlayerFocusTarget, prominent: Bool = false,
+                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.system(size: prominent ? buttonSize + 8 : buttonSize, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: buttonDiameter, height: buttonDiameter)
-                .background(prominent ? AnyShapeStyle(accent) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                .background {
+                    if prominent {
+                        Circle().fill(accent.gradient)
+                    } else {
+                        Circle().fill(.ultraThinMaterial)
+                    }
+                }
+                .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
         }
-        .buttonStyle(UltrafinButtonStyle(focusScale: 1.18, lift: false))
-        .focused($focused, equals: focus)
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.18, lift: true))
+        .focused(focus, equals: target)
     }
 
     // MARK: - Selection panel (captions / quality)
 
     private var selectionPanel: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        let captionOptions: [(id: Int, title: String, selectedID: Int?)] = {
+            var rows: [(Int, String, Int?)] = [(-1, "Off", nil)]
+            for track in model.subtitleTracks { rows.append((track.id, track.name, track.id)) }
+            return rows.map { (id: $0.0, title: $0.1, selectedID: $0.2) }
+        }()
+
+        return VStack(alignment: .leading, spacing: Spacing.md) {
             Text(panel == .captions ? "Subtitles & CC" : "Quality")
                 .font(.system(size: titleSize, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
 
             if panel == .captions {
-                panelRow(title: "Off", selected: model.currentSubtitleID == nil) {
-                    model.setSubtitle(id: nil); panel = .none
-                }
-                ForEach(model.subtitleTracks) { track in
-                    panelRow(title: track.name, selected: model.currentSubtitleID == track.id) {
-                        model.setSubtitle(id: track.id); panel = .none
+                ForEach(Array(captionOptions.enumerated()), id: \.offset) { idx, option in
+                    panelRow(index: idx, title: option.title,
+                             selected: model.currentSubtitleID == option.selectedID) {
+                        model.setSubtitle(id: option.selectedID); panel = .none
                     }
                 }
             } else {
-                ForEach(QualityOption.allCases) { option in
-                    panelRow(title: option.label, selected: model.quality == option) {
+                ForEach(Array(QualityOption.allCases.enumerated()), id: \.offset) { idx, option in
+                    panelRow(index: idx, title: option.label, selected: model.quality == option) {
                         Task { await model.setQuality(option) }
                         panel = .none
                     }
@@ -185,11 +202,16 @@ struct PlayerControlsView: View {
             }
         }
         .padding(Spacing.xl)
-        .frame(maxWidth: 520, alignment: .leading)
-        .glassCard()
+        .frame(maxWidth: 560, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: barRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: barRadius, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+        )
+        .onAppear { panelFocus = 0 }
     }
 
-    private func panelRow(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func panelRow(index: Int, title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
                 Text(title)
@@ -205,6 +227,7 @@ struct PlayerControlsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.04, lift: false))
+        .focused($panelFocus, equals: index)
     }
 
     // MARK: - Helpers
@@ -224,7 +247,7 @@ struct PlayerControlsView: View {
 
     private var titleSize: CGFloat {
         #if os(tvOS)
-        32
+        34
         #else
         18
         #endif
@@ -238,7 +261,7 @@ struct PlayerControlsView: View {
     }
     private var buttonDiameter: CGFloat {
         #if os(tvOS)
-        64
+        66
         #else
         46
         #endif
@@ -248,6 +271,20 @@ struct PlayerControlsView: View {
         Spacing.lg
         #else
         Spacing.md
+        #endif
+    }
+    private var barPadding: CGFloat {
+        #if os(tvOS)
+        Spacing.xl
+        #else
+        Spacing.lg
+        #endif
+    }
+    private var barRadius: CGFloat {
+        #if os(tvOS)
+        32
+        #else
+        24
         #endif
     }
 }

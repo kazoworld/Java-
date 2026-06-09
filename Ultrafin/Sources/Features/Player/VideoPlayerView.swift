@@ -3,6 +3,14 @@ import SwiftUI
 /// Which selection panel (if any) is open over the player.
 enum PlayerPanel: Equatable { case none, captions, quality }
 
+/// What currently holds focus in the player. `surface` is the invisible remote
+/// capture layer used while the controls are hidden; the rest are control-bar
+/// buttons. Sharing one `@FocusState` lets us move focus reliably between the
+/// video and the controls on tvOS.
+enum PlayerFocusTarget: Hashable {
+    case surface, previous, back, playPause, forward, next, captions, quality
+}
+
 /// A request to open the player on a queue of items at a starting index — used
 /// by screens that present playback (e.g. a season of episodes).
 struct PlaybackRequest: Identifiable {
@@ -30,9 +38,7 @@ struct VideoPlayerView: View {
     @State private var skipFeedbackTask: Task<Void, Never>?
     @State private var panel: PlayerPanel = .none
 
-    #if os(tvOS)
-    @FocusState private var surfaceFocused: Bool
-    #endif
+    @FocusState private var focus: PlayerFocusTarget?
 
     init(item: MediaItem, userID: String) {
         self.queue = [item]
@@ -55,9 +61,19 @@ struct VideoPlayerView: View {
                     PlayerSurface(view: engine.playerLayerView)
                         .id(ObjectIdentifier(engine)) // swap cleanly when the engine changes
                         .ignoresSafeArea()
-                        #if os(tvOS)
-                        .focusable(!controlsVisible)
-                        .focused($surfaceFocused)
+                        #if os(iOS)
+                        .onTapGesture { if controlsVisible { hideControls() } else { revealControls() } }
+                        #endif
+                }
+
+                #if os(tvOS)
+                // While controls are hidden, an invisible focusable layer owns
+                // the remote: swipe to scrub, click to reveal the controls.
+                if !controlsVisible && model.errorMessage == nil {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .focusable()
+                        .focused($focus, equals: .surface)
                         .onMoveCommand { direction in
                             switch direction {
                             case .left: scrub(by: -seekInterval)
@@ -66,10 +82,8 @@ struct VideoPlayerView: View {
                             }
                         }
                         .onTapGesture { revealControls() }
-                        #else
-                        .onTapGesture { if controlsVisible { hideControls() } else { revealControls() } }
-                        #endif
                 }
+                #endif
 
                 if let error = model.errorMessage {
                     errorOverlay(error)
@@ -78,12 +92,12 @@ struct VideoPlayerView: View {
                         model: model,
                         skipFeedback: skipFeedback,
                         panel: $panel,
+                        focus: $focus,
                         onPlayPause: { togglePlayPause() },
                         onSkip: { scrub(by: $0) },
                         onSeekProgress: { model.seek(toProgress: $0); resetHide() },
                         onNext: { Task { await model.playNext() }; resetHide() },
-                        onPrevious: { Task { await model.playPrevious() }; resetHide() },
-                        onInteraction: { resetHide() }
+                        onPrevious: { Task { await model.playPrevious() }; resetHide() }
                     )
                     .transition(.opacity)
                 }
@@ -94,6 +108,15 @@ struct VideoPlayerView: View {
         #if os(tvOS)
         .onPlayPauseCommand { togglePlayPause() }
         .onExitCommand { handleBack() }
+        .onChange(of: controlsVisible) { _, visible in
+            focus = visible ? .playPause : .surface
+        }
+        .onChange(of: panel) { _, newPanel in
+            if newPanel == .none && controlsVisible { focus = .playPause }
+        }
+        .onChange(of: focus) { _, _ in
+            if controlsVisible && panel == .none { resetHide() }
+        }
         #endif
         #if os(iOS)
         .statusBarHidden()
@@ -103,11 +126,6 @@ struct VideoPlayerView: View {
         .onChange(of: model?.state.status) { _, status in
             if status == .ended { handleEnded() }
         }
-        #if os(tvOS)
-        .onChange(of: controlsVisible) { _, visible in
-            if !visible { surfaceFocused = true }
-        }
-        #endif
         .onAppear { scheduleHide() }
         .onDisappear { model?.stop() }
         .animation(.smooth(duration: 0.25), value: controlsVisible)

@@ -80,6 +80,9 @@ struct MediaCard: View {
 
     let item: MediaItem
     var style: MediaRail.Style = .poster
+    /// When true the card fills its container's width (for grids); otherwise it
+    /// uses a fixed width (for horizontal rails).
+    var fillWidth: Bool = false
 
     // TVs are viewed from across the room, so cards are far larger there than
     // on a phone. Density then scales these bases up/down.
@@ -96,12 +99,13 @@ struct MediaCard: View {
         return base * settings.appearance.cardDensity.scale
     }
     private var height: CGFloat { style == .poster ? width * 1.5 : width * 9 / 16 }
+    /// Width / height aspect of the artwork.
+    private var aspect: CGFloat { style == .poster ? 2.0 / 3.0 : 16.0 / 9.0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             ZStack(alignment: .bottom) {
-                RemoteImage(url: artworkURL)
-                    .frame(width: width, height: height)
+                artwork
                     .clipShape(RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous))
 
                 if let progress = item.playbackProgress {
@@ -136,9 +140,22 @@ struct MediaCard: View {
                     .lineLimit(1)
             }
         }
-        .frame(width: width)
+        .frame(maxWidth: fillWidth ? .infinity : width)
+        .frame(width: fillWidth ? nil : width)
         .contentShape(Rectangle())
         .animation(.smooth(duration: 0.2), value: isFocused)
+    }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if fillWidth {
+            RemoteImage(url: artworkURL)
+                .aspectRatio(aspect, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+        } else {
+            RemoteImage(url: artworkURL)
+                .frame(width: width, height: height)
+        }
     }
 
     private var titleFont: Font {

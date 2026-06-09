@@ -135,7 +135,8 @@ struct AppearancePreferences: Codable {
     }
 }
 
-/// Relative sizing for media cards, applied app-wide.
+/// Relative sizing for media cards, applied app-wide. The default (Regular) is
+/// the larger, premium size that reads best on a TV.
 enum CardDensity: String, Codable, CaseIterable, Identifiable {
     case compact, regular, large
     var id: String { rawValue }
@@ -143,9 +144,9 @@ enum CardDensity: String, Codable, CaseIterable, Identifiable {
     /// Multiplier applied to the base card width.
     var scale: CGFloat {
         switch self {
-        case .compact: 0.82
-        case .regular: 1.0
-        case .large: 1.22
+        case .compact: 1.0
+        case .regular: 1.22
+        case .large: 1.45
         }
     }
 }

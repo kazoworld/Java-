@@ -24,11 +24,16 @@ struct LibraryRootView: View {
         return nil
     }
 
-    // Library cards are wide banners, so the grid uses wider columns that still
-    // track the Card size setting.
+    // Library cards are wide banners; columns are sized per platform and scale
+    // with the Card size setting. Cards fill their cell so nothing clips.
     private var columns: [GridItem] {
         let scale = settings.appearance.cardDensity.scale
-        return [GridItem(.adaptive(minimum: 240 * scale, maximum: 320 * scale), spacing: Spacing.md)]
+        #if os(tvOS)
+        let minWidth = 360.0 * scale
+        #else
+        let minWidth = 240.0 * scale
+        #endif
+        return [GridItem(.adaptive(minimum: minWidth, maximum: minWidth * 1.4), spacing: Spacing.lg)]
     }
 
     var body: some View {
@@ -36,7 +41,7 @@ struct LibraryRootView: View {
             LazyVGrid(columns: columns, spacing: Spacing.lg) {
                 ForEach(model.libraries) { library in
                     NavigationLink(value: library) {
-                        MediaCard(item: library, style: .landscape)
+                        MediaCard(item: library, style: .landscape, fillWidth: true)
                     }
                     .mediaCardButtonStyle()
                 }
@@ -77,7 +82,12 @@ struct LibraryContentsView: View {
 
     private var columns: [GridItem] {
         let scale = settings.appearance.cardDensity.scale
-        return [GridItem(.adaptive(minimum: 130 * scale, maximum: 180 * scale), spacing: Spacing.md)]
+        #if os(tvOS)
+        let minWidth = 200.0 * scale
+        #else
+        let minWidth = 130.0 * scale
+        #endif
+        return [GridItem(.adaptive(minimum: minWidth, maximum: minWidth * 1.4), spacing: Spacing.lg)]
     }
 
     var body: some View {
@@ -88,7 +98,7 @@ struct LibraryContentsView: View {
                 LazyVGrid(columns: columns, spacing: Spacing.lg) {
                     ForEach(items) { item in
                         NavigationLink(value: item) {
-                            MediaCard(item: item, style: .poster)
+                            MediaCard(item: item, style: .poster, fillWidth: true)
                         }
                         .mediaCardButtonStyle()
                     }

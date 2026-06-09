@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Rich detail screen with a parallax backdrop, metadata, and a play button
-/// that hands off to the hybrid player. Honors the "rich motion" setting.
+/// Cinematic detail screen for a movie (or any single playable item): a
+/// full-bleed backdrop hero with title, metadata, synopsis, and a prominent
+/// Play button — in the style of Netflix / Hulu / Peacock.
 struct ItemDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
@@ -22,24 +23,10 @@ struct ItemDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 hero
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    metadataRow
-                    PrimaryButton(title: playButtonTitle, systemImage: "play.fill") {
-                        presentPlayer = true
-                    }
-                    .frame(maxWidth: 360)
-
-                    if let overview = displayed.overview, !overview.isEmpty {
-                        Text(overview)
-                            .font(Typography.body)
-                            .foregroundStyle(UltrafinColors.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .padding(.horizontal, Spacing.lg)
             }
             .padding(.bottom, Spacing.xxl)
         }
+        .ignoresSafeArea(edges: .top)
         .background(AmbientBackground())
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -55,48 +42,80 @@ struct ItemDetailView: View {
         }
     }
 
+    // MARK: - Hero
+
     private var hero: some View {
-        GeometryReader { geo in
-            let minY = geo.frame(in: .global).minY
-            let stretch = settings.appearance.richMotion ? max(0, minY) : 0
+        ZStack(alignment: .bottomLeading) {
             RemoteImage(url: backdropURL)
-                .frame(width: geo.size.width, height: 320 + stretch)
+                .frame(height: heroHeight)
+                .frame(maxWidth: .infinity)
                 .clipped()
-                .offset(y: -stretch)
                 .overlay(UltrafinColors.heroScrim)
-        }
-        .frame(height: 320)
-    }
 
-    private var metadataRow: some View {
-        HStack(spacing: Spacing.md) {
-            Text(displayed.name)
-                .font(Typography.displayTitle)
-                .foregroundStyle(UltrafinColors.primaryText)
-                .lineLimit(2)
-            Spacer()
-        }
-        .overlay(alignment: .bottomLeading) {
-            HStack(spacing: Spacing.md) {
-                if let year = displayed.productionYear { chip(String(year)) }
-                if let runtime = displayed.runtimeText { chip(runtime) }
-                if let rating = displayed.officialRating { chip(rating) }
-                if let community = displayed.communityRating {
-                    chip(String(format: "★ %.1f", community))
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Text(displayed.name)
+                    .font(.system(size: titleSize, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
+
+                metadata
+
+                if let overview = displayed.overview, !overview.isEmpty {
+                    Text(overview)
+                        .font(.system(size: overviewSize, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(3)
+                        .frame(maxWidth: 1000, alignment: .leading)
+                        .shadow(color: .black.opacity(0.5), radius: 8, y: 2)
                 }
+
+                playButton
             }
-            .offset(y: 36)
+            .padding(.horizontal, edgePadding)
+            .padding(.bottom, Spacing.lg)
         }
-        .padding(.bottom, 36)
     }
 
-    private func chip(_ text: String) -> some View {
+    private var metadata: some View {
+        HStack(spacing: Spacing.sm) {
+            if let community = displayed.communityRating {
+                chip(String(format: "★ %.1f", community), accentColor: true)
+            }
+            if let year = displayed.productionYear { dot(); chip(String(year)) }
+            if let runtime = displayed.runtimeText { dot(); chip(runtime) }
+            if let rating = displayed.officialRating {
+                dot()
+                chip(rating)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, 2)
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+            }
+        }
+    }
+
+    private func chip(_ text: String, accentColor: Bool = false) -> some View {
         Text(text)
-            .font(Typography.caption)
-            .foregroundStyle(UltrafinColors.secondaryText)
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
-            .glassCard(cornerRadius: Spacing.sm)
+            .font(.system(size: metaSize, weight: .semibold, design: .rounded))
+            .foregroundStyle(accentColor ? settings.theme.accent.color : .white.opacity(0.9))
+            .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
+    }
+
+    private func dot() -> some View {
+        Circle().fill(.white.opacity(0.5)).frame(width: 4, height: 4)
+    }
+
+    private var playButton: some View {
+        Button { presentPlayer = true } label: {
+            Label(playButtonTitle, systemImage: "play.fill")
+                .font(.system(size: actionFont, weight: .bold, design: .rounded))
+                .padding(.horizontal, Spacing.xl)
+                .padding(.vertical, Spacing.md)
+                .background(settings.theme.accent.color, in: Capsule())
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: true))
+        .padding(.top, Spacing.sm)
     }
 
     private var playButtonTitle: String {
@@ -109,7 +128,52 @@ struct ItemDetailView: View {
     private var backdropURL: URL? {
         let tag = displayed.backdropImageTags?.first ?? displayed.imageTags?["Primary"]
         let kind: JellyfinClient.ImageKind = displayed.backdropImageTags?.isEmpty == false ? .backdrop : .primary
-        return appState.client?.imageURL(itemID: displayed.id, kind: kind, tag: tag, maxWidth: 1280)
+        return appState.client?.imageURL(itemID: displayed.id, kind: kind, tag: tag, maxWidth: 1920)
+    }
+
+    // MARK: - Metrics
+
+    private var heroHeight: CGFloat {
+        #if os(tvOS)
+        620
+        #else
+        420
+        #endif
+    }
+    private var titleSize: CGFloat {
+        #if os(tvOS)
+        62
+        #else
+        34
+        #endif
+    }
+    private var metaSize: CGFloat {
+        #if os(tvOS)
+        22
+        #else
+        14
+        #endif
+    }
+    private var overviewSize: CGFloat {
+        #if os(tvOS)
+        26
+        #else
+        16
+        #endif
+    }
+    private var actionFont: CGFloat {
+        #if os(tvOS)
+        28
+        #else
+        17
+        #endif
+    }
+    private var edgePadding: CGFloat {
+        #if os(tvOS)
+        60
+        #else
+        20
+        #endif
     }
 }
 

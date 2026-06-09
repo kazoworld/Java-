@@ -107,49 +107,58 @@ struct FeaturedHero: View {
     @ViewBuilder
     private var content: some View {
         if let current {
-            VStack(alignment: .leading, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("FEATURED")
+                    .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
+                    .tracking(4)
+                    .foregroundStyle(accent)
+                    .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
+
                 Text(current.name)
-                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(UltrafinColors.primaryText)
+                    .font(.system(size: titleSize, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
                     .lineLimit(2)
-                    .shadow(radius: 8)
+                    .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
 
                 metadata(for: current)
 
                 if let overview = current.overview, !overview.isEmpty {
                     Text(overview)
-                        .font(Typography.body)
-                        .foregroundStyle(UltrafinColors.secondaryText)
-                        .lineLimit(2)
+                        .font(.system(size: overviewSize, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(3)
                         .frame(maxWidth: overviewWidth, alignment: .leading)
+                        .shadow(color: .black.opacity(0.5), radius: 8, y: 2)
                 }
 
                 HStack(spacing: Spacing.md) {
                     Button { onPlay(current) } label: {
                         Label("Play", systemImage: "play.fill")
-                            .font(.system(size: actionFont, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, Spacing.lg)
-                            .padding(.vertical, Spacing.sm)
+                            .font(.system(size: actionFont, weight: .bold, design: .rounded))
+                            .padding(.horizontal, Spacing.xl)
+                            .padding(.vertical, Spacing.md)
                             .background(settings.theme.accent.color, in: Capsule())
                             .foregroundStyle(.white)
                     }
-                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
+                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
                     .focused($focus, equals: .play)
 
                     NavigationLink(value: current) {
                         Label("More Info", systemImage: "info.circle")
                             .font(.system(size: actionFont, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, Spacing.lg)
-                            .padding(.vertical, Spacing.sm)
+                            .padding(.horizontal, Spacing.xl)
+                            .padding(.vertical, Spacing.md)
                             .background(.ultraThinMaterial, in: Capsule())
-                            .foregroundStyle(UltrafinColors.primaryText)
+                            .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+                            .foregroundStyle(.white)
                     }
-                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
+                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
                     .focused($focus, equals: .info)
 
                     Spacer()
                     pageDots
                 }
+                .padding(.top, Spacing.sm)
                 // Pause rotation while the user is interacting with the hero.
                 .onChange(of: focus) { _, newValue in isFocused = (newValue != nil) }
             }
@@ -158,18 +167,31 @@ struct FeaturedHero: View {
     }
 
     private func metadata(for item: MediaItem) -> some View {
-        HStack(spacing: Spacing.md) {
-            if let year = item.productionYear { chip(String(year)) }
-            if let runtime = item.runtimeText { chip(runtime) }
-            if let rating = item.officialRating { chip(rating) }
-            if let community = item.communityRating { chip(String(format: "★ %.1f", community)) }
+        HStack(spacing: Spacing.sm) {
+            if let community = item.communityRating {
+                chip(String(format: "★ %.1f", community), accentColor: true)
+            }
+            if let year = item.productionYear { dot(); chip(String(year)) }
+            if let runtime = item.runtimeText { dot(); chip(runtime) }
+            if let rating = item.officialRating {
+                dot()
+                chip(rating)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, 2)
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+            }
         }
     }
 
-    private func chip(_ text: String) -> some View {
+    private func chip(_ text: String, accentColor: Bool = false) -> some View {
         Text(text)
-            .font(Typography.caption)
-            .foregroundStyle(UltrafinColors.secondaryText)
+            .font(.system(size: metaSize, weight: .semibold, design: .rounded))
+            .foregroundStyle(accentColor ? accent : .white.opacity(0.9))
+            .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
+    }
+
+    private func dot() -> some View {
+        Circle().fill(.white.opacity(0.5)).frame(width: 4, height: 4)
     }
 
     private var pageDots: some View {
@@ -201,35 +223,56 @@ struct FeaturedHero: View {
 
     private var heroHeight: CGFloat {
         #if os(tvOS)
-        560
+        640
         #else
-        420
+        460
+        #endif
+    }
+    private var eyebrowSize: CGFloat {
+        #if os(tvOS)
+        22
+        #else
+        13
         #endif
     }
     private var titleSize: CGFloat {
         #if os(tvOS)
-        56
+        74
         #else
-        34
+        40
+        #endif
+    }
+    private var metaSize: CGFloat {
+        #if os(tvOS)
+        22
+        #else
+        14
+        #endif
+    }
+    private var overviewSize: CGFloat {
+        #if os(tvOS)
+        26
+        #else
+        16
         #endif
     }
     private var actionFont: CGFloat {
         #if os(tvOS)
-        24
+        28
         #else
         17
         #endif
     }
     private var heroPadding: EdgeInsets {
         #if os(tvOS)
-        EdgeInsets(top: 0, leading: 60, bottom: 48, trailing: 60)
+        EdgeInsets(top: 0, leading: 60, bottom: 56, trailing: 60)
         #else
-        EdgeInsets(top: 0, leading: 20, bottom: 24, trailing: 20)
+        EdgeInsets(top: 0, leading: 20, bottom: 28, trailing: 20)
         #endif
     }
     private var overviewWidth: CGFloat {
         #if os(tvOS)
-        900
+        1000
         #else
         .infinity
         #endif
