@@ -27,6 +27,12 @@ enum QualityOption: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+/// A contextual "Skip Intro" / "Skip Credits" prompt derived from media segments.
+struct SkipAction: Equatable {
+    let label: String
+    let target: Double
+}
+
 /// Drives the player screen. Owns a queue of items (so episodes can advance),
 /// resolves each stream, picks the engine per policy, mirrors engine state, and
 /// reports progress back to the server.
@@ -45,6 +51,7 @@ final class VideoPlayerViewModel {
     private(set) var queue: [MediaItem]
     private(set) var index: Int
     private(set) var quality: QualityOption = .auto
+    private(set) var segments: [MediaSegment] = []
 
     private let userID: String
     private let client: JellyfinClient
@@ -103,9 +110,30 @@ final class VideoPlayerViewModel {
             revision += 1
             engine.load(url: resolution.streamURL, startAt: seconds)
             engine.play()
+            // Intro/outro segments for the Skip Intro button (best-effort).
+            segments = await client.mediaSegments(itemID: item.id)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? "Couldn't start playback."
         }
+    }
+
+    /// The contextual skip prompt for the current playback position, if any.
+    var activeSkip: SkipAction? {
+        let t = state.currentTime
+        guard t > 0.5 else { return nil }
+        for seg in segments where t >= seg.start && t < seg.end - 1 {
+            switch seg.kind {
+            case .intro: return SkipAction(label: "Skip Intro", target: seg.end)
+            case .outro: return SkipAction(label: "Skip Credits", target: seg.end)
+            case .other: continue
+            }
+        }
+        return nil
+    }
+
+    func skipCurrentSegment() {
+        guard let target = activeSkip?.target else { return }
+        engine?.seek(to: target)
     }
 
     private func makeEngine(for resolution: PlaybackResolution) -> PlaybackEngine {

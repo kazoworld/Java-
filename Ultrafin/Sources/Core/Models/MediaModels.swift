@@ -165,6 +165,14 @@ struct ItemsResponse: Codable, Sendable {
 
 // MARK: - Playback
 
+/// An intro/outro/etc. segment from the Media Segments API (e.g. Intro Skipper).
+struct MediaSegment: Equatable, Sendable {
+    enum Kind: Equatable, Sendable { case intro, outro, other }
+    let kind: Kind
+    let start: Double // seconds
+    let end: Double
+}
+
 /// Playback details resolved from `/Items/{id}/PlaybackInfo`. Determines which
 /// engine the hybrid player uses and the exact stream URL to open.
 struct PlaybackResolution: Sendable {

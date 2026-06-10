@@ -45,6 +45,25 @@ struct PlaybackInfoResponse: Decodable {
     }
 }
 
+/// `/MediaSegments/{itemId}` response (intro/outro detection).
+struct MediaSegmentsResponse: Decodable {
+    let items: [Segment]
+
+    struct Segment: Decodable {
+        let type: String
+        let startTicks: Int64
+        let endTicks: Int64
+
+        enum CodingKeys: String, CodingKey {
+            case type = "Type"
+            case startTicks = "StartTicks"
+            case endTicks = "EndTicks"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey { case items = "Items" }
+}
+
 struct MediaSource: Decodable {
     let id: String?
     let container: String?

@@ -255,6 +255,22 @@ actor JellyfinClient {
         ]).items
     }
 
+    /// Intro/outro segments for an item (from the Intro Skipper plugin / Media
+    /// Segments API). Returns empty when unavailable so the UI degrades cleanly.
+    func mediaSegments(itemID: String) async -> [MediaSegment] {
+        guard let request = try? makeRequest(path: "/MediaSegments/\(itemID)"),
+              let data = try? await perform(request),
+              let result = try? decoder.decode(MediaSegmentsResponse.self, from: data)
+        else { return [] }
+        return result.items.map { seg in
+            let kind: MediaSegment.Kind = seg.type == "Intro" ? .intro
+                : (seg.type == "Outro" ? .outro : .other)
+            return MediaSegment(kind: kind,
+                                start: Double(seg.startTicks) / 10_000_000,
+                                end: Double(seg.endTicks) / 10_000_000)
+        }
+    }
+
     // MARK: - Images & streaming URLs
 
     /// Builds a primary/backdrop image URL with an optional pixel width so the

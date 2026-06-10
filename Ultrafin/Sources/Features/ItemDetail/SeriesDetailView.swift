@@ -127,14 +127,29 @@ struct SeriesDetailView: View {
     // MARK: - Hero
 
     private var hero: some View {
-        RemoteImage(url: backdropURL)
-            .frame(height: heroHeight)
-            .frame(maxWidth: .infinity)
-            .clipped()
-            .overlay(
-                LinearGradient(colors: [.clear, .clear, UltrafinColors.background],
-                               startPoint: .top, endPoint: .bottom)
-            )
+        let item = model?.displayed ?? series
+        return ZStack(alignment: .bottomLeading) {
+            RemoteImage(url: backdropURL)
+                .frame(height: heroHeight)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .overlay(
+                    LinearGradient(colors: [.clear, .clear, UltrafinColors.background],
+                                   startPoint: .top, endPoint: .bottom)
+                )
+
+            TitleLogo(logoURL: logoURL(item), title: item.name,
+                      fallbackFont: .system(size: titleSize, weight: .heavy, design: .rounded),
+                      fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
+                .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
+                .padding(.horizontal, edgePadding)
+                .padding(.bottom, Spacing.md)
+        }
+    }
+
+    private func logoURL(_ item: MediaItem) -> URL? {
+        guard let tag = item.imageTags?["Logo"] else { return nil }
+        return appState.client?.imageURL(itemID: item.id, kind: .logo, tag: tag, maxWidth: 800)
     }
 
     // MARK: - Content
@@ -143,11 +158,6 @@ struct SeriesDetailView: View {
     private func detailColumn(_ model: SeriesDetailViewModel) -> some View {
         let item = model.displayed
         VStack(alignment: .leading, spacing: Spacing.md) {
-            Text(item.name)
-                .font(.system(size: titleSize, weight: .heavy, design: .rounded))
-                .foregroundStyle(UltrafinColors.primaryText)
-                .lineLimit(2)
-
             DetailBadges(item: item, seasonCount: model.seasons.count)
 
             playButton(model)
@@ -312,6 +322,20 @@ struct SeriesDetailView: View {
         60
         #else
         20
+        #endif
+    }
+    private var logoMaxWidth: CGFloat {
+        #if os(tvOS)
+        640
+        #else
+        320
+        #endif
+    }
+    private var logoMaxHeight: CGFloat {
+        #if os(tvOS)
+        150
+        #else
+        90
         #endif
     }
 }

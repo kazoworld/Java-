@@ -108,11 +108,10 @@ struct FeaturedHero: View {
     private var content: some View {
         if let current {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                Text(current.name)
-                    .font(.system(size: titleSize, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .shadow(color: .black.opacity(0.7), radius: 16, y: 6)
+                TitleLogo(logoURL: logoURL(current), title: current.name,
+                          fallbackFont: .system(size: titleSize, weight: .heavy, design: .rounded),
+                          fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
+                    .shadow(color: .black.opacity(0.6), radius: 16, y: 6)
 
                 infoCard(for: current)
 
@@ -218,6 +217,26 @@ struct FeaturedHero: View {
         withAnimation(.easeInOut(duration: 0.6)) {
             index = (index + 1) % items.count
         }
+    }
+
+    private func logoURL(_ item: MediaItem) -> URL? {
+        guard let tag = item.imageTags?["Logo"] else { return nil }
+        return appState.client?.imageURL(itemID: item.id, kind: .logo, tag: tag, maxWidth: 800)
+    }
+
+    private var logoMaxWidth: CGFloat {
+        #if os(tvOS)
+        720
+        #else
+        360
+        #endif
+    }
+    private var logoMaxHeight: CGFloat {
+        #if os(tvOS)
+        150
+        #else
+        80
+        #endif
     }
 
     private func backdropURL(for item: MediaItem) -> URL? {

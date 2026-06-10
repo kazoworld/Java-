@@ -9,7 +9,7 @@ enum PlayerPanel: Equatable { case none, quality }
 /// buttons. Sharing one `@FocusState` lets us move focus reliably between the
 /// video and the controls on tvOS.
 enum PlayerFocusTarget: Hashable {
-    case surface, previous, back, playPause, forward, next, captions, quality
+    case surface, previous, back, playPause, forward, next, captions, quality, skipIntro
 }
 
 /// A request to open the player on a queue of items at a starting index — used
@@ -86,6 +86,30 @@ struct VideoPlayerView: View {
                 }
                 #endif
 
+                // Floating "Skip Intro / Skip Credits" prompt, shown over the
+                // video regardless of whether the controls are visible.
+                if let skip = model.activeSkip {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button { model.skipCurrentSegment() } label: {
+                                Label(skip.label, systemImage: "forward.fill")
+                                    .font(.system(size: skipFont, weight: .bold, design: .rounded))
+                                    .padding(.horizontal, Spacing.lg)
+                                    .padding(.vertical, Spacing.md)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
+                            .focused($focus, equals: .skipIntro)
+                        }
+                    }
+                    .padding(skipPadding)
+                    .transition(.opacity)
+                }
+
                 if let error = model.errorMessage {
                     errorOverlay(error)
                 } else if controlsVisible {
@@ -119,6 +143,11 @@ struct VideoPlayerView: View {
         .onChange(of: focus) { _, _ in
             if controlsVisible && panel == .none { resetHide() }
         }
+        .onChange(of: model?.activeSkip) { _, skip in
+            // Pull focus to the Skip button while it's showing, then release.
+            if skip != nil { focus = .skipIntro }
+            else if !controlsVisible { focus = .surface }
+        }
         #endif
         #if os(iOS)
         .statusBarHidden()
@@ -133,6 +162,22 @@ struct VideoPlayerView: View {
         .animation(.smooth(duration: 0.25), value: controlsVisible)
         .animation(.smooth(duration: 0.2), value: panel)
         .animation(.smooth(duration: 0.2), value: skipFeedback)
+        .animation(.smooth(duration: 0.25), value: model?.activeSkip)
+    }
+
+    private var skipFont: CGFloat {
+        #if os(tvOS)
+        24
+        #else
+        16
+        #endif
+    }
+    private var skipPadding: CGFloat {
+        #if os(tvOS)
+        Spacing.xxl
+        #else
+        Spacing.xl
+        #endif
     }
 
     // MARK: - Start
