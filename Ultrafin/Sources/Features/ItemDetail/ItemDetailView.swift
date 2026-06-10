@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Cinematic detail screen for a movie (or any single playable item): a
-/// full-bleed backdrop hero with title, metadata, synopsis, and a prominent
-/// Play button — in the style of Netflix / Hulu / Peacock.
+/// Rich, Netflix-style detail screen for a movie (or any single playable item):
+/// backdrop, metadata badges, a prominent Play button, My List / Watched
+/// actions, synopsis with cast, and a "More Like This" rail.
 struct ItemDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
@@ -10,6 +10,9 @@ struct ItemDetailView: View {
     let item: MediaItem
 
     @State private var detail: MediaItem?
+    @State private var similar: [MediaItem] = []
+    @State private var isFavorite = false
+    @State private var isWatched = false
     @State private var presentPlayer = false
 
     private var session: UserSession? {
@@ -23,6 +26,7 @@ struct ItemDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 hero
+                content
             }
             .padding(.bottom, Spacing.xxl)
         }
@@ -31,10 +35,7 @@ struct ItemDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task {
-            guard let session, let client = appState.client else { return }
-            detail = try? await client.itemDetail(item.id, userID: session.userID)
-        }
+        .task { await load() }
         .fullScreenCoverCompat(isPresented: $presentPlayer) {
             if let session {
                 VideoPlayerView(item: displayed, userID: session.userID)
@@ -42,80 +43,119 @@ struct ItemDetailView: View {
         }
     }
 
+    private func load() async {
+        guard let session, let client = appState.client else { return }
+        async let detailTask = try? client.itemDetail(item.id, userID: session.userID)
+        async let similarTask = try? client.similarItems(itemID: item.id, userID: session.userID)
+        detail = await detailTask ?? nil
+        similar = await similarTask ?? []
+        isFavorite = displayed.userData?.isFavorite ?? false
+        isWatched = displayed.userData?.played ?? false
+    }
+
     // MARK: - Hero
 
     private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            RemoteImage(url: backdropURL)
-                .frame(height: heroHeight)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .overlay(UltrafinColors.heroScrim)
-
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text(displayed.name)
-                    .font(.system(size: titleSize, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
-
-                metadata
-
-                if let overview = displayed.overview, !overview.isEmpty {
-                    Text(overview)
-                        .font(.system(size: overviewSize, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(3)
-                        .frame(maxWidth: 1000, alignment: .leading)
-                        .shadow(color: .black.opacity(0.5), radius: 8, y: 2)
-                }
-
-                playButton
-            }
-            .padding(.horizontal, edgePadding)
-            .padding(.bottom, Spacing.lg)
-        }
+        RemoteImage(url: backdropURL)
+            .frame(height: heroHeight)
+            .frame(maxWidth: .infinity)
+            .clipped()
+            .overlay(
+                LinearGradient(colors: [.clear, .clear, UltrafinColors.background],
+                               startPoint: .top, endPoint: .bottom)
+            )
     }
 
-    private var metadata: some View {
-        HStack(spacing: Spacing.sm) {
-            if let community = displayed.communityRating {
-                chip(String(format: "★ %.1f", community), accentColor: true)
+    // MARK: - Content
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text(displayed.name)
+                .font(.system(size: titleSize, weight: .heavy, design: .rounded))
+                .foregroundStyle(UltrafinColors.primaryText)
+                .lineLimit(2)
+
+            DetailBadges(item: displayed)
+
+            playButton
+
+            if let overview = displayed.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(.system(size: overviewSize))
+                    .foregroundStyle(UltrafinColors.secondaryText)
+                    .lineLimit(5)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            if let year = displayed.productionYear { dot(); chip(String(year)) }
-            if let runtime = displayed.runtimeText { dot(); chip(runtime) }
-            if let rating = displayed.officialRating {
-                dot()
-                chip(rating)
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, 2)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+
+            CastCrewView(item: displayed)
+
+            actionRow
+
+            if !similar.isEmpty {
+                Text("More Like This")
+                    .font(.system(size: titleSize * 0.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(UltrafinColors.primaryText)
+                    .padding(.top, Spacing.md)
+                similarRail
             }
         }
-    }
-
-    private func chip(_ text: String, accentColor: Bool = false) -> some View {
-        Text(text)
-            .font(.system(size: metaSize, weight: .semibold, design: .rounded))
-            .foregroundStyle(accentColor ? settings.theme.accent.color : .white.opacity(0.9))
-            .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
-    }
-
-    private func dot() -> some View {
-        Circle().fill(.white.opacity(0.5)).frame(width: 4, height: 4)
+        .padding(.horizontal, edgePadding)
     }
 
     private var playButton: some View {
         Button { presentPlayer = true } label: {
             Label(playButtonTitle, systemImage: "play.fill")
                 .font(.system(size: actionFont, weight: .bold, design: .rounded))
-                .padding(.horizontal, Spacing.xl)
+                .frame(maxWidth: 420)
                 .padding(.vertical, Spacing.md)
                 .background(settings.theme.accent.color, in: Capsule())
                 .foregroundStyle(.white)
         }
-        .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: true))
-        .padding(.top, Spacing.sm)
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: true))
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: Spacing.xl) {
+            DetailActionButton(title: "My List",
+                               systemImage: isFavorite ? "checkmark" : "plus",
+                               active: isFavorite) { toggleFavorite() }
+            DetailActionButton(title: "Watched",
+                               systemImage: isWatched ? "eye.fill" : "eye",
+                               active: isWatched) { toggleWatched() }
+            Spacer()
+        }
+        .padding(.top, Spacing.xs)
+    }
+
+    private var similarRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.lg) {
+                ForEach(similar) { item in
+                    NavigationLink(value: item) {
+                        MediaCard(item: item, style: .poster)
+                    }
+                    .mediaCardButtonStyle()
+                }
+            }
+            .padding(.vertical, Spacing.md)
+        }
+        .scrollClipDisabled()
+    }
+
+    // MARK: - Actions
+
+    private func toggleFavorite() {
+        isFavorite.toggle()
+        let value = isFavorite
+        guard let session, let client = appState.client else { return }
+        Task { await client.setFavorite(itemID: item.id, userID: session.userID, isFavorite: value) }
+    }
+
+    private func toggleWatched() {
+        isWatched.toggle()
+        let value = isWatched
+        guard let session, let client = appState.client else { return }
+        Task { await client.setPlayed(itemID: item.id, userID: session.userID, isPlayed: value) }
     }
 
     private var playButtonTitle: String {
@@ -135,37 +175,30 @@ struct ItemDetailView: View {
 
     private var heroHeight: CGFloat {
         #if os(tvOS)
-        620
+        540
         #else
-        420
+        300
         #endif
     }
     private var titleSize: CGFloat {
         #if os(tvOS)
-        62
+        52
         #else
-        34
-        #endif
-    }
-    private var metaSize: CGFloat {
-        #if os(tvOS)
-        22
-        #else
-        14
+        30
         #endif
     }
     private var overviewSize: CGFloat {
         #if os(tvOS)
-        26
+        24
         #else
-        16
+        15
         #endif
     }
     private var actionFont: CGFloat {
         #if os(tvOS)
-        28
+        24
         #else
-        17
+        16
         #endif
     }
     private var edgePadding: CGFloat {

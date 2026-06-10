@@ -7,11 +7,14 @@ final class SeriesDetailViewModel {
     private let client: JellyfinClient
     private let userID: String
 
+    var detail: MediaItem?
     var seasons: [MediaItem] = []
     var selectedSeasonID: String?
     var episodes: [MediaItem] = []
-    /// The episode the big Play button will start (resume / next up / first).
+    var similar: [MediaItem] = []
     var playTarget: MediaItem?
+    var isFavorite = false
+    var isWatched = false
     var isLoading = true
 
     init(series: MediaItem, client: JellyfinClient, userID: String) {
@@ -20,9 +23,9 @@ final class SeriesDetailViewModel {
         self.userID = userID
     }
 
+    var displayed: MediaItem { detail ?? series }
     var selectedSeason: MediaItem? { seasons.first { $0.id == selectedSeasonID } }
 
-    /// "Resume S1·E4" / "Play S1·E1" / "Play".
     var playLabel: String {
         guard let target = playTarget else { return "Play" }
         let verb = (target.playbackProgress ?? 0) > 0.01 ? "Resume" : "Play"
@@ -32,19 +35,24 @@ final class SeriesDetailViewModel {
 
     func load() async {
         isLoading = true
+        async let detailTask = try? client.itemDetail(series.id, userID: userID)
         async let seasonsTask = try? client.seasons(seriesID: series.id, userID: userID)
         async let nextTask = try? client.nextUp(seriesID: series.id, userID: userID)
+        async let similarTask = try? client.similarItems(itemID: series.id, userID: userID)
 
+        detail = await detailTask ?? nil
         seasons = await seasonsTask ?? []
         playTarget = await nextTask ?? nil
+        similar = await similarTask ?? []
 
-        // Open on the season that contains the next-up episode, else the first.
+        isFavorite = displayed.userData?.isFavorite ?? false
+        isWatched = displayed.userData?.played ?? false
+
         let initialID = playTarget?.seasonId ?? seasons.first?.id
         selectedSeasonID = initialID
         if let sid = initialID {
             episodes = (try? await client.episodes(seriesID: series.id, seasonID: sid, userID: userID)) ?? []
         }
-        // No next-up (fresh series) → default to the first episode.
         if playTarget == nil { playTarget = episodes.first }
         isLoading = false
     }
@@ -54,10 +62,23 @@ final class SeriesDetailViewModel {
         selectedSeasonID = id
         episodes = (try? await client.episodes(seriesID: series.id, seasonID: id, userID: userID)) ?? []
     }
+
+    func toggleFavorite() {
+        isFavorite.toggle()
+        let value = isFavorite
+        Task { await client.setFavorite(itemID: series.id, userID: userID, isFavorite: value) }
+    }
+
+    func toggleWatched() {
+        isWatched.toggle()
+        let value = isWatched
+        Task { await client.setPlayed(itemID: series.id, userID: userID, isPlayed: value) }
+    }
 }
 
-/// Netflix-style series page: backdrop hero with a smart Play button, a season
-/// switcher, and the episode list for the selected season.
+/// Rich, Netflix-style series page: backdrop, metadata, a smart Play button,
+/// My List / Watched actions, synopsis with cast, and tabs for Episodes and
+/// More Like This.
 struct SeriesDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
@@ -66,6 +87,7 @@ struct SeriesDetailView: View {
 
     @State private var model: SeriesDetailViewModel?
     @State private var playback: PlaybackRequest?
+    @State private var tab = 0
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -74,13 +96,10 @@ struct SeriesDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
                 hero
                 if let model {
-                    if !model.seasons.isEmpty {
-                        seasonPicker(model)
-                    }
-                    episodeList(model)
+                    detailColumn(model)
                 }
             }
             .padding(.bottom, Spacing.xxl)
@@ -98,17 +117,6 @@ struct SeriesDetailView: View {
         }
     }
 
-    /// Plays `episode` within the current season as a queue, so the in-player
-    /// Next/Previous controls and auto-advance work across the season.
-    private func play(_ episode: MediaItem) {
-        guard let model else { return }
-        if let idx = model.episodes.firstIndex(where: { $0.id == episode.id }) {
-            playback = PlaybackRequest(queue: model.episodes, index: idx)
-        } else {
-            playback = PlaybackRequest(queue: [episode], index: 0)
-        }
-    }
-
     private func loadIfNeeded() async {
         guard model == nil, let session, let client = appState.client else { return }
         let vm = SeriesDetailViewModel(series: series, client: client, userID: session.userID)
@@ -119,95 +127,104 @@ struct SeriesDetailView: View {
     // MARK: - Hero
 
     private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            RemoteImage(url: backdropURL)
-                .frame(height: heroHeight)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .overlay(UltrafinColors.heroScrim)
-
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text(series.name)
-                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(UltrafinColors.primaryText)
-                    .lineLimit(2)
-                metadata
-                if let overview = series.overview, !overview.isEmpty {
-                    Text(overview)
-                        .font(Typography.body)
-                        .foregroundStyle(UltrafinColors.secondaryText)
-                        .lineLimit(3)
-                        .frame(maxWidth: 900, alignment: .leading)
-                }
-                playButton
-            }
-            .padding(.horizontal, edgePadding)
-            .padding(.bottom, Spacing.lg)
-        }
+        RemoteImage(url: backdropURL)
+            .frame(height: heroHeight)
+            .frame(maxWidth: .infinity)
+            .clipped()
+            .overlay(
+                LinearGradient(colors: [.clear, .clear, UltrafinColors.background],
+                               startPoint: .top, endPoint: .bottom)
+            )
     }
 
-    private var metadata: some View {
-        HStack(spacing: Spacing.md) {
-            if let year = series.productionYear { chip(String(year)) }
-            if let rating = series.officialRating { chip(rating) }
-            if let community = series.communityRating { chip(String(format: "★ %.1f", community)) }
-        }
-    }
-
-    private func chip(_ text: String) -> some View {
-        Text(text)
-            .font(Typography.caption)
-            .foregroundStyle(UltrafinColors.secondaryText)
-    }
+    // MARK: - Content
 
     @ViewBuilder
-    private var playButton: some View {
-        if let model, let target = model.playTarget {
-            Button { play(target) } label: {
-                Label(model.playLabel, systemImage: "play.fill")
-                    .font(.system(size: actionFont, weight: .semibold, design: .rounded))
-                    .padding(.horizontal, Spacing.lg)
-                    .padding(.vertical, Spacing.sm)
-                    .background(settings.theme.accent.color, in: Capsule())
-                    .foregroundStyle(.white)
+    private func detailColumn(_ model: SeriesDetailViewModel) -> some View {
+        let item = model.displayed
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text(item.name)
+                .font(.system(size: titleSize, weight: .heavy, design: .rounded))
+                .foregroundStyle(UltrafinColors.primaryText)
+                .lineLimit(2)
+
+            DetailBadges(item: item, seasonCount: model.seasons.count)
+
+            playButton(model)
+
+            if let overview = item.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(.system(size: overviewSize))
+                    .foregroundStyle(UltrafinColors.secondaryText)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
-            .padding(.top, Spacing.sm)
+
+            CastCrewView(item: item)
+
+            actionRow(model)
+
+            DetailTabBar(tabs: ["Episodes", "More Like This"], selection: $tab)
+                .padding(.top, Spacing.sm)
+
+            if tab == 0 {
+                seasonPicker(model)
+                episodeList(model)
+            } else {
+                similarRail(model)
+            }
         }
+        .padding(.horizontal, edgePadding)
     }
 
-    // MARK: - Season picker
+    private func playButton(_ model: SeriesDetailViewModel) -> some View {
+        Button { if let target = model.playTarget { play(target) } } label: {
+            Label(model.playLabel, systemImage: "play.fill")
+                .font(.system(size: actionFont, weight: .bold, design: .rounded))
+                .frame(maxWidth: 420)
+                .padding(.vertical, Spacing.md)
+                .background(settings.theme.accent.color, in: Capsule())
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: true))
+    }
+
+    private func actionRow(_ model: SeriesDetailViewModel) -> some View {
+        HStack(spacing: Spacing.xl) {
+            DetailActionButton(title: "My List",
+                               systemImage: model.isFavorite ? "checkmark" : "plus",
+                               active: model.isFavorite) { model.toggleFavorite() }
+            DetailActionButton(title: "Watched",
+                               systemImage: model.isWatched ? "eye.fill" : "eye",
+                               active: model.isWatched) { model.toggleWatched() }
+            Spacer()
+        }
+        .padding(.top, Spacing.xs)
+    }
+
+    // MARK: - Seasons & episodes
 
     private func seasonPicker(_ model: SeriesDetailViewModel) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.md) {
                 ForEach(model.seasons) { season in
-                    Button {
-                        Task { await model.selectSeason(season.id) }
-                    } label: {
+                    Button { Task { await model.selectSeason(season.id) } } label: {
                         Text(season.name)
                             .font(.system(size: actionFont, weight: .semibold, design: .rounded))
                             .padding(.horizontal, Spacing.lg)
                             .padding(.vertical, Spacing.sm)
-                            .background(
-                                Capsule().fill(season.id == model.selectedSeasonID
-                                               ? settings.theme.accent.color.opacity(0.9)
-                                               : Color.clear)
-                            )
+                            .background(Capsule().fill(season.id == model.selectedSeasonID
+                                                       ? settings.theme.accent.color.opacity(0.9) : Color.clear))
                             .overlay(Capsule().strokeBorder(UltrafinColors.separator, lineWidth: 1))
-                            .foregroundStyle(season.id == model.selectedSeasonID
-                                             ? .white : UltrafinColors.primaryText)
+                            .foregroundStyle(season.id == model.selectedSeasonID ? .white : UltrafinColors.primaryText)
                     }
                     .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: false))
                 }
             }
-            .padding(.horizontal, edgePadding)
             .padding(.vertical, Spacing.sm)
         }
         .scrollClipDisabled()
     }
-
-    // MARK: - Episodes
 
     private func episodeList(_ model: SeriesDetailViewModel) -> some View {
         LazyVStack(spacing: Spacing.md) {
@@ -215,18 +232,44 @@ struct SeriesDetailView: View {
                 Button { play(episode) } label: {
                     EpisodeRow(episode: episode, imageURL: episodeImageURL(episode))
                 }
-                .buttonStyle(UltrafinButtonStyle(focusScale: 1.03, lift: true))
+                .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: true))
             }
         }
-        .padding(.horizontal, edgePadding)
+    }
+
+    private func similarRail(_ model: SeriesDetailViewModel) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.lg) {
+                ForEach(model.similar) { item in
+                    NavigationLink(value: item) {
+                        MediaCard(item: item, style: .poster)
+                    }
+                    .mediaCardButtonStyle()
+                }
+            }
+            .padding(.vertical, Spacing.md)
+        }
+        .scrollClipDisabled()
+    }
+
+    // MARK: - Playback
+
+    private func play(_ episode: MediaItem) {
+        guard let model else { return }
+        if let idx = model.episodes.firstIndex(where: { $0.id == episode.id }) {
+            playback = PlaybackRequest(queue: model.episodes, index: idx)
+        } else {
+            playback = PlaybackRequest(queue: [episode], index: 0)
+        }
     }
 
     // MARK: - Image URLs
 
     private var backdropURL: URL? {
-        let tag = series.backdropImageTags?.first ?? series.imageTags?["Primary"]
-        let kind: JellyfinClient.ImageKind = series.backdropImageTags?.isEmpty == false ? .backdrop : .primary
-        return appState.client?.imageURL(itemID: series.id, kind: kind, tag: tag, maxWidth: 1920)
+        let item = model?.displayed ?? series
+        let tag = item.backdropImageTags?.first ?? item.imageTags?["Primary"]
+        let kind: JellyfinClient.ImageKind = item.backdropImageTags?.isEmpty == false ? .backdrop : .primary
+        return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: 1920)
     }
 
     private func episodeImageURL(_ episode: MediaItem) -> URL? {
@@ -234,11 +277,11 @@ struct SeriesDetailView: View {
         return appState.client?.imageURL(itemID: episode.id, kind: .primary, tag: tag, maxWidth: 600)
     }
 
-    // MARK: - Platform metrics
+    // MARK: - Metrics
 
     private var heroHeight: CGFloat {
         #if os(tvOS)
-        520
+        540
         #else
         300
         #endif
@@ -247,19 +290,26 @@ struct SeriesDetailView: View {
         #if os(tvOS)
         52
         #else
-        32
+        30
+        #endif
+    }
+    private var overviewSize: CGFloat {
+        #if os(tvOS)
+        24
+        #else
+        15
         #endif
     }
     private var actionFont: CGFloat {
         #if os(tvOS)
-        22
+        24
         #else
         16
         #endif
     }
     private var edgePadding: CGFloat {
         #if os(tvOS)
-        56
+        60
         #else
         20
         #endif

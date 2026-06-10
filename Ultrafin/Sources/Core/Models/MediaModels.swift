@@ -22,6 +22,7 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let parentIndexNumber: Int?
     let genres: [String]?
     let childCount: Int?
+    let people: [Person]?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -42,12 +43,31 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case parentIndexNumber = "ParentIndexNumber"
         case genres = "Genres"
         case childCount = "ChildCount"
+        case people = "People"
     }
 
     /// "Drama · Sci-Fi · Thriller" from the first few genres.
     var genreText: String? {
         guard let genres, !genres.isEmpty else { return nil }
         return genres.prefix(3).joined(separator: " · ")
+    }
+
+    /// Top-billed cast names, comma separated.
+    var castText: String? {
+        let names = (people ?? []).filter { $0.type == "Actor" }.prefix(4).map(\.name)
+        return names.isEmpty ? nil : names.joined(separator: ", ")
+    }
+
+    /// Director (movie) or creator/writer (series), labeled.
+    var crewLine: (label: String, name: String)? {
+        let people = people ?? []
+        if let director = people.first(where: { $0.type == "Director" }) {
+            return ("Director", director.name)
+        }
+        if let writer = people.first(where: { $0.type == "Writer" }) {
+            return ("Creator", writer.name)
+        }
+        return nil
     }
 
     /// Compact episode tag like "S1·E4" for episodes.
@@ -72,6 +92,21 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         guard let played = userData?.playbackPositionTicks, let total = runTimeTicks, total > 0, played > 0
         else { return nil }
         return min(1, Double(played) / Double(total))
+    }
+}
+
+/// A cast or crew member attached to an item.
+struct Person: Codable, Hashable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let type: String
+    let role: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+        case name = "Name"
+        case type = "Type"
+        case role = "Role"
     }
 }
 

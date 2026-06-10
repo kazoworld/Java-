@@ -236,6 +236,25 @@ actor JellyfinClient {
         return (try? await perform(request)) != nil
     }
 
+    /// Toggle an item's watched/played status.
+    @discardableResult
+    func setPlayed(itemID: String, userID: String, isPlayed: Bool) async -> Bool {
+        let method = isPlayed ? "POST" : "DELETE"
+        guard let request = try? makeRequest(path: "/Users/\(userID)/PlayedItems/\(itemID)", method: method) else {
+            return false
+        }
+        return (try? await perform(request)) != nil
+    }
+
+    /// "More Like This" — items similar to the given one.
+    func similarItems(itemID: String, userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Items/\(itemID)/Similar", query: [
+            .init(name: "userId", value: userID),
+            .init(name: "limit", value: "12"),
+            .init(name: "fields", value: "Overview,Genres")
+        ]).items
+    }
+
     // MARK: - Images & streaming URLs
 
     /// Builds a primary/backdrop image URL with an optional pixel width so the
