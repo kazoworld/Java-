@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Which selection panel (if any) is open over the player.
-enum PlayerPanel: Equatable { case none, captions, quality }
+/// Which selection panel (if any) is open over the player. Captions are a
+/// one-press toggle (no panel); quality opens a small list.
+enum PlayerPanel: Equatable { case none, quality }
 
 /// What currently holds focus in the player. `surface` is the invisible remote
 /// capture layer used while the controls are hidden; the rest are control-bar
@@ -97,7 +98,8 @@ struct VideoPlayerView: View {
                         onSkip: { scrub(by: $0) },
                         onSeekProgress: { model.seek(toProgress: $0); resetHide() },
                         onNext: { Task { await model.playNext() }; resetHide() },
-                        onPrevious: { Task { await model.playPrevious() }; resetHide() }
+                        onPrevious: { Task { await model.playPrevious() }; resetHide() },
+                        onToggleCaptions: { model.toggleCaptions(); resetHide() }
                     )
                     .transition(.opacity)
                 }

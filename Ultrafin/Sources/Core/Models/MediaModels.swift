@@ -20,6 +20,8 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let seasonId: String?
     let indexNumber: Int?
     let parentIndexNumber: Int?
+    let genres: [String]?
+    let childCount: Int?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -38,6 +40,14 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case seasonId = "SeasonId"
         case indexNumber = "IndexNumber"
         case parentIndexNumber = "ParentIndexNumber"
+        case genres = "Genres"
+        case childCount = "ChildCount"
+    }
+
+    /// "Drama · Sci-Fi · Thriller" from the first few genres.
+    var genreText: String? {
+        guard let genres, !genres.isEmpty else { return nil }
+        return genres.prefix(3).joined(separator: " · ")
     }
 
     /// Compact episode tag like "S1·E4" for episodes.

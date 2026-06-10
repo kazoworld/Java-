@@ -66,11 +66,14 @@ final class SettingsStore {
     // MARK: - Home layout mutations
 
     /// Moves a row up or down in the Home order (used by the reorder controls,
-    /// which work on tvOS where drag-to-reorder isn't available).
+    /// which work on tvOS where drag-to-reorder isn't available). The featured
+    /// media bar is pinned to the top and can't be reordered.
     func moveHomeRow(_ kind: HomeRowKind, up: Bool) {
+        guard kind != .featured else { return }
         guard let i = homeLayout.rows.firstIndex(where: { $0.kind == kind }) else { return }
+        let lower = homeLayout.rows.first?.kind == .featured ? 1 : 0
         let j = up ? i - 1 : i + 1
-        guard homeLayout.rows.indices.contains(j) else { return }
+        guard j >= lower, j < homeLayout.rows.count else { return }
         homeLayout.rows.swapAt(i, j)
     }
 
@@ -196,7 +199,7 @@ struct SubtitlePreferences: Codable {
             }
         }
     }
-    var captionMode: CaptionMode = .whenEngaged
+    var captionMode: CaptionMode = .off
 
     enum Size: String, Codable, CaseIterable, Identifiable {
         case small, medium, large
@@ -261,7 +264,10 @@ enum MediaLanguage {
 enum HomeRowKind: String, Codable, CaseIterable, Identifiable {
     case featured
     case continueWatching
+    case comingUp
     case recentlyAdded
+    case recentShows
+    case favorites
     case libraries
 
     var id: String { rawValue }
@@ -270,7 +276,10 @@ enum HomeRowKind: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .featured: "Featured Banner"
         case .continueWatching: "Continue Watching"
+        case .comingUp: "Coming Up"
         case .recentlyAdded: "Recently Added"
+        case .recentShows: "Recently Added TV Shows"
+        case .favorites: "Favorites"
         case .libraries: "Your Libraries"
         }
     }
@@ -279,7 +288,10 @@ enum HomeRowKind: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .featured: "rectangle.on.rectangle.angled"
         case .continueWatching: "play.circle"
+        case .comingUp: "calendar"
         case .recentlyAdded: "sparkles"
+        case .recentShows: "tv"
+        case .favorites: "heart"
         case .libraries: "square.stack"
         }
     }
@@ -345,6 +357,11 @@ struct HomeLayoutPreferences: Codable {
         rows = rows.filter { seen.insert($0.kind).inserted }
         for kind in HomeRowKind.allCases where !seen.contains(kind) {
             rows.append(HomeRowConfig(kind: kind, isEnabled: true))
+        }
+        // Pin the featured media bar to the top.
+        if let fi = rows.firstIndex(where: { $0.kind == .featured }), fi != 0 {
+            let featured = rows.remove(at: fi)
+            rows.insert(featured, at: 0)
         }
     }
 }

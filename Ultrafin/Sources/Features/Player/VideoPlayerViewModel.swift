@@ -204,13 +204,36 @@ final class VideoPlayerViewModel {
         revision += 1
     }
 
+    /// Single-press captions toggle: off → preferred (English) track, on → off.
+    func toggleCaptions() {
+        guard let engine else { return }
+        if engine.currentSubtitleID != nil {
+            engine.selectSubtitle(id: nil)
+        } else if let track = preferredSubtitleTrack() {
+            engine.selectSubtitle(id: track.id)
+        }
+        revision += 1
+    }
+
+    var captionsOn: Bool { engine?.currentSubtitleID != nil }
+
+    private func preferredSubtitleTrack() -> MediaTrack? {
+        let tracks = engine?.subtitleTracks ?? []
+        let code = SettingsStore.shared.subtitles.preferredLanguage
+        let label = MediaLanguage.options.first(where: { $0.code == code })?.label ?? "English"
+        let target = (code.isEmpty ? "english" : label.lowercased())
+        if let match = tracks.first(where: { $0.name.lowercased().contains(target) }) { return match }
+        if let eng = tracks.first(where: { $0.name.lowercased().contains("eng") }) { return eng }
+        return tracks.first
+    }
+
     private func applyCaptionDefault() {
         guard let engine else { return }
         switch captionMode {
         case .off, .whenEngaged:
             engine.selectSubtitle(id: nil)
         case .always:
-            if let first = engine.subtitleTracks.first { engine.selectSubtitle(id: first.id) }
+            engine.selectSubtitle(id: preferredSubtitleTrack()?.id)
         }
         revision += 1
     }

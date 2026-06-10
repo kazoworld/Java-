@@ -9,11 +9,17 @@ import SwiftUI
 struct HomeLayoutEditorView: View {
     @Environment(SettingsStore.self) private var settings
 
+    /// The reorderable rows — everything except the pinned featured media bar
+    /// (its visibility lives on the Media Bar page).
+    private var editableRows: [HomeRowConfig] {
+        settings.homeLayout.rows.filter { $0.kind != .featured }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.md) {
-                ForEach(Array(settings.homeLayout.rows.enumerated()), id: \.element.kind) { index, config in
-                    rowEditor(index: index, config: config)
+                ForEach(editableRows) { config in
+                    rowEditor(config: config)
                 }
             }
             .padding(Spacing.lg)
@@ -24,8 +30,10 @@ struct HomeLayoutEditorView: View {
         .navigationTitle("Home Layout")
     }
 
-    private func rowEditor(index: Int, config: HomeRowConfig) -> some View {
-        let count = settings.homeLayout.rows.count
+    private func rowEditor(config: HomeRowConfig) -> some View {
+        let rows = settings.homeLayout.rows
+        let index = rows.firstIndex(where: { $0.kind == config.kind }) ?? 0
+        let lower = rows.first?.kind == .featured ? 1 : 0
         return HStack(spacing: Spacing.md) {
             Image(systemName: config.kind.systemImage)
                 .foregroundStyle(config.isEnabled ? settings.theme.accent.color : UltrafinColors.tertiaryText)
@@ -34,10 +42,10 @@ struct HomeLayoutEditorView: View {
                 .font(.system(size: 18, weight: .medium, design: .rounded))
                 .foregroundStyle(config.isEnabled ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
             Spacer()
-            iconButton("chevron.up", enabled: index > 0) {
+            iconButton("chevron.up", enabled: index > lower) {
                 settings.moveHomeRow(config.kind, up: true)
             }
-            iconButton("chevron.down", enabled: index < count - 1) {
+            iconButton("chevron.down", enabled: index < rows.count - 1) {
                 settings.moveHomeRow(config.kind, up: false)
             }
             iconButton(config.isEnabled ? "eye.fill" : "eye.slash", enabled: true) {

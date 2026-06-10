@@ -6,6 +6,9 @@ final class HomeViewModel {
     var resume: [MediaItem] = []
     var latest: [MediaItem] = []
     var libraries: [MediaItem] = []
+    var comingUp: [MediaItem] = []
+    var recentShows: [MediaItem] = []
+    var favorites: [MediaItem] = []
     /// Latest items from the media bar's chosen libraries (when not "all").
     var featuredPool: [MediaItem] = []
     var isLoading = true
@@ -14,13 +17,19 @@ final class HomeViewModel {
     func load(client: JellyfinClient, userID: String, featured: FeaturedPreferences) async {
         isLoading = true
         defer { isLoading = false }
-        // Fetch the three home rails concurrently so the screen paints fast.
+        // Fetch the rails concurrently so the screen paints fast.
         async let resumeTask = try? client.resumeItems(userID: userID)
         async let latestTask = try? client.latestItems(userID: userID)
         async let viewsTask = try? client.userViews(userID: userID)
+        async let comingTask = try? client.nextUp(userID: userID)
+        async let showsTask = try? client.latestItems(userID: userID, includeItemTypes: "Series")
+        async let favTask = try? client.favorites(userID: userID)
         resume = await resumeTask ?? []
         latest = await latestTask ?? []
         libraries = await viewsTask ?? []
+        comingUp = await comingTask ?? []
+        recentShows = await showsTask ?? []
+        favorites = await favTask ?? []
 
         // When the media bar is scoped to specific libraries, pull their latest.
         if !featured.sourceLibraryIDs.isEmpty {
@@ -153,9 +162,21 @@ struct HomeView: View {
             if !model.resume.isEmpty {
                 MediaRail(title: "Continue Watching", items: model.resume, style: .landscape)
             }
+        case .comingUp:
+            if !model.comingUp.isEmpty {
+                MediaRail(title: "Coming Up", items: model.comingUp, style: .landscape)
+            }
         case .recentlyAdded:
             if !model.latest.isEmpty {
                 MediaRail(title: "Recently Added", items: model.latest, style: .poster)
+            }
+        case .recentShows:
+            if !model.recentShows.isEmpty {
+                MediaRail(title: "Recently Added TV Shows", items: model.recentShows, style: .poster)
+            }
+        case .favorites:
+            if !model.favorites.isEmpty {
+                MediaRail(title: "Favorites", items: model.favorites, style: .poster)
             }
         case .libraries:
             if !model.libraries.isEmpty {

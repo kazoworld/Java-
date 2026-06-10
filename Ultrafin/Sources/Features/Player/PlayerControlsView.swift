@@ -15,6 +15,7 @@ struct PlayerControlsView: View {
     let onSeekProgress: (Double) -> Void
     let onNext: () -> Void
     let onPrevious: () -> Void
+    let onToggleCaptions: () -> Void
 
     @Environment(SettingsStore.self) private var settings
     @FocusState private var panelFocus: Int?
@@ -25,9 +26,12 @@ struct PlayerControlsView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [.black.opacity(0.55), .clear, .black.opacity(0.75)],
-                           startPoint: .top, endPoint: .bottom)
+            // Only a soft gradient at the very top for title legibility — the
+            // video stays clear; the glass bar provides its own backing.
+            LinearGradient(colors: [.black.opacity(0.45), .clear],
+                           startPoint: .top, endPoint: .center)
                 .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             if panel == .none {
                 VStack(spacing: 0) {
@@ -144,19 +148,19 @@ struct PlayerControlsView: View {
 
             Spacer()
 
-            glassButton(model.currentSubtitleID == nil ? "captions.bubble" : "captions.bubble.fill",
-                        target: .captions) { panel = .captions }
+            glassButton(model.captionsOn ? "captions.bubble.fill" : "captions.bubble",
+                        target: .captions, active: model.captionsOn) { onToggleCaptions() }
             glassButton("slider.horizontal.3", target: .quality) { panel = .quality }
         }
         .padding(.top, Spacing.xs)
     }
 
     private func glassButton(_ system: String, target: PlayerFocusTarget, prominent: Bool = false,
-                             action: @escaping () -> Void) -> some View {
+                             active: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.system(size: prominent ? buttonSize + 8 : buttonSize, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(active && !prominent ? accent : .white)
                 .frame(width: buttonDiameter, height: buttonDiameter)
                 .background {
                     if prominent {
@@ -165,7 +169,8 @@ struct PlayerControlsView: View {
                         Circle().fill(.ultraThinMaterial)
                     }
                 }
-                .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                .overlay(Circle().strokeBorder(active ? accent : .white.opacity(0.18),
+                                               lineWidth: active ? 2 : 1))
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.18, lift: true))
         .focused(focus, equals: target)
@@ -174,30 +179,15 @@ struct PlayerControlsView: View {
     // MARK: - Selection panel (captions / quality)
 
     private var selectionPanel: some View {
-        let captionOptions: [(id: Int, title: String, selectedID: Int?)] = {
-            var rows: [(Int, String, Int?)] = [(-1, "Off", nil)]
-            for track in model.subtitleTracks { rows.append((track.id, track.name, track.id)) }
-            return rows.map { (id: $0.0, title: $0.1, selectedID: $0.2) }
-        }()
-
-        return VStack(alignment: .leading, spacing: Spacing.md) {
-            Text(panel == .captions ? "Subtitles & CC" : "Quality")
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text("Quality")
                 .font(.system(size: titleSize, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
 
-            if panel == .captions {
-                ForEach(Array(captionOptions.enumerated()), id: \.offset) { idx, option in
-                    panelRow(index: idx, title: option.title,
-                             selected: model.currentSubtitleID == option.selectedID) {
-                        model.setSubtitle(id: option.selectedID); panel = .none
-                    }
-                }
-            } else {
-                ForEach(Array(QualityOption.allCases.enumerated()), id: \.offset) { idx, option in
-                    panelRow(index: idx, title: option.label, selected: model.quality == option) {
-                        Task { await model.setQuality(option) }
-                        panel = .none
-                    }
+            ForEach(Array(QualityOption.allCases.enumerated()), id: \.offset) { idx, option in
+                panelRow(index: idx, title: option.label, selected: model.quality == option) {
+                    Task { await model.setQuality(option) }
+                    panel = .none
                 }
             }
         }

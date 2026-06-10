@@ -137,7 +137,7 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Users/\(userID)/Items/Resume", query: [
             .init(name: "limit", value: "20"),
             .init(name: "mediaTypes", value: "Video"),
-            .init(name: "fields", value: "Overview")
+            .init(name: "fields", value: "Overview,Genres")
         ]).items
     }
 
@@ -146,7 +146,7 @@ actor JellyfinClient {
     func latestItems(userID: String, parentID: String? = nil) async throws -> [MediaItem] {
         var query: [URLQueryItem] = [
             .init(name: "limit", value: "24"),
-            .init(name: "fields", value: "Overview")
+            .init(name: "fields", value: "Overview,Genres")
         ]
         if let parentID { query.append(.init(name: "parentId", value: parentID)) }
         return try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: query)
@@ -158,7 +158,7 @@ actor JellyfinClient {
             .init(name: "parentId", value: parentID),
             .init(name: "sortBy", value: "SortName"),
             .init(name: "sortOrder", value: "Ascending"),
-            .init(name: "fields", value: "Overview,PrimaryImageAspectRatio")
+            .init(name: "fields", value: "Overview,Genres,PrimaryImageAspectRatio")
         ]).items
     }
 
@@ -172,7 +172,7 @@ actor JellyfinClient {
     func seasons(seriesID: String, userID: String) async throws -> [MediaItem] {
         try await get(ItemsResponse.self, path: "/Shows/\(seriesID)/Seasons", query: [
             .init(name: "userId", value: userID),
-            .init(name: "fields", value: "Overview")
+            .init(name: "fields", value: "Overview,Genres")
         ]).items
     }
 
@@ -181,7 +181,7 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Shows/\(seriesID)/Episodes", query: [
             .init(name: "seasonId", value: seasonID),
             .init(name: "userId", value: userID),
-            .init(name: "fields", value: "Overview")
+            .init(name: "fields", value: "Overview,Genres")
         ]).items
     }
 
@@ -190,8 +190,50 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Shows/NextUp", query: [
             .init(name: "seriesId", value: seriesID),
             .init(name: "userId", value: userID),
-            .init(name: "fields", value: "Overview")
+            .init(name: "fields", value: "Overview,Genres")
         ]).items.first
+    }
+
+    // MARK: - Home rails
+
+    /// "Coming Up" — next episodes across all the user's shows.
+    func nextUp(userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Shows/NextUp", query: [
+            .init(name: "userId", value: userID),
+            .init(name: "limit", value: "24"),
+            .init(name: "fields", value: "Overview,Genres")
+        ]).items
+    }
+
+    /// Recently added items of a specific type, e.g. `Series`.
+    func latestItems(userID: String, includeItemTypes: String) async throws -> [MediaItem] {
+        try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: [
+            .init(name: "limit", value: "24"),
+            .init(name: "includeItemTypes", value: includeItemTypes),
+            .init(name: "fields", value: "Overview,Genres")
+        ])
+    }
+
+    /// Favorited movies and shows.
+    func favorites(userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "filters", value: "IsFavorite"),
+            .init(name: "recursive", value: "true"),
+            .init(name: "includeItemTypes", value: "Movie,Series"),
+            .init(name: "sortBy", value: "SortName"),
+            .init(name: "limit", value: "24"),
+            .init(name: "fields", value: "Overview,Genres")
+        ]).items
+    }
+
+    /// Toggle an item's favorite ("My List") status.
+    @discardableResult
+    func setFavorite(itemID: String, userID: String, isFavorite: Bool) async -> Bool {
+        let method = isFavorite ? "POST" : "DELETE"
+        guard let request = try? makeRequest(path: "/Users/\(userID)/FavoriteItems/\(itemID)", method: method) else {
+            return false
+        }
+        return (try? await perform(request)) != nil
     }
 
     // MARK: - Images & streaming URLs

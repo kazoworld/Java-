@@ -107,29 +107,14 @@ struct FeaturedHero: View {
     @ViewBuilder
     private var content: some View {
         if let current {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("FEATURED")
-                    .font(.system(size: eyebrowSize, weight: .heavy, design: .rounded))
-                    .tracking(4)
-                    .foregroundStyle(accent)
-                    .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
-
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 Text(current.name)
                     .font(.system(size: titleSize, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
+                    .shadow(color: .black.opacity(0.7), radius: 16, y: 6)
 
-                metadata(for: current)
-
-                if let overview = current.overview, !overview.isEmpty {
-                    Text(overview)
-                        .font(.system(size: overviewSize, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(3)
-                        .frame(maxWidth: overviewWidth, alignment: .leading)
-                        .shadow(color: .black.opacity(0.5), radius: 8, y: 2)
-                }
+                infoCard(for: current)
 
                 HStack(spacing: Spacing.md) {
                     Button { onPlay(current) } label: {
@@ -158,7 +143,7 @@ struct FeaturedHero: View {
                     Spacer()
                     pageDots
                 }
-                .padding(.top, Spacing.sm)
+                .padding(.top, Spacing.xs)
                 // Pause rotation while the user is interacting with the hero.
                 .onChange(of: focus) { _, newValue in isFocused = (newValue != nil) }
             }
@@ -166,32 +151,44 @@ struct FeaturedHero: View {
         }
     }
 
-    private func metadata(for item: MediaItem) -> some View {
-        HStack(spacing: Spacing.sm) {
+    /// Frosted glass info card (metadata · rating · synopsis), Moonfin-style.
+    private func infoCard(for item: MediaItem) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(metaLine(for: item))
+                .font(.system(size: metaSize, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
+
             if let community = item.communityRating {
-                chip(String(format: "★ %.1f", community), accentColor: true)
+                HStack(spacing: Spacing.sm) {
+                    Text(String(format: "★ %.1f", community))
+                        .font(.system(size: metaSize + 2, weight: .bold, design: .rounded))
+                        .foregroundStyle(accent)
+                    Text("Community Rating")
+                        .font(.system(size: metaSize - 4, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
             }
-            if let year = item.productionYear { dot(); chip(String(year)) }
-            if let runtime = item.runtimeText { dot(); chip(runtime) }
-            if let rating = item.officialRating {
-                dot()
-                chip(rating)
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, 2)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+
+            if let overview = item.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(.system(size: overviewSize, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(Spacing.lg)
+        .frame(maxWidth: overviewWidth, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(.white.opacity(0.12), lineWidth: 1))
     }
 
-    private func chip(_ text: String, accentColor: Bool = false) -> some View {
-        Text(text)
-            .font(.system(size: metaSize, weight: .semibold, design: .rounded))
-            .foregroundStyle(accentColor ? accent : .white.opacity(0.9))
-            .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
-    }
-
-    private func dot() -> some View {
-        Circle().fill(.white.opacity(0.5)).frame(width: 4, height: 4)
+    private func metaLine(for item: MediaItem) -> String {
+        [item.productionYear.map(String.init), item.officialRating, item.genreText]
+            .compactMap { $0 }
+            .joined(separator: "  ·  ")
     }
 
     private var pageDots: some View {
