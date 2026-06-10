@@ -34,6 +34,7 @@ struct SubtitleSettingsView: View {
                 Text("Applies to the VLCKit player; the native player uses your tvOS caption style.")
             }
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif

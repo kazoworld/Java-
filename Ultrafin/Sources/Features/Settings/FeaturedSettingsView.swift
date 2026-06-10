@@ -58,6 +58,7 @@ struct FeaturedSettingsView: View {
             }
             .disabled(!settings.isFeaturedEnabled)
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif

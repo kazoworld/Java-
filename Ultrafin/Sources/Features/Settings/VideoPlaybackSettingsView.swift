@@ -42,6 +42,7 @@ struct VideoPlaybackSettingsView: View {
                 Text("Playback")
             }
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif

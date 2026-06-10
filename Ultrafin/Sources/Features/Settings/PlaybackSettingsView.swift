@@ -26,6 +26,7 @@ struct PlaybackSettingsView: View {
                 }
             }
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif

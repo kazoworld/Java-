@@ -40,6 +40,7 @@ struct DownloadSettingsView: View {
                 Text("My Downloads")
             }
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif

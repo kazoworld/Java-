@@ -34,6 +34,7 @@ struct AppearanceSettingsView: View {
                 Text("OLED mode uses true black for deeper contrast and lower power. Turn off the ambient background to reduce on-screen effects.")
             }
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif

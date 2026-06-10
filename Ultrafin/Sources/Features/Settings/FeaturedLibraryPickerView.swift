@@ -46,6 +46,7 @@ struct FeaturedLibraryPickerView: View {
                 }
             }
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif

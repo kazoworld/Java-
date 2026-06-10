@@ -21,6 +21,20 @@ extension View {
     func glassCard(cornerRadius: CGFloat = Spacing.cornerRadius) -> some View {
         modifier(GlassCard(cornerRadius: cornerRadius))
     }
+
+    /// Frosted-glass row backgrounds for Forms/Lists shown over the ambient.
+    /// Propagates to every row in the list.
+    func glassRows() -> some View {
+        listRowBackground(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(UltrafinColors.separator, lineWidth: 1)
+                )
+                .padding(.vertical, 2)
+        )
+    }
 }
 
 // MARK: - Primary button

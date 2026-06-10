@@ -43,6 +43,7 @@ struct SettingsView: View {
                 Text("Ultrafin is a Jellyfin client. Jellyfin and the Swiftfin media core are open source.")
             }
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif

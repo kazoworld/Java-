@@ -30,6 +30,7 @@ struct AudioSettingsView: View {
                 Text("Pass Dolby/DTS straight to your receiver, and prefer a default audio language when available.")
             }
         }
+        .glassRows()
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif
