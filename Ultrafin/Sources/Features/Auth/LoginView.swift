@@ -31,55 +31,37 @@ final class LoginViewModel {
     }
 }
 
-/// Username/password sign-in for the connected server.
+/// Username/password sign-in for the connected server, on a floating glass card.
 struct LoginView: View {
     @Environment(AppState.self) private var appState
     @State private var model: LoginViewModel
-    @FocusState private var focus: Field?
-
-    enum Field { case username, password }
+    @State private var appeared = false
 
     init(server: ServerConnection) {
         _model = State(initialValue: LoginViewModel(server: server))
     }
 
     var body: some View {
-        VStack(spacing: Spacing.xl) {
+        VStack {
             Spacer()
-            VStack(spacing: Spacing.sm) {
-                Text("Sign in")
-                    .font(Typography.displayTitle)
-                    .foregroundStyle(UltrafinColors.primaryText)
-                Text(model.server.name)
-                    .font(Typography.body)
-                    .foregroundStyle(UltrafinColors.secondaryText)
-            }
+            AuthCard {
+                AuthBrand(systemImage: "person.crop.circle.fill",
+                          title: "Sign In",
+                          subtitle: model.server.name)
 
-            VStack(spacing: Spacing.md) {
-                TextField("Username", text: $model.username)
-                    .textFieldStyle(.plain)
-                    .padding(Spacing.md)
-                    .glassCard(cornerRadius: Spacing.md)
-                    .focused($focus, equals: .username)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    #endif
-                    .submitLabel(.next)
-                    .onSubmit { focus = .password }
+                GlassField(icon: "person.fill", placeholder: "Username",
+                           text: $model.username, submitLabel: .next, autofocus: true)
 
-                SecureField("Password", text: $model.password)
-                    .textFieldStyle(.plain)
-                    .padding(Spacing.md)
-                    .glassCard(cornerRadius: Spacing.md)
-                    .focused($focus, equals: .password)
-                    .submitLabel(.go)
-                    .onSubmit { Task { await submit() } }
+                GlassField(icon: "lock.fill", placeholder: "Password",
+                           text: $model.password, isSecure: true, submitLabel: .go) {
+                    Task { await submit() }
+                }
 
                 if let error = model.errorMessage {
                     Text(error)
                         .font(Typography.caption)
                         .foregroundStyle(UltrafinColors.accent)
+                        .multilineTextAlignment(.center)
                         .transition(.opacity)
                 }
 
@@ -96,15 +78,15 @@ struct LoginView: View {
                 .foregroundStyle(UltrafinColors.secondaryText)
                 .buttonStyle(.plain)
             }
-            .foregroundStyle(UltrafinColors.primaryText)
-            .frame(maxWidth: 460)
-
+            .scaleEffect(appeared ? 1 : 0.96)
+            .opacity(appeared ? 1 : 0)
             Spacer()
             Spacer()
         }
+        .frame(maxWidth: .infinity)
         .padding(Spacing.xl)
         .animation(.smooth, value: model.errorMessage)
-        .onAppear { focus = .username }
+        .task { withAnimation(.smooth(duration: 0.5)) { appeared = true } }
     }
 
     private func submit() async {

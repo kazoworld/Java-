@@ -39,45 +39,27 @@ final class ServerConnectViewModel {
     }
 }
 
-/// First-run screen: enter a Jellyfin server address.
+/// First-run screen: enter a Jellyfin server address, on a floating glass card.
 struct ServerConnectView: View {
     @Environment(AppState.self) private var appState
+    @Environment(SettingsStore.self) private var settings
     @State private var model = ServerConnectViewModel()
-    @FocusState private var addressFocused: Bool
+    @State private var appeared = false
 
     var body: some View {
-        VStack(spacing: Spacing.xl) {
+        VStack {
             Spacer()
+            AuthCard {
+                AuthBrand(systemImage: "play.circle.fill",
+                          title: "Ultrafin",
+                          subtitle: "Connect to your Jellyfin server to get started.")
 
-            VStack(spacing: Spacing.md) {
-                Image(systemName: "server.rack")
-                    .font(.system(size: 56, weight: .thin))
-                    .foregroundStyle(UltrafinColors.accentGradient)
-                Text("Connect to Jellyfin")
-                    .font(Typography.displayTitle)
-                    .foregroundStyle(UltrafinColors.primaryText)
-                Text("Enter the address of your Jellyfin server to get started.")
-                    .font(Typography.body)
-                    .foregroundStyle(UltrafinColors.secondaryText)
-                    .multilineTextAlignment(.center)
-            }
-
-            VStack(spacing: Spacing.md) {
                 discoverySection
 
-                TextField("media.example.com", text: $model.address)
-                    .textFieldStyle(.plain)
-                    .padding(Spacing.md)
-                    .glassCard(cornerRadius: Spacing.md)
-                    .foregroundStyle(UltrafinColors.primaryText)
-                    .focused($addressFocused)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .submitLabel(.go)
-                    #endif
-                    .onSubmit { Task { await attemptConnect() } }
+                GlassField(icon: "server.rack", placeholder: "media.example.com",
+                           text: $model.address, keyboard: .url, submitLabel: .go, autofocus: true) {
+                    Task { await attemptConnect() }
+                }
 
                 if let error = model.errorMessage {
                     Text(error)
@@ -93,20 +75,22 @@ struct ServerConnectView: View {
                 .disabled(!model.canConnect)
                 .opacity(model.canConnect ? 1 : 0.5)
             }
-            .frame(maxWidth: 520)
-
+            .scaleEffect(appeared ? 1 : 0.96)
+            .opacity(appeared ? 1 : 0)
             Spacer()
             Spacer()
         }
+        .frame(maxWidth: .infinity)
         .padding(Spacing.xl)
         .animation(.smooth, value: model.errorMessage)
         .animation(.smooth, value: model.discovered)
-        .task { await model.scan() }
-        .onAppear { addressFocused = true }
+        .task {
+            withAnimation(.smooth(duration: 0.5)) { appeared = true }
+            await model.scan()
+        }
     }
 
-    /// Discovered servers on the LAN, shown above manual entry so the user can
-    /// connect with a single click instead of typing an address.
+    /// Discovered servers on the LAN, shown above manual entry as glass rows.
     @ViewBuilder
     private var discoverySection: some View {
         if model.isScanning && model.discovered.isEmpty {
@@ -116,19 +100,16 @@ struct ServerConnectView: View {
                     .font(Typography.caption)
                     .foregroundStyle(UltrafinColors.secondaryText)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
         } else if !model.discovered.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("Found on your network")
                     .font(Typography.caption)
                     .foregroundStyle(UltrafinColors.secondaryText)
                 ForEach(model.discovered) { server in
-                    Button {
-                        Task { await attemptConnect(address: server.address) }
-                    } label: {
+                    Button { Task { await attemptConnect(address: server.address) } } label: {
                         HStack(spacing: Spacing.md) {
-                            Image(systemName: "server.rack")
-                                .foregroundStyle(UltrafinColors.accent)
+                            Image(systemName: "server.rack").foregroundStyle(UltrafinColors.accent)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(server.name)
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
@@ -139,11 +120,12 @@ struct ServerConnectView: View {
                                     .lineLimit(1)
                             }
                             Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(UltrafinColors.tertiaryText)
+                            Image(systemName: "chevron.right").foregroundStyle(UltrafinColors.tertiaryText)
                         }
-                        .padding(Spacing.md)
-                        .glassCard(cornerRadius: Spacing.md)
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.vertical, Spacing.md)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 1))
                     }
                     .buttonStyle(UltrafinButtonStyle(focusScale: 1.03, lift: false))
                 }
