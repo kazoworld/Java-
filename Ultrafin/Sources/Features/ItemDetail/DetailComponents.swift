@@ -9,7 +9,15 @@ struct DetailBadges: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
+            if let rt = item.criticScoreText {
+                HStack(spacing: 3) {
+                    Text("🍅")
+                    Text(rt).foregroundStyle(item.isFresh ? Color(hex: 0xFA5A3C) : UltrafinColors.secondaryText)
+                }
+                .font(font)
+            }
             if let community = item.communityRating {
+                if item.criticScoreText != nil { dot() }
                 Text(String(format: "★ %.1f", community))
                     .font(font).foregroundStyle(UltrafinColors.primaryText)
             }

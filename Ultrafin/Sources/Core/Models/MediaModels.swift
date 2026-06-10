@@ -11,6 +11,7 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let productionYear: Int?
     let officialRating: String?
     let communityRating: Double?
+    let criticRating: Double?
     let runTimeTicks: Int64?
     let userData: UserData?
     let imageTags: [String: String]?
@@ -32,6 +33,7 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case productionYear = "ProductionYear"
         case officialRating = "OfficialRating"
         case communityRating = "CommunityRating"
+        case criticRating = "CriticRating"
         case runTimeTicks = "RunTimeTicks"
         case userData = "UserData"
         case imageTags = "ImageTags"
@@ -45,6 +47,14 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case childCount = "ChildCount"
         case people = "People"
     }
+
+    /// Rotten Tomatoes Tomatometer percentage (Jellyfin's CriticRating).
+    var criticScoreText: String? {
+        guard let criticRating else { return nil }
+        return "\(Int(criticRating.rounded()))%"
+    }
+    /// True when the Tomatometer is "Fresh" (≥ 60%).
+    var isFresh: Bool { (criticRating ?? 0) >= 60 }
 
     /// "Drama · Sci-Fi · Thriller" from the first few genres.
     var genreText: String? {

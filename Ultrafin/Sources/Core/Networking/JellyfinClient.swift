@@ -137,7 +137,7 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Users/\(userID)/Items/Resume", query: [
             .init(name: "limit", value: "20"),
             .init(name: "mediaTypes", value: "Video"),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]).items
     }
 
@@ -146,7 +146,7 @@ actor JellyfinClient {
     func latestItems(userID: String, parentID: String? = nil) async throws -> [MediaItem] {
         var query: [URLQueryItem] = [
             .init(name: "limit", value: "24"),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]
         if let parentID { query.append(.init(name: "parentId", value: parentID)) }
         return try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: query)
@@ -158,7 +158,7 @@ actor JellyfinClient {
             .init(name: "parentId", value: parentID),
             .init(name: "sortBy", value: "SortName"),
             .init(name: "sortOrder", value: "Ascending"),
-            .init(name: "fields", value: "Overview,Genres,PrimaryImageAspectRatio")
+            .init(name: "fields", value: "Overview,Genres,CriticRating,PrimaryImageAspectRatio")
         ]).items
     }
 
@@ -172,7 +172,7 @@ actor JellyfinClient {
     func seasons(seriesID: String, userID: String) async throws -> [MediaItem] {
         try await get(ItemsResponse.self, path: "/Shows/\(seriesID)/Seasons", query: [
             .init(name: "userId", value: userID),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]).items
     }
 
@@ -181,7 +181,7 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Shows/\(seriesID)/Episodes", query: [
             .init(name: "seasonId", value: seasonID),
             .init(name: "userId", value: userID),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]).items
     }
 
@@ -190,7 +190,7 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Shows/NextUp", query: [
             .init(name: "seriesId", value: seriesID),
             .init(name: "userId", value: userID),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]).items.first
     }
 
@@ -201,7 +201,7 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Shows/NextUp", query: [
             .init(name: "userId", value: userID),
             .init(name: "limit", value: "24"),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]).items
     }
 
@@ -210,7 +210,7 @@ actor JellyfinClient {
         try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: [
             .init(name: "limit", value: "24"),
             .init(name: "includeItemTypes", value: includeItemTypes),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ])
     }
 
@@ -222,7 +222,7 @@ actor JellyfinClient {
             .init(name: "includeItemTypes", value: "Movie,Series"),
             .init(name: "sortBy", value: "SortName"),
             .init(name: "limit", value: "24"),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]).items
     }
 
@@ -251,7 +251,7 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Items/\(itemID)/Similar", query: [
             .init(name: "userId", value: userID),
             .init(name: "limit", value: "12"),
-            .init(name: "fields", value: "Overview,Genres")
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]).items
     }
 

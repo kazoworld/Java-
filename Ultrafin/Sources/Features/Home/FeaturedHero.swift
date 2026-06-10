@@ -159,14 +159,24 @@ struct FeaturedHero: View {
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(1)
 
-            if let community = item.communityRating {
-                HStack(spacing: Spacing.sm) {
-                    Text(String(format: "★ %.1f", community))
-                        .font(.system(size: metaSize + 2, weight: .bold, design: .rounded))
-                        .foregroundStyle(accent)
-                    Text("Community Rating")
-                        .font(.system(size: metaSize - 4, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
+            HStack(spacing: Spacing.md) {
+                if let rt = item.criticScoreText {
+                    HStack(spacing: 4) {
+                        Text("🍅")
+                        Text(rt)
+                            .foregroundStyle(item.isFresh ? Color(hex: 0xFF6A52) : .white.opacity(0.8))
+                    }
+                    .font(.system(size: metaSize + 2, weight: .bold, design: .rounded))
+                }
+                if let community = item.communityRating {
+                    HStack(spacing: Spacing.sm) {
+                        Text(String(format: "★ %.1f", community))
+                            .font(.system(size: metaSize + 2, weight: .bold, design: .rounded))
+                            .foregroundStyle(accent)
+                        Text("Community Rating")
+                            .font(.system(size: metaSize - 4, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
                 }
             }
 
