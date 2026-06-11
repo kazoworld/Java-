@@ -95,10 +95,14 @@ struct HomeView: View {
         return out
     }
 
-    /// Continue Watching + Next Up, merged into one de-duplicated row.
+    /// Continue Watching + Next Up, merged into one de-duplicated row. The order
+    /// (Next Up first vs. in-progress first) follows the user's preference.
     private var continueWatching: [MediaItem] {
         var seen = Set<String>()
-        return (model.resume + model.comingUp).filter { seen.insert($0.id).inserted }
+        let ordered = settings.nextUpFirst
+            ? (model.comingUp + model.resume)
+            : (model.resume + model.comingUp)
+        return ordered.filter { seen.insert($0.id).inserted }
     }
 
     var body: some View {

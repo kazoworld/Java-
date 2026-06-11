@@ -43,6 +43,9 @@ struct ItemDetailView: View {
         }
     }
 
+    private func tint(_ c: ArtworkColor?) -> Color { c?.color ?? Color.white.opacity(0.9) }
+    private func playTextColor(_ c: ArtworkColor?) -> Color { (c?.isDark ?? false) ? .white : .black }
+
     private func load() async {
         guard let session, let client = appState.client else { return }
         async let detailTask = try? client.itemDetail(item.id, userID: session.userID)
@@ -56,22 +59,41 @@ struct ItemDetailView: View {
     // MARK: - Hero
 
     private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            RemoteImage(url: backdropURL)
-                .frame(height: heroHeight)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .overlay(
-                    LinearGradient(colors: [.clear, .clear, UltrafinColors.background],
-                                   startPoint: .top, endPoint: .bottom)
-                )
+        DetailHero(backdropURL: backdropURL,
+                   colorURL: colorURL,
+                   logoURL: logoURL(displayed),
+                   title: displayed.name,
+                   height: heroHeight,
+                   edgePadding: edgePadding,
+                   titleSize: titleSize,
+                   logoMaxWidth: logoMaxWidth,
+                   logoMaxHeight: logoMaxHeight) { art in
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                DetailBadges(item: displayed, onDark: true)
+                heroActions(art)
+            }
+        }
+    }
 
-            TitleLogo(logoURL: logoURL(displayed), title: displayed.name,
-                      fallbackFont: .system(size: titleSize, weight: .heavy, design: .rounded),
-                      fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
-                .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
-                .padding(.horizontal, edgePadding)
-                .padding(.bottom, Spacing.md)
+    private func heroActions(_ art: ArtworkColor?) -> some View {
+        HStack(spacing: Spacing.xl) {
+            Button { presentPlayer = true } label: {
+                Label(playButtonTitle, systemImage: "play.fill")
+                    .font(.system(size: actionFont, weight: .bold, design: .rounded))
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.md)
+                    .background(tint(art), in: Capsule())
+                    .foregroundStyle(playTextColor(art))
+            }
+            .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))
+
+            DetailActionButton(title: "My List",
+                               systemImage: isFavorite ? "checkmark" : "plus",
+                               active: isFavorite, onDark: true) { toggleFavorite() }
+            DetailActionButton(title: "Watched",
+                               systemImage: isWatched ? "eye.fill" : "eye",
+                               active: isWatched, onDark: true) { toggleWatched() }
+            Spacer()
         }
     }
 
@@ -83,57 +105,33 @@ struct ItemDetailView: View {
     // MARK: - Content
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            DetailBadges(item: displayed)
-
-            playButton
-
-            if let overview = displayed.overview, !overview.isEmpty {
-                Text(overview)
-                    .font(.system(size: overviewSize))
-                    .foregroundStyle(UltrafinColors.secondaryText)
-                    .lineLimit(5)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            if hasInfo {
+                GlassInfoCard {
+                    if let overview = displayed.overview, !overview.isEmpty {
+                        Text(overview)
+                            .font(.system(size: overviewSize))
+                            .foregroundStyle(UltrafinColors.primaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    CastCrewView(item: displayed)
+                }
             }
-
-            CastCrewView(item: displayed)
-
-            actionRow
 
             if !similar.isEmpty {
                 Text("More Like This")
                     .font(.system(size: titleSize * 0.5, weight: .bold, design: .rounded))
                     .foregroundStyle(UltrafinColors.primaryText)
-                    .padding(.top, Spacing.md)
+                    .padding(.top, Spacing.xs)
                 similarRail
             }
         }
         .padding(.horizontal, edgePadding)
+        .padding(.top, Spacing.sm)
     }
 
-    private var playButton: some View {
-        Button { presentPlayer = true } label: {
-            Label(playButtonTitle, systemImage: "play.fill")
-                .font(.system(size: actionFont, weight: .bold, design: .rounded))
-                .frame(maxWidth: 420)
-                .padding(.vertical, Spacing.md)
-                .background(settings.theme.accent.color, in: Capsule())
-                .foregroundStyle(.white)
-        }
-        .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: true))
-    }
-
-    private var actionRow: some View {
-        HStack(spacing: Spacing.xl) {
-            DetailActionButton(title: "My List",
-                               systemImage: isFavorite ? "checkmark" : "plus",
-                               active: isFavorite) { toggleFavorite() }
-            DetailActionButton(title: "Watched",
-                               systemImage: isWatched ? "eye.fill" : "eye",
-                               active: isWatched) { toggleWatched() }
-            Spacer()
-        }
-        .padding(.top, Spacing.xs)
+    private var hasInfo: Bool {
+        (displayed.overview?.isEmpty == false) || displayed.castText != nil || displayed.crewLine != nil
     }
 
     private var similarRail: some View {
@@ -177,16 +175,23 @@ struct ItemDetailView: View {
     private var backdropURL: URL? {
         let tag = displayed.backdropImageTags?.first ?? displayed.imageTags?["Primary"]
         let kind: JellyfinClient.ImageKind = displayed.backdropImageTags?.isEmpty == false ? .backdrop : .primary
-        return appState.client?.imageURL(itemID: displayed.id, kind: kind, tag: tag, maxWidth: 1920)
+        return appState.client?.imageURL(itemID: displayed.id, kind: kind, tag: tag, maxWidth: 1280)
+    }
+
+    /// Tiny image for color sampling only.
+    private var colorURL: URL? {
+        let tag = displayed.backdropImageTags?.first ?? displayed.imageTags?["Primary"]
+        let kind: JellyfinClient.ImageKind = displayed.backdropImageTags?.isEmpty == false ? .backdrop : .primary
+        return appState.client?.imageURL(itemID: displayed.id, kind: kind, tag: tag, maxWidth: 240)
     }
 
     // MARK: - Metrics
 
     private var heroHeight: CGFloat {
         #if os(tvOS)
-        540
+        680
         #else
-        300
+        480
         #endif
     }
     private var titleSize: CGFloat {

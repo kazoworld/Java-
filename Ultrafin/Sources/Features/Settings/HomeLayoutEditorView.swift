@@ -16,11 +16,14 @@ struct HomeLayoutEditorView: View {
     }
 
     var body: some View {
-        ScrollView {
+        @Bindable var settings = settings
+        return ScrollView {
             VStack(spacing: Spacing.md) {
                 ForEach(editableRows) { config in
                     rowEditor(config: config)
                 }
+
+                continueWatchingOrder(settings: settings)
             }
             .padding(Spacing.lg)
             .frame(maxWidth: 760)
@@ -28,6 +31,28 @@ struct HomeLayoutEditorView: View {
         }
         .background(AmbientBackground())
         .navigationTitle("Home Layout")
+    }
+
+    /// Toggle for whether Continue Watching leads with Next Up or in-progress.
+    private func continueWatchingOrder(settings: SettingsStore) -> some View {
+        @Bindable var settings = settings
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
+            Toggle(isOn: $settings.nextUpFirst) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Next Up first")
+                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .foregroundStyle(UltrafinColors.primaryText)
+                    Text(settings.nextUpFirst
+                         ? "Continue Watching leads with the next episode, then in-progress."
+                         : "Continue Watching leads with in-progress, then the next episode.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(UltrafinColors.secondaryText)
+                }
+            }
+            .tint(settings.theme.accent.color)
+        }
+        .padding(Spacing.md)
+        .glassCard()
     }
 
     private func rowEditor(config: HomeRowConfig) -> some View {

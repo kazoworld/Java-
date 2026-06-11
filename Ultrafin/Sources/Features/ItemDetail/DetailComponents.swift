@@ -4,31 +4,37 @@ import SwiftUI
 struct DetailBadges: View {
     let item: MediaItem
     var seasonCount: Int? = nil
+    /// When overlaid on a dark hero, force light text instead of adaptive colors.
+    var onDark: Bool = false
 
     private var font: Font { .system(size: size, weight: .semibold, design: .rounded) }
+    private var primary: Color { onDark ? .white : UltrafinColors.primaryText }
+    private var secondary: Color { onDark ? .white.opacity(0.85) : UltrafinColors.secondaryText }
+    private var tertiary: Color { onDark ? .white.opacity(0.55) : UltrafinColors.tertiaryText }
+    private var separator: Color { onDark ? .white.opacity(0.45) : UltrafinColors.separator }
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
             if let rt = item.criticScoreText {
                 HStack(spacing: 3) {
                     Text("🍅")
-                    Text(rt).foregroundStyle(item.isFresh ? Color(hex: 0xFA5A3C) : UltrafinColors.secondaryText)
+                    Text(rt).foregroundStyle(item.isFresh ? Color(hex: 0xFA5A3C) : secondary)
                 }
                 .font(font)
             }
             if let community = item.communityRating {
                 if item.criticScoreText != nil { dot() }
                 Text(String(format: "★ %.1f", community))
-                    .font(font).foregroundStyle(UltrafinColors.primaryText)
+                    .font(font).foregroundStyle(primary)
             }
             if let year = item.productionYear { dot(); badge(String(year)) }
             if let rating = item.officialRating {
                 dot()
                 Text(rating)
                     .font(font)
-                    .foregroundStyle(UltrafinColors.secondaryText)
+                    .foregroundStyle(secondary)
                     .padding(.horizontal, 6).padding(.vertical, 1)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(UltrafinColors.separator, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(separator, lineWidth: 1))
             }
             if let seasonCount, seasonCount > 0 {
                 dot(); badge("\(seasonCount) Season\(seasonCount == 1 ? "" : "s")")
@@ -36,13 +42,14 @@ struct DetailBadges: View {
                 dot(); badge(runtime)
             }
         }
+        .shadow(color: onDark ? .black.opacity(0.5) : .clear, radius: 5, y: 2)
     }
 
     private func badge(_ text: String) -> some View {
-        Text(text).font(font).foregroundStyle(UltrafinColors.secondaryText)
+        Text(text).font(font).foregroundStyle(secondary)
     }
     private func dot() -> some View {
-        Circle().fill(UltrafinColors.tertiaryText).frame(width: 4, height: 4)
+        Circle().fill(tertiary).frame(width: 4, height: 4)
     }
 
     private var size: CGFloat {
@@ -59,20 +66,29 @@ struct DetailActionButton: View {
     let title: String
     let systemImage: String
     var active: Bool = false
+    /// When overlaid on a dark hero, force light text instead of adaptive colors.
+    var onDark: Bool = false
     let action: () -> Void
 
     @Environment(SettingsStore.self) private var settings
+
+    private var iconColor: Color {
+        if active { return settings.theme.accent.color }
+        return onDark ? .white : UltrafinColors.primaryText
+    }
+    private var labelColor: Color { onDark ? .white.opacity(0.85) : UltrafinColors.secondaryText }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: Spacing.xs) {
                 Image(systemName: systemImage)
                     .font(.system(size: iconSize, weight: .semibold))
-                    .foregroundStyle(active ? settings.theme.accent.color : UltrafinColors.primaryText)
+                    .foregroundStyle(iconColor)
                 Text(title)
                     .font(.system(size: labelSize, weight: .medium))
-                    .foregroundStyle(UltrafinColors.secondaryText)
+                    .foregroundStyle(labelColor)
             }
+            .shadow(color: onDark ? .black.opacity(0.45) : .clear, radius: 4, y: 2)
             .frame(minWidth: minWidth)
             .padding(.vertical, Spacing.sm)
             .contentShape(Rectangle())

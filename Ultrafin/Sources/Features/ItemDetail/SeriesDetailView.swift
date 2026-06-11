@@ -128,24 +128,48 @@ struct SeriesDetailView: View {
 
     private var hero: some View {
         let item = model?.displayed ?? series
-        return ZStack(alignment: .bottomLeading) {
-            RemoteImage(url: backdropURL)
-                .frame(height: heroHeight)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .overlay(
-                    LinearGradient(colors: [.clear, .clear, UltrafinColors.background],
-                                   startPoint: .top, endPoint: .bottom)
-                )
-
-            TitleLogo(logoURL: logoURL(item), title: item.name,
-                      fallbackFont: .system(size: titleSize, weight: .heavy, design: .rounded),
-                      fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
-                .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
-                .padding(.horizontal, edgePadding)
-                .padding(.bottom, Spacing.md)
+        return DetailHero(backdropURL: backdropURL,
+                          colorURL: colorURL,
+                          logoURL: logoURL(item),
+                          title: item.name,
+                          height: heroHeight,
+                          edgePadding: edgePadding,
+                          titleSize: titleSize,
+                          logoMaxWidth: logoMaxWidth,
+                          logoMaxHeight: logoMaxHeight) { art in
+            if let model {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    DetailBadges(item: model.displayed, seasonCount: model.seasons.count, onDark: true)
+                    heroActions(model, art: art)
+                }
+            }
         }
     }
+
+    private func heroActions(_ model: SeriesDetailViewModel, art: ArtworkColor?) -> some View {
+        HStack(spacing: Spacing.xl) {
+            Button { if let target = model.playTarget { play(target) } } label: {
+                Label(model.playLabel, systemImage: "play.fill")
+                    .font(.system(size: actionFont, weight: .bold, design: .rounded))
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.md)
+                    .background(tint(art), in: Capsule())
+                    .foregroundStyle(playTextColor(art))
+            }
+            .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))
+
+            DetailActionButton(title: "My List",
+                               systemImage: model.isFavorite ? "checkmark" : "plus",
+                               active: model.isFavorite, onDark: true) { model.toggleFavorite() }
+            DetailActionButton(title: "Watched",
+                               systemImage: model.isWatched ? "eye.fill" : "eye",
+                               active: model.isWatched, onDark: true) { model.toggleWatched() }
+            Spacer()
+        }
+    }
+
+    private func tint(_ c: ArtworkColor?) -> Color { c?.color ?? Color.white.opacity(0.9) }
+    private func playTextColor(_ c: ArtworkColor?) -> Color { (c?.isDark ?? false) ? .white : .black }
 
     private func logoURL(_ item: MediaItem) -> URL? {
         guard let tag = item.imageTags?["Logo"] else { return nil }
@@ -157,25 +181,20 @@ struct SeriesDetailView: View {
     @ViewBuilder
     private func detailColumn(_ model: SeriesDetailViewModel) -> some View {
         let item = model.displayed
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            DetailBadges(item: item, seasonCount: model.seasons.count)
-
-            playButton(model)
-
-            if let overview = item.overview, !overview.isEmpty {
-                Text(overview)
-                    .font(.system(size: overviewSize))
-                    .foregroundStyle(UltrafinColors.secondaryText)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            if hasInfo(item) {
+                GlassInfoCard {
+                    if let overview = item.overview, !overview.isEmpty {
+                        Text(overview)
+                            .font(.system(size: overviewSize))
+                            .foregroundStyle(UltrafinColors.primaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    CastCrewView(item: item)
+                }
             }
 
-            CastCrewView(item: item)
-
-            actionRow(model)
-
             DetailTabBar(tabs: ["Episodes", "More Like This"], selection: $tab)
-                .padding(.top, Spacing.sm)
 
             if tab == 0 {
                 seasonPicker(model)
@@ -185,31 +204,11 @@ struct SeriesDetailView: View {
             }
         }
         .padding(.horizontal, edgePadding)
+        .padding(.top, Spacing.sm)
     }
 
-    private func playButton(_ model: SeriesDetailViewModel) -> some View {
-        Button { if let target = model.playTarget { play(target) } } label: {
-            Label(model.playLabel, systemImage: "play.fill")
-                .font(.system(size: actionFont, weight: .bold, design: .rounded))
-                .frame(maxWidth: 420)
-                .padding(.vertical, Spacing.md)
-                .background(settings.theme.accent.color, in: Capsule())
-                .foregroundStyle(.white)
-        }
-        .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: true))
-    }
-
-    private func actionRow(_ model: SeriesDetailViewModel) -> some View {
-        HStack(spacing: Spacing.xl) {
-            DetailActionButton(title: "My List",
-                               systemImage: model.isFavorite ? "checkmark" : "plus",
-                               active: model.isFavorite) { model.toggleFavorite() }
-            DetailActionButton(title: "Watched",
-                               systemImage: model.isWatched ? "eye.fill" : "eye",
-                               active: model.isWatched) { model.toggleWatched() }
-            Spacer()
-        }
-        .padding(.top, Spacing.xs)
+    private func hasInfo(_ item: MediaItem) -> Bool {
+        (item.overview?.isEmpty == false) || item.castText != nil || item.crewLine != nil
     }
 
     // MARK: - Seasons & episodes
@@ -279,7 +278,15 @@ struct SeriesDetailView: View {
         let item = model?.displayed ?? series
         let tag = item.backdropImageTags?.first ?? item.imageTags?["Primary"]
         let kind: JellyfinClient.ImageKind = item.backdropImageTags?.isEmpty == false ? .backdrop : .primary
-        return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: 1920)
+        return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: 1280)
+    }
+
+    /// Tiny image for color sampling only.
+    private var colorURL: URL? {
+        let item = model?.displayed ?? series
+        let tag = item.backdropImageTags?.first ?? item.imageTags?["Primary"]
+        let kind: JellyfinClient.ImageKind = item.backdropImageTags?.isEmpty == false ? .backdrop : .primary
+        return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: 240)
     }
 
     private func episodeImageURL(_ episode: MediaItem) -> URL? {
@@ -291,9 +298,9 @@ struct SeriesDetailView: View {
 
     private var heroHeight: CGFloat {
         #if os(tvOS)
-        540
+        680
         #else
-        300
+        480
         #endif
     }
     private var titleSize: CGFloat {

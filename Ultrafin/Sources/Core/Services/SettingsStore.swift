@@ -37,6 +37,13 @@ final class SettingsStore {
         didSet { persist(downloads, key: Keys.downloads) }
     }
 
+    /// When true, the Continue Watching row leads with Next Up (the next
+    /// unwatched episode) before in-progress items; false leads with in-progress.
+    /// Stored standalone so adding it doesn't break decoding of existing groups.
+    var nextUpFirst: Bool {
+        didSet { UserDefaults.standard.set(nextUpFirst, forKey: Keys.nextUpFirst) }
+    }
+
     private enum Keys {
         static let theme = "settings.theme"
         static let appearance = "settings.appearance"
@@ -47,6 +54,7 @@ final class SettingsStore {
         static let video = "settings.video"
         static let subtitles = "settings.subtitles"
         static let downloads = "settings.downloads"
+        static let nextUpFirst = "settings.nextUpFirst"
     }
 
     private init() {
@@ -58,6 +66,7 @@ final class SettingsStore {
         video = Self.load(Keys.video) ?? VideoPreferences()
         subtitles = Self.load(Keys.subtitles) ?? SubtitlePreferences()
         downloads = Self.load(Keys.downloads) ?? DownloadPreferences()
+        nextUpFirst = UserDefaults.standard.object(forKey: Keys.nextUpFirst) as? Bool ?? true
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout

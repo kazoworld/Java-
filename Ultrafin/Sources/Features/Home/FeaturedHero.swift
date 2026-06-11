@@ -14,6 +14,9 @@ struct FeaturedHero: View {
     @State private var index = 0
     @State private var isFocused = false
     @State private var artColor: ArtworkColor?
+    /// Per-item color cache so rotating back to a title never re-downloads or
+    /// re-samples its art — that repeated work was a big part of the Home lag.
+    @State private var colorCache: [String: ArtworkColor] = [:]
     @FocusState private var focus: HeroFocus?
 
     private enum HeroFocus: Hashable { case play, info, prev, next }
@@ -237,7 +240,14 @@ struct FeaturedHero: View {
     }
 
     private func loadColor() async {
-        artColor = await ImageColor.vibrant(from: colorURL(current))
+        guard let current else { artColor = nil; return }
+        if let cached = colorCache[current.id] {
+            artColor = cached
+            return
+        }
+        let color = await ImageColor.vibrant(from: colorURL(current))
+        if let color { colorCache[current.id] = color }
+        artColor = color
     }
 
     // MARK: - Image URLs
@@ -250,7 +260,7 @@ struct FeaturedHero: View {
     private func backdropURL(for item: MediaItem) -> URL? {
         let tag = item.backdropImageTags?.first ?? item.imageTags?["Primary"]
         let kind: JellyfinClient.ImageKind = (item.backdropImageTags?.isEmpty == false) ? .backdrop : .primary
-        return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: 1920)
+        return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: 1280)
     }
 
     /// Small image used only for color sampling (keeps the download tiny).
