@@ -17,6 +17,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   build:
     name: Build ${{ matrix.platform }}
@@ -60,4 +64,18 @@ jobs:
             -destination "${{ matrix.destination }}" \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO
+            COMPILER_INDEX_STORE_ENABLE=NO 2>&1 | tee build.log
+
+      - name: Report build errors to PR
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### ❌ ${{ matrix.platform }} build failed"
+            echo ""
+            echo '```'
+            grep -E "error:|unable to type-check|cannot find|no exact matches|ambiguous" build.log | head -40 || echo "(no error lines captured)"
+            echo '```'
+          } > comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md || true

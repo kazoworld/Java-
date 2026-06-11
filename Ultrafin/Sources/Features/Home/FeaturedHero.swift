@@ -48,8 +48,9 @@ struct FeaturedHero: View {
         .frame(maxWidth: .infinity)
         .clipped()
         .onReceive(rotation) { _ in advance() }
-        .task(id: current?.id) {
-            artColor = await ImageColor.vibrant(from: colorURL(current))
+        .task { await loadColor() }
+        .onChange(of: index) { _, _ in
+            Task { await loadColor() }
         }
         .animation(.easeInOut(duration: 0.4), value: artColor)
         #if os(tvOS)
@@ -206,6 +207,10 @@ struct FeaturedHero: View {
         withAnimation(.easeInOut(duration: 0.6)) {
             index = (index + 1) % items.count
         }
+    }
+
+    private func loadColor() async {
+        artColor = await ImageColor.vibrant(from: colorURL(current))
     }
 
     // MARK: - Image URLs
