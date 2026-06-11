@@ -43,8 +43,15 @@ struct FeaturedHero: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            backdrop
-            scrim
+            // Backdrop + scrim share a single bottom-fade mask (one offscreen
+            // pass instead of three) so the hero stays cheap to composite while
+            // the Home page scrolls.
+            ZStack {
+                backdrop
+                scrim
+            }
+            .mask(bottomFade)
+
             content
         }
         .frame(height: heroHeight)
@@ -82,9 +89,8 @@ struct FeaturedHero: View {
                 .clipped()
                 .id(current.id) // drive the cross-fade
                 .transition(.opacity)
-                .mask(bottomFade)
         } else {
-            UltrafinColors.elevatedSurface.mask(bottomFade)
+            UltrafinColors.elevatedSurface
         }
     }
 
@@ -99,11 +105,16 @@ struct FeaturedHero: View {
                 .init(color: .clear, location: 1.0)
             ], startPoint: .top, endPoint: .bottom)
 
-            // Content-color glow — the bar's color comes from the artwork.
-            LinearGradient(colors: [.clear, tint.opacity(0.5)], startPoint: .center, endPoint: .bottom)
-                .mask(bottomFade)
-            LinearGradient(colors: [tint.opacity(0.32), .clear], startPoint: .leading, endPoint: .trailing)
-                .mask(bottomFade)
+            // Content-color glow — the bar's color comes from the artwork. The
+            // fades are baked into the gradient stops so neither layer needs its
+            // own mask (the shared bottom-fade handles the page blend).
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0.45),
+                .init(color: tint.opacity(0.5), location: 0.9),
+                .init(color: tint.opacity(0.2), location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+            RadialGradient(colors: [tint.opacity(0.4), .clear],
+                           center: .bottomLeading, startRadius: 0, endRadius: heroHeight * 0.95)
         }
     }
 

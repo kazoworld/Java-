@@ -49,6 +49,39 @@ struct AmbientBackground: View {
     }
 }
 
+/// A full-screen backdrop tinted entirely by a title's cover art, used on movie
+/// and series detail pages instead of the accent-derived ``AmbientBackground``.
+///
+/// The wash is concentrated up top (under the hero) and fades to a whisper lower
+/// down so synopsis/episode text stays legible, with a touch of frost to keep it
+/// soft. It blends with the system background so it reads in both light and dark.
+struct ArtworkBackground: View {
+    let color: ArtworkColor?
+
+    private var tint: Color { color?.color ?? UltrafinColors.accent }
+
+    var body: some View {
+        ZStack {
+            UltrafinColors.background
+
+            LinearGradient(stops: [
+                .init(color: tint.opacity(0.55), location: 0.0),
+                .init(color: tint.opacity(0.22), location: 0.35),
+                .init(color: tint.opacity(0.08), location: 0.7),
+                .init(color: tint.opacity(0.03), location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+
+            RadialGradient(colors: [tint.opacity(0.28), .clear],
+                           center: .topTrailing, startRadius: 0, endRadius: 760)
+
+            // A whisper of frost to soften the wash.
+            Rectangle().fill(.ultraThinMaterial).opacity(0.12)
+        }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.5), value: color)
+    }
+}
+
 private extension Color {
     /// A hue-shifted partner color for the ambient wash. Approximations are
     /// fine here — these only tint a soft background.

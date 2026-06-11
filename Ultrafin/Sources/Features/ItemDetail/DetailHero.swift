@@ -10,10 +10,11 @@ import SwiftUI
 /// can carry the title's color, exactly like the media bar.
 struct DetailHero<Overlay: View>: View {
     let backdropURL: URL?
-    /// Small image used purely for color sampling (keeps the download tiny).
-    let colorURL: URL?
     let logoURL: URL?
     let title: String
+    /// Color sampled from the cover art by the host view (also tints the page
+    /// background), so the hero and background always agree.
+    let artColor: ArtworkColor?
     let height: CGFloat
     let edgePadding: CGFloat
     let titleSize: CGFloat
@@ -21,19 +22,18 @@ struct DetailHero<Overlay: View>: View {
     let logoMaxHeight: CGFloat
     @ViewBuilder var overlay: (ArtworkColor?) -> Overlay
 
-    @State private var artColor: ArtworkColor?
-
     private var tint: Color { artColor?.color ?? Color.white.opacity(0.9) }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            RemoteImage(url: backdropURL)
-                .frame(height: height)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .mask(bottomFade)
-
-            scrim
+            ZStack {
+                RemoteImage(url: backdropURL)
+                    .frame(height: height)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                scrim
+            }
+            .mask(bottomFade)
 
             VStack(alignment: .leading, spacing: Spacing.md) {
                 TitleLogo(logoURL: logoURL, title: title,
@@ -49,7 +49,6 @@ struct DetailHero<Overlay: View>: View {
         .frame(height: height)
         .frame(maxWidth: .infinity)
         .clipped()
-        .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
         .animation(.easeInOut(duration: 0.4), value: artColor)
     }
 
@@ -73,11 +72,16 @@ struct DetailHero<Overlay: View>: View {
                 .init(color: .clear, location: 1.0)
             ], startPoint: .top, endPoint: .bottom)
 
-            // Content-color glow — the hero's color comes from the artwork.
-            LinearGradient(colors: [.clear, tint.opacity(0.5)], startPoint: .center, endPoint: .bottom)
-                .mask(bottomFade)
-            LinearGradient(colors: [tint.opacity(0.30), .clear], startPoint: .leading, endPoint: .trailing)
-                .mask(bottomFade)
+            // Content-color glow — the hero's color comes from the artwork. The
+            // fades are baked into the stops so these don't need their own masks
+            // (the shared bottom-fade on the group handles the page blend).
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0.45),
+                .init(color: tint.opacity(0.5), location: 0.9),
+                .init(color: tint.opacity(0.2), location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+            RadialGradient(colors: [tint.opacity(0.38), .clear],
+                           center: .bottomLeading, startRadius: 0, endRadius: height * 0.95)
         }
     }
 }

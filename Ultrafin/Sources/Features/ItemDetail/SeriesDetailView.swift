@@ -88,6 +88,7 @@ struct SeriesDetailView: View {
     @State private var model: SeriesDetailViewModel?
     @State private var playback: PlaybackRequest?
     @State private var tab = 0
+    @State private var artColor: ArtworkColor?
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -105,11 +106,12 @@ struct SeriesDetailView: View {
             .padding(.bottom, Spacing.xxl)
         }
         .ignoresSafeArea(edges: .top)
-        .background(AmbientBackground())
+        .background(ArtworkBackground(color: artColor))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task { await loadIfNeeded() }
+        .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
         .fullScreenCover(item: $playback) { request in
             if let session {
                 VideoPlayerView(queue: request.queue, startIndex: request.index, userID: session.userID)
@@ -129,9 +131,9 @@ struct SeriesDetailView: View {
     private var hero: some View {
         let item = model?.displayed ?? series
         return DetailHero(backdropURL: backdropURL,
-                          colorURL: colorURL,
                           logoURL: logoURL(item),
                           title: item.name,
+                          artColor: artColor,
                           height: heroHeight,
                           edgePadding: edgePadding,
                           titleSize: titleSize,
@@ -364,7 +366,7 @@ private struct EpisodeRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Spacing.md) {
+        HStack(alignment: .center, spacing: Spacing.md) {
             ZStack(alignment: .bottom) {
                 RemoteImage(url: imageURL)
                     .frame(width: thumbWidth, height: thumbWidth * 9 / 16)
@@ -403,11 +405,16 @@ private struct EpisodeRow: View {
                     Text(overview)
                         .font(Typography.caption)
                         .foregroundStyle(UltrafinColors.secondaryText)
-                        .lineLimit(3)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // A uniform minimum height keeps every row's frosted box the same size,
+        // so the list lines up cleanly regardless of how much synopsis an
+        // episode has.
+        .frame(maxWidth: .infinity, minHeight: thumbWidth * 9 / 16, alignment: .leading)
         .padding(Spacing.sm)
         .glassCard()
         .animation(.smooth(duration: 0.2), value: isFocused)

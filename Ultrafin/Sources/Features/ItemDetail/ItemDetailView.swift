@@ -14,6 +14,7 @@ struct ItemDetailView: View {
     @State private var isFavorite = false
     @State private var isWatched = false
     @State private var presentPlayer = false
+    @State private var artColor: ArtworkColor?
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -31,11 +32,12 @@ struct ItemDetailView: View {
             .padding(.bottom, Spacing.xxl)
         }
         .ignoresSafeArea(edges: .top)
-        .background(AmbientBackground())
+        .background(ArtworkBackground(color: artColor))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task { await load() }
+        .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
         .fullScreenCoverCompat(isPresented: $presentPlayer) {
             if let session {
                 VideoPlayerView(item: displayed, userID: session.userID)
@@ -60,9 +62,9 @@ struct ItemDetailView: View {
 
     private var hero: some View {
         DetailHero(backdropURL: backdropURL,
-                   colorURL: colorURL,
                    logoURL: logoURL(displayed),
                    title: displayed.name,
+                   artColor: artColor,
                    height: heroHeight,
                    edgePadding: edgePadding,
                    titleSize: titleSize,
