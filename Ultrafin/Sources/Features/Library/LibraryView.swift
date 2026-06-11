@@ -51,7 +51,7 @@ struct LibraryRootView: View {
         .background(AmbientBackground())
         .navigationTitle("Library")
         .navigationDestination(for: MediaItem.self) { item in
-            if item.type == .collectionFolder || item.type == .folder {
+            if item.type == .collectionFolder || item.type == .folder || item.type == .boxSet {
                 LibraryContentsView(library: item)
             } else if item.type == .series {
                 SeriesDetailView(series: item)

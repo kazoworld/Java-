@@ -25,7 +25,9 @@ struct FeaturedSettingsView: View {
                     ForEach(FeaturedPreferences.Source.allCases) { Text($0.label).tag($0) }
                 }
                 Picker("Item count", selection: $settings.featured.itemCount) {
-                    ForEach([3, 5, 8, 10], id: \.self) { Text("\($0)").tag($0) }
+                    ForEach([5, 10, 15, 25, 0], id: \.self) { count in
+                        Text(count == 0 ? "All" : "\(count)").tag(count)
+                    }
                 }
             } header: {
                 Text("Content")

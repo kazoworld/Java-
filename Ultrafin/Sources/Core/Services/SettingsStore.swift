@@ -130,10 +130,13 @@ struct AppearancePreferences: Codable {
     var ambientBackground: Bool = true
 
     var colorScheme: ColorScheme? {
+        // OLED implies dark — otherwise adaptive text stays dark on a black
+        // background and disappears.
+        if oledMode { return .dark }
         switch mode {
-        case .system: nil
-        case .dark: .dark
-        case .light: .light
+        case .system: return nil
+        case .dark: return .dark
+        case .light: return .light
         }
     }
 }
@@ -264,11 +267,15 @@ enum MediaLanguage {
 enum HomeRowKind: String, Codable, CaseIterable, Identifiable {
     case featured
     case continueWatching
-    case comingUp
+    case comingUp // merged into Continue Watching; kept for decode compatibility
     case recentlyAdded
     case recentShows
     case favorites
     case libraries
+
+    /// Rows that appear in the Home Layout editor (Coming Up is folded into
+    /// Continue Watching, so it isn't independently arrangeable).
+    static var layoutKinds: [HomeRowKind] { allCases.filter { $0 != .comingUp } }
 
     var id: String { rawValue }
 
@@ -333,7 +340,8 @@ struct FeaturedPreferences: Codable {
 
     var contentType: ContentType = .all
     var source: Source = .both
-    var itemCount: Int = 5
+    /// Number of items in the media bar; 0 means "show all".
+    var itemCount: Int = 15
     /// Libraries that feed the bar. Empty means all libraries.
     var sourceLibraryIDs: [String] = []
     /// Automatically rotate through items.
@@ -354,8 +362,10 @@ struct HomeLayoutPreferences: Codable {
     /// any newly-added kinds and dropping unknown ones (forward/backward compat).
     mutating func normalize() {
         var seen = Set<HomeRowKind>()
-        rows = rows.filter { seen.insert($0.kind).inserted }
-        for kind in HomeRowKind.allCases where !seen.contains(kind) {
+        // Drop de-duped rows and any kind no longer surfaced in the layout
+        // (e.g. the legacy Coming Up row, now folded into Continue Watching).
+        rows = rows.filter { HomeRowKind.layoutKinds.contains($0.kind) && seen.insert($0.kind).inserted }
+        for kind in HomeRowKind.layoutKinds where !seen.contains(kind) {
             rows.append(HomeRowConfig(kind: kind, isEnabled: true))
         }
         // Pin the featured media bar to the top.

@@ -90,9 +90,15 @@ struct HomeView: View {
         for item in chosen where !seen.contains(item.id) {
             seen.insert(item.id)
             out.append(item)
-            if out.count == prefs.itemCount { break }
+            if prefs.itemCount > 0 && out.count == prefs.itemCount { break }
         }
         return out
+    }
+
+    /// Continue Watching + Next Up, merged into one de-duplicated row.
+    private var continueWatching: [MediaItem] {
+        var seen = Set<String>()
+        return (model.resume + model.comingUp).filter { seen.insert($0.id).inserted }
     }
 
     var body: some View {
@@ -124,7 +130,9 @@ struct HomeView: View {
         .ignoresSafeArea()
         .background(AmbientBackground())
         .navigationDestination(for: MediaItem.self) { item in
-            if item.type == .series {
+            if item.type == .collectionFolder || item.type == .folder || item.type == .boxSet {
+                LibraryContentsView(library: item)
+            } else if item.type == .series {
                 SeriesDetailView(series: item)
             } else {
                 ItemDetailView(item: item)
@@ -159,13 +167,12 @@ struct HomeView: View {
                 }
             }
         case .continueWatching:
-            if !model.resume.isEmpty {
-                MediaRail(title: "Continue Watching", items: model.resume, style: .landscape)
+            if !continueWatching.isEmpty {
+                MediaRail(title: "Continue Watching", items: continueWatching, style: .landscape)
             }
         case .comingUp:
-            if !model.comingUp.isEmpty {
-                MediaRail(title: "Coming Up", items: model.comingUp, style: .landscape)
-            }
+            // Folded into Continue Watching — no standalone row.
+            EmptyView()
         case .recentlyAdded:
             if !model.latest.isEmpty {
                 MediaRail(title: "Recently Added", items: model.latest, style: .poster)

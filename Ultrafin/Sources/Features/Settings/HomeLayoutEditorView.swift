@@ -12,7 +12,7 @@ struct HomeLayoutEditorView: View {
     /// The reorderable rows — everything except the pinned featured media bar
     /// (its visibility lives on the Media Bar page).
     private var editableRows: [HomeRowConfig] {
-        settings.homeLayout.rows.filter { $0.kind != .featured }
+        settings.homeLayout.rows.filter { $0.kind != .featured && $0.kind != .comingUp }
     }
 
     var body: some View {

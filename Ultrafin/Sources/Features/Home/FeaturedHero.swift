@@ -16,7 +16,7 @@ struct FeaturedHero: View {
     @State private var artColor: ArtworkColor?
     @FocusState private var focus: HeroFocus?
 
-    private enum HeroFocus: Hashable { case play, info }
+    private enum HeroFocus: Hashable { case play, info, prev, next }
 
     private let rotation: Publishers.Autoconnect<Timer.TimerPublisher>
 
@@ -178,10 +178,37 @@ struct FeaturedHero: View {
             .focused($focus, equals: .info)
 
             Spacer()
-            pageDots
+
+            if items.count > 1 {
+                chevron("chevron.left", target: .prev) { advanceManually(-1) }
+                pageDots
+                chevron("chevron.right", target: .next) { advanceManually(1) }
+            } else {
+                pageDots
+            }
         }
         .padding(.top, Spacing.xs)
         .onChange(of: focus) { _, newValue in isFocused = (newValue != nil) }
+    }
+
+    private func chevron(_ system: String, target: HeroFocus, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: actionFont * 0.85, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(Spacing.sm)
+                .background(.black.opacity(0.3), in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.18, lift: true))
+        .focused($focus, equals: target)
+    }
+
+    private func advanceManually(_ delta: Int) {
+        guard items.count > 1 else { return }
+        withAnimation(.easeInOut(duration: 0.4)) {
+            index = (index + delta + items.count) % items.count
+        }
     }
 
     private func metaLine(for item: MediaItem) -> String {
@@ -238,9 +265,9 @@ struct FeaturedHero: View {
 
     private var heroHeight: CGFloat {
         #if os(tvOS)
-        640
+        720
         #else
-        460
+        500
         #endif
     }
     private var titleSize: CGFloat {
