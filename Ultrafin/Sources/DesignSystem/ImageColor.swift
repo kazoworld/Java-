@@ -4,11 +4,16 @@ import UIKit
 import CoreImage
 #endif
 
-/// A color sampled from artwork, plus whether it's dark enough to need white
-/// text on top.
-struct ArtworkColor: Equatable {
-    let color: Color
+/// A color sampled from artwork, stored as plain components so it's `Sendable`
+/// and safe to hand back from a background task. `isDark` says whether white
+/// text reads well when this is used as a fill.
+struct ArtworkColor: Equatable, Sendable {
+    let red: Double
+    let green: Double
+    let blue: Double
     let isDark: Bool
+
+    var color: Color { Color(.sRGB, red: red, green: green, blue: blue, opacity: 1) }
 }
 
 /// Extracts a vivid representative color from a remote image so UI (like the
@@ -30,10 +35,9 @@ enum ImageColor {
         else { return nil }
 
         var bitmap = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: NSNull()])
-        context.render(output, toBitmap: &bitmap, rowBytes: 4,
-                       bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-                       format: .RGBA8, colorSpace: nil)
+        CIContext().render(output, toBitmap: &bitmap, rowBytes: 4,
+                           bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                           format: .RGBA8, colorSpace: nil)
 
         let r = CGFloat(bitmap[0]) / 255
         let g = CGFloat(bitmap[1]) / 255
@@ -47,12 +51,11 @@ enum ImageColor {
                             brightness: min(0.9, max(br, 0.6)),
                             alpha: 1)
 
-        // Luminance of the vivid color → readable text color when used as a fill.
         var vr: CGFloat = 0, vg: CGFloat = 0, vb: CGFloat = 0, va: CGFloat = 0
         vivid.getRed(&vr, green: &vg, blue: &vb, alpha: &va)
         let luminance = 0.2126 * vr + 0.7152 * vg + 0.0722 * vb
 
-        return ArtworkColor(color: Color(vivid), isDark: luminance < 0.6)
+        return ArtworkColor(red: Double(vr), green: Double(vg), blue: Double(vb), isDark: luminance < 0.6)
         #else
         return nil
         #endif
