@@ -2,14 +2,14 @@ import SwiftUI
 
 /// Which selection panel (if any) is open over the player. Captions are a
 /// one-press toggle (no panel); quality opens a small list.
-enum PlayerPanel: Equatable { case none, quality }
+enum PlayerPanel: Equatable { case none, quality, episodes }
 
 /// What currently holds focus in the player. `surface` is the invisible remote
 /// capture layer used while the controls are hidden; the rest are control-bar
 /// buttons. Sharing one `@FocusState` lets us move focus reliably between the
 /// video and the controls on tvOS.
 enum PlayerFocusTarget: Hashable {
-    case surface, previous, back, playPause, forward, next, captions, quality, skipIntro
+    case surface, previous, back, playPause, forward, next, captions, quality, episodes, skipIntro
 }
 
 /// A request to open the player on a queue of items at a starting index — used

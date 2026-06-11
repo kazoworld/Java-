@@ -53,6 +53,11 @@ final class VideoPlayerViewModel {
     private(set) var quality: QualityOption = .auto
     private(set) var segments: [MediaSegment] = []
 
+    // Episode browser (in-player season/episode picker for TV shows).
+    private(set) var browseSeasons: [MediaItem] = []
+    private(set) var browseSeasonID: String?
+    private(set) var browseEpisodes: [MediaItem] = []
+
     private let userID: String
     private let client: JellyfinClient
     private let settings: PlaybackPreferences
@@ -85,6 +90,48 @@ final class VideoPlayerViewModel {
 
     var subtitleTracks: [MediaTrack] { engine?.subtitleTracks ?? [] }
     var currentSubtitleID: Int? { engine?.currentSubtitleID }
+
+    /// True when the current item is a TV episode, so the in-player episode
+    /// browser button should appear.
+    var isEpisode: Bool { currentItem?.type == .episode && currentItem?.seriesId != nil }
+
+    // MARK: - Episode browser
+
+    nonisolated func episodeImageURL(_ item: MediaItem) -> URL? {
+        let tag = item.imageTags?["Primary"]
+        return client.imageURL(itemID: item.id, kind: .primary, tag: tag, maxWidth: 320)
+    }
+
+    /// Loads the seasons/episodes for the current series the first time the
+    /// browser is opened (or after the season changes).
+    func loadEpisodeBrowserIfNeeded() async {
+        guard let item = currentItem, let seriesID = item.seriesId else { return }
+        if browseSeasons.isEmpty {
+            browseSeasons = (try? await client.seasons(seriesID: seriesID, userID: userID)) ?? []
+        }
+        let target = browseSeasonID ?? item.seasonId ?? browseSeasons.first?.id
+        if let target, browseSeasonID != target || browseEpisodes.isEmpty {
+            browseSeasonID = target
+            browseEpisodes = (try? await client.episodes(seriesID: seriesID, seasonID: target, userID: userID)) ?? []
+        }
+    }
+
+    func selectBrowseSeason(_ id: String) async {
+        guard let seriesID = currentItem?.seriesId, id != browseSeasonID else { return }
+        browseSeasonID = id
+        browseEpisodes = (try? await client.episodes(seriesID: seriesID, seasonID: id, userID: userID)) ?? []
+    }
+
+    /// Switches playback to the chosen episode, making its season the new queue
+    /// so previous/next continue to work from there.
+    func playBrowsedEpisode(_ episode: MediaItem) async {
+        guard let idx = browseEpisodes.firstIndex(where: { $0.id == episode.id }) else { return }
+        if episode.id == currentItem?.id { return }
+        await reportStopped()
+        queue = browseEpisodes
+        index = idx
+        await loadCurrent(startAt: resumeSeconds())
+    }
 
     // MARK: - Lifecycle
 

@@ -43,7 +43,14 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
     }
 
     func play() {
-        player.play()
+        // `playImmediately` resumes at full rate without re-buffering first —
+        // plain `play()` with `automaticallyWaitsToMinimizeStalling` would stall
+        // for a second or two (audio dropping out) every time you un-pause.
+        if player.currentItem != nil {
+            player.playImmediately(atRate: 1.0)
+        } else {
+            player.play()
+        }
         subject.value.status = .playing
     }
 

@@ -19,6 +19,7 @@ struct PlayerControlsView: View {
 
     @Environment(SettingsStore.self) private var settings
     @FocusState private var panelFocus: Int?
+    @FocusState private var episodeFocus: String?
     @State private var isScrubbing = false
     @State private var scrubProgress: Double = 0
 
@@ -26,12 +27,20 @@ struct PlayerControlsView: View {
 
     var body: some View {
         ZStack {
-            // Only a soft gradient at the very top for title legibility — the
-            // video stays clear; the glass bar provides its own backing.
-            LinearGradient(colors: [.black.opacity(0.45), .clear],
-                           startPoint: .top, endPoint: .center)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+            // Soft gradients at the very top and bottom for legibility — the
+            // video stays clear and the controls float directly over it (no
+            // boxed-in control bar).
+            VStack {
+                LinearGradient(colors: [.black.opacity(0.45), .clear],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 180)
+                Spacer()
+                LinearGradient(colors: [.clear, .black.opacity(0.55)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 220)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             if panel == .none {
                 VStack(spacing: 0) {
@@ -42,6 +51,8 @@ struct PlayerControlsView: View {
                     glassBar
                 }
                 .padding(platformPadding)
+            } else if panel == .episodes {
+                episodesPanel
             } else {
                 selectionPanel
             }
@@ -124,13 +135,6 @@ struct PlayerControlsView: View {
 
             buttonBar
         }
-        .padding(barPadding)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: barRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: barRadius, style: .continuous)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
     }
 
     private var buttonBar: some View {
@@ -150,6 +154,11 @@ struct PlayerControlsView: View {
 
             glassButton(model.captionsOn ? "captions.bubble.fill" : "captions.bubble",
                         target: .captions, active: model.captionsOn) { onToggleCaptions() }
+            if model.isEpisode {
+                glassButton("rectangle.stack.fill", target: .episodes) {
+                    panel = .episodes
+                }
+            }
             glassButton("slider.horizontal.3", target: .quality) { panel = .quality }
         }
         .padding(.top, Spacing.xs)
@@ -218,6 +227,176 @@ struct PlayerControlsView: View {
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.04, lift: false))
         .focused($panelFocus, equals: index)
+    }
+
+    // MARK: - Episodes panel
+
+    /// A compact, scrollable episode browser that floats over the video. The
+    /// season selector sits at the top; scroll the list to any episode and pick
+    /// it to start playing. Back dismisses it (handled by the host).
+    private var episodesPanel: some View {
+        ZStack {
+            // Dim the video so the list reads; tapping it dismisses on iOS
+            // (tvOS dismisses with the Back/Menu button, handled by the host).
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+                #if os(iOS)
+                .onTapGesture { panel = .none }
+                #endif
+
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                episodesPanelCard
+            }
+        }
+    }
+
+    private var episodesPanelCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text(model.currentItem?.seriesName ?? "Episodes")
+                .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+
+            if model.browseSeasons.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.sm) {
+                        ForEach(model.browseSeasons) { season in
+                            Button { Task { await model.selectBrowseSeason(season.id) } } label: {
+                                Text(season.name)
+                                    .font(.system(size: seasonFont, weight: .semibold, design: .rounded))
+                                    .padding(.horizontal, Spacing.md)
+                                    .padding(.vertical, Spacing.xs)
+                                    .background(Capsule().fill(season.id == model.browseSeasonID
+                                                               ? accent.opacity(0.9) : Color.white.opacity(0.08)))
+                                    .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: Spacing.sm) {
+                        ForEach(model.browseEpisodes) { episode in
+                            Button {
+                                Task { await model.playBrowsedEpisode(episode); panel = .none }
+                            } label: {
+                                episodeRow(episode)
+                            }
+                            .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: false))
+                            .focused($episodeFocus, equals: episode.id)
+                            .id(episode.id)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .frame(maxHeight: episodesMaxHeight)
+                .onChange(of: episodeFocus) { _, id in
+                    guard let id else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
+                }
+            }
+        }
+        .padding(Spacing.xl)
+        .frame(width: episodesPanelWidth, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: barRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: barRadius, style: .continuous)
+            .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .padding(platformPadding)
+        .task {
+            await model.loadEpisodeBrowserIfNeeded()
+            episodeFocus = model.currentItem?.id ?? model.browseEpisodes.first?.id
+        }
+    }
+
+    private func episodeRow(_ episode: MediaItem) -> some View {
+        let isCurrent = episode.id == model.currentItem?.id
+        return HStack(spacing: Spacing.md) {
+            ZStack(alignment: .bottomLeading) {
+                RemoteImage(url: model.episodeImageURL(episode))
+                    .frame(width: epThumbWidth, height: epThumbWidth * 9 / 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                if let progress = episode.playbackProgress {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.black.opacity(0.5))
+                            Capsule().fill(accent).frame(width: geo.size.width * progress)
+                        }
+                        .frame(height: 3)
+                    }
+                    .frame(height: 3)
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 4)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(episodeTitle(episode))
+                    .font(.system(size: episodeTitleSize, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                if let runtime = episode.runtimeText {
+                    Text(runtime)
+                        .font(Typography.caption)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            Spacer(minLength: 0)
+            if isCurrent {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(accent)
+            }
+        }
+        .padding(Spacing.sm)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(isCurrent ? accent.opacity(0.22) : Color.white.opacity(0.05)))
+        .contentShape(Rectangle())
+    }
+
+    private func episodeTitle(_ episode: MediaItem) -> String {
+        if let n = episode.indexNumber { return "\(n). \(episode.name)" }
+        return episode.name
+    }
+
+    private var seasonFont: CGFloat {
+        #if os(tvOS)
+        22
+        #else
+        14
+        #endif
+    }
+    private var episodeTitleSize: CGFloat {
+        #if os(tvOS)
+        22
+        #else
+        15
+        #endif
+    }
+    private var epThumbWidth: CGFloat {
+        #if os(tvOS)
+        180
+        #else
+        120
+        #endif
+    }
+    private var episodesPanelWidth: CGFloat {
+        #if os(tvOS)
+        680
+        #else
+        420
+        #endif
+    }
+    private var episodesMaxHeight: CGFloat {
+        #if os(tvOS)
+        620
+        #else
+        360
+        #endif
     }
 
     // MARK: - Helpers
