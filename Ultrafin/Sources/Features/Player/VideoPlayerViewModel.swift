@@ -62,6 +62,8 @@ final class VideoPlayerViewModel {
     private let client: JellyfinClient
     private let settings: PlaybackPreferences
     private let captionMode: SubtitlePreferences.CaptionMode
+    /// When false, ignore any saved resume position and start from 0.
+    private let resumeEnabled: Bool
 
     private var cancellable: AnyCancellable?
     private var resolution: PlaybackResolution?
@@ -71,7 +73,7 @@ final class VideoPlayerViewModel {
 
     init(queue: [MediaItem], startIndex: Int, userID: String, client: JellyfinClient,
          settings: PlaybackPreferences, captionMode: SubtitlePreferences.CaptionMode,
-         defaultQuality: QualityOption = .auto) {
+         defaultQuality: QualityOption = .auto, resume: Bool = true) {
         self.queue = queue.isEmpty ? [] : queue
         self.index = min(max(0, startIndex), max(0, queue.count - 1))
         self.userID = userID
@@ -79,6 +81,7 @@ final class VideoPlayerViewModel {
         self.settings = settings
         self.captionMode = captionMode
         self.quality = defaultQuality
+        self.resumeEnabled = resume
     }
 
     // MARK: - Derived
@@ -331,7 +334,8 @@ final class VideoPlayerViewModel {
     // MARK: - Progress reporting
 
     private func resumeSeconds() -> Double {
-        guard settings.autoResume, let ticks = currentItem?.userData?.playbackPositionTicks, ticks > 0 else { return 0 }
+        guard resumeEnabled, settings.autoResume,
+              let ticks = currentItem?.userData?.playbackPositionTicks, ticks > 0 else { return 0 }
         return Double(ticks) / 10_000_000.0
     }
 

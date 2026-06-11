@@ -13,10 +13,13 @@ final class HomeViewModel {
     var featuredPool: [MediaItem] = []
     var isLoading = true
     var errorMessage: String?
+    /// Set once the first load finishes so re-appearing (e.g. switching back to
+    /// the Home tab) doesn't kick off a fresh, janky reload every time.
+    private(set) var didLoad = false
 
     func load(client: JellyfinClient, userID: String, featured: FeaturedPreferences) async {
         isLoading = true
-        defer { isLoading = false }
+        defer { isLoading = false; didLoad = true }
         // Fetch the rails concurrently so the screen paints fast.
         async let resumeTask = try? client.resumeItems(userID: userID)
         async let latestTask = try? client.latestItems(userID: userID)
@@ -153,6 +156,7 @@ struct HomeView: View {
         #endif
         .task {
             guard let session, let client = appState.client else { return }
+            if model.didLoad { return }
             await model.load(client: client, userID: session.userID, featured: settings.featured)
         }
     }

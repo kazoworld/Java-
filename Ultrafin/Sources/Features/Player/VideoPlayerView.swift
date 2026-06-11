@@ -18,6 +18,7 @@ struct PlaybackRequest: Identifiable {
     let id = UUID()
     let queue: [MediaItem]
     let index: Int
+    var resume: Bool = true
 }
 
 /// Full-screen player. Hosts the active engine's video output and overlays
@@ -31,6 +32,9 @@ struct VideoPlayerView: View {
     let queue: [MediaItem]
     let startIndex: Int
     let userID: String
+    /// When false, playback starts from the beginning even if there's a saved
+    /// resume position (the detail "Play from beginning" action).
+    var resume: Bool = true
 
     @State private var model: VideoPlayerViewModel?
     @State private var controlsVisible = true
@@ -41,16 +45,18 @@ struct VideoPlayerView: View {
 
     @FocusState private var focus: PlayerFocusTarget?
 
-    init(item: MediaItem, userID: String) {
+    init(item: MediaItem, userID: String, resume: Bool = true) {
         self.queue = [item]
         self.startIndex = 0
         self.userID = userID
+        self.resume = resume
     }
 
-    init(queue: [MediaItem], startIndex: Int, userID: String) {
+    init(queue: [MediaItem], startIndex: Int, userID: String, resume: Bool = true) {
         self.queue = queue
         self.startIndex = startIndex
         self.userID = userID
+        self.resume = resume
     }
 
     var body: some View {
@@ -191,7 +197,8 @@ struct VideoPlayerView: View {
             client: client,
             settings: settings.playback,
             captionMode: settings.subtitles.captionMode,
-            defaultQuality: settings.video.defaultQuality
+            defaultQuality: settings.video.defaultQuality,
+            resume: resume
         )
         model = vm
         await vm.start()

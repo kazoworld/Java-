@@ -122,6 +122,10 @@ struct DetailActionButton: View {
 /// Cast and director/creator lines.
 struct CastCrewView: View {
     let item: MediaItem
+    var onDark: Bool = false
+
+    private var labelColor: Color { onDark ? .white.opacity(0.6) : UltrafinColors.tertiaryText }
+    private var valueColor: Color { onDark ? .white.opacity(0.85) : UltrafinColors.secondaryText }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -131,8 +135,8 @@ struct CastCrewView: View {
     }
 
     private func line(label: String, value: String) -> some View {
-        (Text(label + ": ").foregroundStyle(UltrafinColors.tertiaryText)
-            + Text(value).foregroundStyle(UltrafinColors.secondaryText))
+        (Text(label + ": ").foregroundStyle(labelColor)
+            + Text(value).foregroundStyle(valueColor))
             .font(.system(size: size))
             .lineLimit(1)
     }

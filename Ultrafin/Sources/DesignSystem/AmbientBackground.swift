@@ -23,15 +23,12 @@ struct AmbientBackground: View {
             (settings.appearance.oledMode ? Color.black : UltrafinColors.background)
 
             if showsWash {
-                GeometryReader { geo in
-                    let w = geo.size.width
-                    let h = geo.size.height
-                    ZStack {
-                        blob(accent, center: UnitPoint(x: 0.05, y: 0.0), radius: w * 0.75)
-                        blob(accent.complement, center: UnitPoint(x: 1.0, y: 0.15), radius: w * 0.6)
-                        blob(accent.analogous, center: UnitPoint(x: 0.85, y: 1.0), radius: w * 0.8)
-                        blob(accent, center: UnitPoint(x: 0.1, y: 1.05), radius: h * 0.7)
-                    }
+                // Fixed radii (no GeometryReader) so the wash is a single static
+                // layer the GPU can cache — cheaper when tabs swap in and out.
+                ZStack {
+                    blob(accent, center: UnitPoint(x: 0.0, y: 0.0), radius: 900)
+                    blob(accent.complement, center: UnitPoint(x: 1.0, y: 0.1), radius: 760)
+                    blob(accent.analogous, center: UnitPoint(x: 0.9, y: 1.0), radius: 950)
                 }
                 .opacity(0.5)
             }

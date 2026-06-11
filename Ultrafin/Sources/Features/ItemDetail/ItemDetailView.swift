@@ -14,6 +14,7 @@ struct ItemDetailView: View {
     @State private var isFavorite = false
     @State private var isWatched = false
     @State private var presentPlayer = false
+    @State private var resumePlayback = true
     @State private var artColor: ArtworkColor?
 
     private var session: UserSession? {
@@ -24,15 +25,22 @@ struct ItemDetailView: View {
     private var displayed: MediaItem { detail ?? item }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                hero
-                content
+        GeometryReader { screen in
+            let landscape = screen.size.width >= screen.size.height * 1.2
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    heroSection(landscape: landscape, screen: screen.size)
+                    belowSection
+                }
+                .padding(.bottom, Spacing.xxl)
             }
-            .padding(.bottom, Spacing.xxl)
+            .background(UltrafinColors.background)
         }
         .ignoresSafeArea(edges: .top)
-        .background(ArtworkBackground(color: artColor))
+        // Detail pages are always dark (the Netflix look) so the overlaid white
+        // column reads, and the episodes/“more like this” below resolve their
+        // adaptive colors to the light-on-dark variants.
+        .environment(\.colorScheme, .dark)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -40,13 +48,10 @@ struct ItemDetailView: View {
         .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
         .fullScreenCoverCompat(isPresented: $presentPlayer) {
             if let session {
-                VideoPlayerView(item: displayed, userID: session.userID)
+                VideoPlayerView(item: displayed, userID: session.userID, resume: resumePlayback)
             }
         }
     }
-
-    private func tint(_ c: ArtworkColor?) -> Color { c?.color ?? Color.white.opacity(0.9) }
-    private func playTextColor(_ c: ArtworkColor?) -> Color { (c?.isDark ?? false) ? .white : .black }
 
     private func load() async {
         guard let session, let client = appState.client else { return }
@@ -58,45 +63,67 @@ struct ItemDetailView: View {
         isWatched = displayed.userData?.played ?? false
     }
 
-    // MARK: - Hero
+    // MARK: - Hero (Netflix-style art + content column)
 
-    private var hero: some View {
-        DetailHero(backdropURL: backdropURL,
-                   logoURL: logoURL(displayed),
-                   title: displayed.name,
-                   artColor: artColor,
-                   height: heroHeight,
-                   edgePadding: edgePadding,
-                   titleSize: titleSize,
-                   logoMaxWidth: logoMaxWidth,
-                   logoMaxHeight: logoMaxHeight) { art in
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                DetailBadges(item: displayed, onDark: true)
-                heroActions(art)
+    private func heroSection(landscape: Bool, screen: CGSize) -> some View {
+        ZStack(alignment: landscape ? .leading : .bottomLeading) {
+            DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape)
+
+            contentColumn
+                .frame(maxWidth: landscape ? screen.width * 0.52 : .infinity, alignment: .leading)
+                .padding(.horizontal, edgePadding)
+                .padding(.bottom, landscape ? 0 : Spacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity,
+                       alignment: landscape ? .leading : .bottom)
+        }
+        .frame(height: landscape ? screen.height : screen.height * 0.74)
+    }
+
+    private var contentColumn: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            TitleLogo(logoURL: logoURL(displayed), title: displayed.name,
+                      fallbackFont: .system(size: titleSize, weight: .heavy, design: .rounded),
+                      fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
+                .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
+
+            DetailBadges(item: displayed, onDark: true)
+
+            if let overview = displayed.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(.system(size: overviewSize))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
             }
+
+            CastCrewView(item: displayed, onDark: true)
+
+            actionRows
+                .padding(.top, Spacing.xs)
         }
     }
 
-    private func heroActions(_ art: ArtworkColor?) -> some View {
-        HStack(spacing: Spacing.xl) {
-            Button { presentPlayer = true } label: {
-                Label(playButtonTitle, systemImage: "play.fill")
-                    .font(.system(size: actionFont, weight: .bold, design: .rounded))
-                    .padding(.horizontal, Spacing.xl)
-                    .padding(.vertical, Spacing.md)
-                    .background(tint(art), in: Capsule())
-                    .foregroundStyle(playTextColor(art))
+    private var actionRows: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            if let p = displayed.playbackProgress, p > 0.01, p < 0.95, settings.playback.autoResume {
+                DetailActionRow(icon: "play.fill", title: "Resume", progress: p, prominent: true) {
+                    resumePlayback = true; presentPlayer = true
+                }
+                DetailActionRow(icon: "arrow.counterclockwise", title: "Play from beginning") {
+                    resumePlayback = false; presentPlayer = true
+                }
+            } else {
+                DetailActionRow(icon: "play.fill", title: "Play", prominent: true) {
+                    resumePlayback = true; presentPlayer = true
+                }
             }
-            .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))
-
-            DetailActionButton(title: "My List",
-                               systemImage: isFavorite ? "checkmark" : "plus",
-                               active: isFavorite, onDark: true) { toggleFavorite() }
-            DetailActionButton(title: "Watched",
-                               systemImage: isWatched ? "eye.fill" : "eye",
-                               active: isWatched, onDark: true) { toggleWatched() }
-            Spacer()
+            DetailActionRow(icon: isFavorite ? "checkmark" : "plus",
+                            title: isFavorite ? "In My List" : "Add to My List") { toggleFavorite() }
+            DetailActionRow(icon: isWatched ? "eye.fill" : "eye",
+                            title: isWatched ? "Watched" : "Mark as Watched") { toggleWatched() }
         }
+        .frame(maxWidth: actionMaxWidth)
     }
 
     private func logoURL(_ item: MediaItem) -> URL? {
@@ -104,36 +131,20 @@ struct ItemDetailView: View {
         return appState.client?.imageURL(itemID: item.id, kind: .logo, tag: tag, maxWidth: 800)
     }
 
-    // MARK: - Content
+    // MARK: - Below the fold
 
-    private var content: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            if hasInfo {
-                GlassInfoCard {
-                    if let overview = displayed.overview, !overview.isEmpty {
-                        Text(overview)
-                            .font(.system(size: overviewSize))
-                            .foregroundStyle(UltrafinColors.primaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    CastCrewView(item: displayed)
-                }
-            }
-
-            if !similar.isEmpty {
+    @ViewBuilder
+    private var belowSection: some View {
+        if !similar.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 Text("More Like This")
                     .font(.system(size: titleSize * 0.5, weight: .bold, design: .rounded))
                     .foregroundStyle(UltrafinColors.primaryText)
-                    .padding(.top, Spacing.xs)
                 similarRail
             }
+            .padding(.horizontal, edgePadding)
+            .padding(.top, Spacing.lg)
         }
-        .padding(.horizontal, edgePadding)
-        .padding(.top, Spacing.sm)
-    }
-
-    private var hasInfo: Bool {
-        (displayed.overview?.isEmpty == false) || displayed.castText != nil || displayed.crewLine != nil
     }
 
     private var similarRail: some View {
@@ -167,13 +178,6 @@ struct ItemDetailView: View {
         Task { await client.setPlayed(itemID: item.id, userID: session.userID, isPlayed: value) }
     }
 
-    private var playButtonTitle: String {
-        if settings.playback.autoResume, let p = displayed.playbackProgress, p > 0.01, p < 0.95 {
-            return "Resume"
-        }
-        return "Play"
-    }
-
     private var backdropURL: URL? {
         let tag = displayed.backdropImageTags?.first ?? displayed.imageTags?["Primary"]
         let kind: JellyfinClient.ImageKind = displayed.backdropImageTags?.isEmpty == false ? .backdrop : .primary
@@ -189,13 +193,6 @@ struct ItemDetailView: View {
 
     // MARK: - Metrics
 
-    private var heroHeight: CGFloat {
-        #if os(tvOS)
-        680
-        #else
-        480
-        #endif
-    }
     private var titleSize: CGFloat {
         #if os(tvOS)
         52
@@ -205,16 +202,16 @@ struct ItemDetailView: View {
     }
     private var overviewSize: CGFloat {
         #if os(tvOS)
-        24
+        22
         #else
         15
         #endif
     }
-    private var actionFont: CGFloat {
+    private var actionMaxWidth: CGFloat {
         #if os(tvOS)
-        24
+        600
         #else
-        16
+        .infinity
         #endif
     }
     private var edgePadding: CGFloat {
