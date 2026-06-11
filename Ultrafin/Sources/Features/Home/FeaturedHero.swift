@@ -1,22 +1,19 @@
 import SwiftUI
 import Combine
 
-/// A large, auto-rotating hero banner for the top of Home — the "media bar".
-///
-/// On tvOS this is the signature Apple TV look: full-bleed backdrop, title,
-/// synopsis, and focusable Play / More Info actions. It cross-fades through a
-/// handful of featured items and pauses rotation while focused so it never
-/// moves out from under the remote.
+/// The "media bar" hero at the top of Home. Its colors come from the **artwork**
+/// (a vivid color sampled from each title's backdrop), not the app theme — so it
+/// stays unique to the movie/show and is unaffected by accent or theme changes.
 struct FeaturedHero: View {
     let items: [MediaItem]
     let autoAdvance: Bool
     let onPlay: (MediaItem) -> Void
 
     @Environment(AppState.self) private var appState
-    @Environment(SettingsStore.self) private var settings
 
     @State private var index = 0
     @State private var isFocused = false
+    @State private var artColor: ArtworkColor?
     @FocusState private var focus: HeroFocus?
 
     private enum HeroFocus: Hashable { case play, info }
@@ -37,6 +34,10 @@ struct FeaturedHero: View {
         return items[index]
     }
 
+    /// Color sampled from the current artwork (falls back to neutral while loading).
+    private var tint: Color { artColor?.color ?? Color.white.opacity(0.9) }
+    private var playTextColor: Color { (artColor?.isDark ?? false) ? .white : .black }
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             backdrop
@@ -47,6 +48,10 @@ struct FeaturedHero: View {
         .frame(maxWidth: .infinity)
         .clipped()
         .onReceive(rotation) { _ in advance() }
+        .task(id: current?.id) {
+            artColor = await ImageColor.vibrant(from: colorURL(current))
+        }
+        .animation(.easeInOut(duration: 0.4), value: artColor)
         #if os(tvOS)
         .focusSection()
         #endif
@@ -54,10 +59,8 @@ struct FeaturedHero: View {
 
     // MARK: - Layers
 
-    private var accent: Color { settings.theme.accent.color }
-
-    /// Opaque at the top, transparent at the bottom — used to dissolve the hero
-    /// into the page so there's no hard seam against the rows below.
+    /// Opaque at the top, transparent at the bottom — dissolves the hero into the
+    /// page so there's no hard seam against the rows below.
     private var bottomFade: LinearGradient {
         LinearGradient(stops: [
             .init(color: .black, location: 0.0),
@@ -75,7 +78,7 @@ struct FeaturedHero: View {
                 .clipped()
                 .id(current.id) // drive the cross-fade
                 .transition(.opacity)
-                .mask(bottomFade) // fade the artwork into the page at the bottom
+                .mask(bottomFade)
         } else {
             UltrafinColors.elevatedSurface.mask(bottomFade)
         }
@@ -83,23 +86,19 @@ struct FeaturedHero: View {
 
     private var scrim: some View {
         ZStack {
-            // Vertical legibility backing that also fades to clear at the very
-            // bottom, so the hero blends seamlessly into the content below.
+            // Dark legibility gradient (content-agnostic) so white text always
+            // reads; fades to clear at the very bottom for the page blend.
             LinearGradient(stops: [
                 .init(color: .clear, location: 0.0),
-                .init(color: UltrafinColors.background.opacity(0.0), location: 0.35),
-                .init(color: UltrafinColors.background.opacity(0.6), location: 0.82),
+                .init(color: .black.opacity(0.0), location: 0.30),
+                .init(color: .black.opacity(0.72), location: 0.85),
                 .init(color: .clear, location: 1.0)
             ], startPoint: .top, endPoint: .bottom)
 
-            // Left-side contrast for the text, faded at the bottom edge.
-            LinearGradient(colors: [UltrafinColors.background.opacity(0.7), .clear],
-                           startPoint: .leading, endPoint: .trailing)
+            // Content-color glow — the bar's color comes from the artwork.
+            LinearGradient(colors: [.clear, tint.opacity(0.5)], startPoint: .center, endPoint: .bottom)
                 .mask(bottomFade)
-
-            // Accent wash so the media bar re-tints when the theme changes.
-            LinearGradient(colors: [.clear, accent.opacity(0.28)],
-                           startPoint: .center, endPoint: .bottom)
+            LinearGradient(colors: [tint.opacity(0.32), .clear], startPoint: .leading, endPoint: .trailing)
                 .mask(bottomFade)
         }
     }
@@ -113,85 +112,75 @@ struct FeaturedHero: View {
                           fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
                     .shadow(color: .black.opacity(0.6), radius: 16, y: 6)
 
-                infoCard(for: current)
+                metadataRow(for: current)
 
-                HStack(spacing: Spacing.md) {
-                    Button { onPlay(current) } label: {
-                        Label("Play", systemImage: "play.fill")
-                            .font(.system(size: actionFont, weight: .bold, design: .rounded))
-                            .padding(.horizontal, Spacing.xl)
-                            .padding(.vertical, Spacing.md)
-                            .background(settings.theme.accent.color, in: Capsule())
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
-                    .focused($focus, equals: .play)
-
-                    NavigationLink(value: current) {
-                        Label("More Info", systemImage: "info.circle")
-                            .font(.system(size: actionFont, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, Spacing.xl)
-                            .padding(.vertical, Spacing.md)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
-                    .focused($focus, equals: .info)
-
-                    Spacer()
-                    pageDots
+                if let overview = current.overview, !overview.isEmpty {
+                    Text(overview)
+                        .font(.system(size: overviewSize, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(2)
+                        .frame(maxWidth: overviewWidth, alignment: .leading)
+                        .shadow(color: .black.opacity(0.6), radius: 8, y: 2)
                 }
-                .padding(.top, Spacing.xs)
-                // Pause rotation while the user is interacting with the hero.
-                .onChange(of: focus) { _, newValue in isFocused = (newValue != nil) }
+
+                actions(for: current)
             }
             .padding(heroPadding)
         }
     }
 
-    /// Frosted glass info card (metadata · rating · synopsis), Moonfin-style.
-    private func infoCard(for item: MediaItem) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+    private func metadataRow(for item: MediaItem) -> some View {
+        HStack(spacing: Spacing.md) {
+            if let rt = item.criticScoreText {
+                HStack(spacing: 4) {
+                    Text("🍅")
+                    Text(rt).foregroundStyle(item.isFresh ? Color(hex: 0xFF6A52) : .white.opacity(0.85))
+                }
+                .font(.system(size: metaSize, weight: .bold, design: .rounded))
+            }
+            if let community = item.communityRating {
+                Text(String(format: "★ %.1f", community))
+                    .font(.system(size: metaSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(hex: 0xF5C518)) // IMDb gold
+            }
             Text(metaLine(for: item))
                 .font(.system(size: metaSize, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(.white.opacity(0.85))
                 .lineLimit(1)
-
-            HStack(spacing: Spacing.md) {
-                if let rt = item.criticScoreText {
-                    HStack(spacing: 4) {
-                        Text("🍅")
-                        Text(rt)
-                            .foregroundStyle(item.isFresh ? Color(hex: 0xFF6A52) : .white.opacity(0.8))
-                    }
-                    .font(.system(size: metaSize + 2, weight: .bold, design: .rounded))
-                }
-                if let community = item.communityRating {
-                    HStack(spacing: Spacing.sm) {
-                        Text(String(format: "★ %.1f", community))
-                            .font(.system(size: metaSize + 2, weight: .bold, design: .rounded))
-                            .foregroundStyle(accent)
-                        Text("Community Rating")
-                            .font(.system(size: metaSize - 4, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
-                }
-            }
-
-            if let overview = item.overview, !overview.isEmpty {
-                Text(overview)
-                    .font(.system(size: overviewSize, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
-        .padding(Spacing.lg)
-        .frame(maxWidth: overviewWidth, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .shadow(color: .black.opacity(0.6), radius: 6, y: 2)
+    }
+
+    private func actions(for current: MediaItem) -> some View {
+        HStack(spacing: Spacing.md) {
+            Button { onPlay(current) } label: {
+                Label("Play", systemImage: "play.fill")
+                    .font(.system(size: actionFont, weight: .bold, design: .rounded))
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.md)
+                    .background(tint, in: Capsule())
+                    .foregroundStyle(playTextColor)
+            }
+            .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
+            .focused($focus, equals: .play)
+
+            NavigationLink(value: current) {
+                Label("More Info", systemImage: "info.circle")
+                    .font(.system(size: actionFont, weight: .semibold, design: .rounded))
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.md)
+                    .background(.black.opacity(0.35), in: Capsule())
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
+            .focused($focus, equals: .info)
+
+            Spacer()
+            pageDots
+        }
+        .padding(.top, Spacing.xs)
+        .onChange(of: focus) { _, newValue in isFocused = (newValue != nil) }
     }
 
     private func metaLine(for item: MediaItem) -> String {
@@ -204,7 +193,7 @@ struct FeaturedHero: View {
         HStack(spacing: Spacing.sm) {
             ForEach(items.indices, id: \.self) { i in
                 Circle()
-                    .fill(i == index ? settings.theme.accent.color : UltrafinColors.tertiaryText)
+                    .fill(i == index ? tint : Color.white.opacity(0.4))
                     .frame(width: 8, height: 8)
             }
         }
@@ -219,30 +208,25 @@ struct FeaturedHero: View {
         }
     }
 
+    // MARK: - Image URLs
+
     private func logoURL(_ item: MediaItem) -> URL? {
         guard let tag = item.imageTags?["Logo"] else { return nil }
         return appState.client?.imageURL(itemID: item.id, kind: .logo, tag: tag, maxWidth: 800)
-    }
-
-    private var logoMaxWidth: CGFloat {
-        #if os(tvOS)
-        720
-        #else
-        360
-        #endif
-    }
-    private var logoMaxHeight: CGFloat {
-        #if os(tvOS)
-        150
-        #else
-        80
-        #endif
     }
 
     private func backdropURL(for item: MediaItem) -> URL? {
         let tag = item.backdropImageTags?.first ?? item.imageTags?["Primary"]
         let kind: JellyfinClient.ImageKind = (item.backdropImageTags?.isEmpty == false) ? .backdrop : .primary
         return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: 1920)
+    }
+
+    /// Small image used only for color sampling (keeps the download tiny).
+    private func colorURL(_ item: MediaItem?) -> URL? {
+        guard let item else { return nil }
+        let tag = item.backdropImageTags?.first ?? item.imageTags?["Primary"]
+        let kind: JellyfinClient.ImageKind = (item.backdropImageTags?.isEmpty == false) ? .backdrop : .primary
+        return appState.client?.imageURL(itemID: item.id, kind: kind, tag: tag, maxWidth: 240)
     }
 
     // MARK: - Platform metrics
@@ -252,13 +236,6 @@ struct FeaturedHero: View {
         640
         #else
         460
-        #endif
-    }
-    private var eyebrowSize: CGFloat {
-        #if os(tvOS)
-        22
-        #else
-        13
         #endif
     }
     private var titleSize: CGFloat {
@@ -294,6 +271,20 @@ struct FeaturedHero: View {
         EdgeInsets(top: 0, leading: 60, bottom: 56, trailing: 60)
         #else
         EdgeInsets(top: 0, leading: 20, bottom: 28, trailing: 20)
+        #endif
+    }
+    private var logoMaxWidth: CGFloat {
+        #if os(tvOS)
+        720
+        #else
+        360
+        #endif
+    }
+    private var logoMaxHeight: CGFloat {
+        #if os(tvOS)
+        150
+        #else
+        80
         #endif
     }
     private var overviewWidth: CGFloat {

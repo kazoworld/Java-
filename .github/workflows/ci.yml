@@ -1,13 +1,17 @@
 name: CI
 
-# Compiles both the iOS and tvOS targets on every push/PR so build breakage is
-# caught immediately. No code signing or secrets required — these are
-# simulator builds for validation only.
+# Builds both the iOS and tvOS targets to catch breakage. Runs only on pull
+# requests (a push to a PR branch already triggers this via "synchronize"), so
+# routine pushes don't double-run — important for macOS Actions minutes, which
+# bill at 10x. Docs-only changes are skipped, and SwiftPM artifacts are cached.
 
 on:
-  push:
-    branches: ["**"]
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,7 +20,6 @@ concurrency:
 jobs:
   build:
     name: Build ${{ matrix.platform }}
-    # macos-15 ships Xcode 16, which can read the project format XcodeGen emits.
     runs-on: macos-15
     strategy:
       fail-fast: false
@@ -34,6 +37,13 @@ jobs:
 
       - name: Show Xcode version
         run: xcodebuild -version
+
+      - name: Cache SwiftPM artifacts
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ hashFiles('project.yml') }}
+          restore-keys: spm-
 
       - name: Install XcodeGen
         run: brew install xcodegen
