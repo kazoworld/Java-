@@ -133,12 +133,12 @@ struct MediaCard: View {
                 .font(titleFont)
                 .foregroundStyle(isFocused ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
                 .lineLimit(1)
-            if let subtitle {
-                Text(subtitle)
-                    .font(subtitleFont)
-                    .foregroundStyle(UltrafinColors.tertiaryText)
-                    .lineLimit(1)
-            }
+            // Always reserve the subtitle line so every card is the same total
+            // height and rows/rails line up cleanly.
+            Text(subtitle ?? " ")
+                .font(subtitleFont)
+                .foregroundStyle(UltrafinColors.tertiaryText)
+                .lineLimit(1)
         }
         .frame(maxWidth: fillWidth ? .infinity : width)
         .frame(width: fillWidth ? nil : width)
@@ -146,15 +146,21 @@ struct MediaCard: View {
         .animation(.smooth(duration: 0.2), value: isFocused)
     }
 
+    /// A uniformly-sized, center-cropped artwork box: a fixed-aspect container
+    /// the image *fills* (and is clipped to), so every card is identical no
+    /// matter what dimensions the server's image happens to be.
     @ViewBuilder
     private var artwork: some View {
         if fillWidth {
-            RemoteImage(url: artworkURL)
+            Color.clear
                 .aspectRatio(aspect, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .overlay(RemoteImage(url: artworkURL, contentMode: .fill))
+                .clipped()
         } else {
-            RemoteImage(url: artworkURL)
+            Color.clear
                 .frame(width: width, height: height)
+                .overlay(RemoteImage(url: artworkURL, contentMode: .fill))
+                .clipped()
         }
     }
 
@@ -174,6 +180,15 @@ struct MediaCard: View {
     }
 
     private var subtitle: String? {
+        // Episodes show series + season/episode so Continue Watching reads like
+        // "The Office · S1 · E3" instead of just the episode title.
+        if item.type == .episode {
+            let s = item.parentIndexNumber.map { "S\($0)" }
+            let e = item.indexNumber.map { "E\($0)" }
+            let se = [s, e].compactMap { $0 }.joined(separator: " · ")
+            let parts = [item.seriesName, se.isEmpty ? nil : se].compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        }
         if let series = item.seriesName { return series }
         if let year = item.productionYear { return String(year) }
         return nil

@@ -36,7 +36,7 @@ struct ItemDetailView: View {
             }
             .background(UltrafinColors.background)
         }
-        .ignoresSafeArea(edges: .top)
+        .ignoresSafeArea()
         // Detail pages are always dark (the Netflix look) so the overlaid white
         // column reads, and the episodes/“more like this” below resolve their
         // adaptive colors to the light-on-dark variants.

@@ -94,7 +94,7 @@ struct SeriesDetailView: View {
 
     @State private var model: SeriesDetailViewModel?
     @State private var playback: PlaybackRequest?
-    @State private var tab = 0
+    @State private var showEpisodes = false
     @State private var artColor: ArtworkColor?
 
     private var session: UserSession? {
@@ -105,24 +105,27 @@ struct SeriesDetailView: View {
     var body: some View {
         GeometryReader { screen in
             let landscape = screen.size.width >= screen.size.height * 1.2
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        heroSection(landscape: landscape, screen: screen.size, proxy: proxy)
-                        if let model {
-                            belowSection(model).id("episodes")
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    heroSection(landscape: landscape, screen: screen.size)
+                    if let model, !showEpisodes, !model.similar.isEmpty {
+                        moreLikeThis(model)
                     }
-                    .padding(.bottom, Spacing.xxl)
                 }
+                .padding(.bottom, Spacing.xxl)
             }
             .background(UltrafinColors.background)
         }
-        .ignoresSafeArea(edges: .top)
+        .ignoresSafeArea()
         // Detail pages are always dark (the Netflix look) so the overlaid white
         // column reads, and the episodes/“more like this” below resolve their
         // adaptive colors to the light-on-dark variants.
         .environment(\.colorScheme, .dark)
+        #if os(tvOS)
+        // Back/Menu closes the inline episodes browser first; otherwise the
+        // navigation pops as usual (perform: nil restores the default).
+        .onExitCommand(perform: showEpisodes ? { withAnimation(.easeInOut(duration: 0.25)) { showEpisodes = false } } : nil)
+        #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -145,56 +148,66 @@ struct SeriesDetailView: View {
 
     // MARK: - Hero (Netflix-style art + content column)
 
-    private func heroSection(landscape: Bool, screen: CGSize, proxy: ScrollViewProxy) -> some View {
+    private func heroSection(landscape: Bool, screen: CGSize) -> some View {
         ZStack(alignment: landscape ? .leading : .bottomLeading) {
             DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape)
 
-            contentColumn(proxy: proxy)
-                .frame(maxWidth: landscape ? screen.width * 0.52 : .infinity, alignment: .leading)
-                .padding(.horizontal, edgePadding)
-                .padding(.bottom, landscape ? 0 : Spacing.xl)
-                .frame(maxWidth: .infinity, maxHeight: .infinity,
-                       alignment: landscape ? .leading : .bottom)
+            if let model {
+                if showEpisodes {
+                    // Dim the art a touch so the inline episode list reads.
+                    Color.black.opacity(0.45).transition(.opacity)
+                    episodesPanel(model)
+                        .padding(.horizontal, edgePadding)
+                        .padding(.vertical, edgePadding * 0.6)
+                        .transition(.opacity)
+                } else {
+                    contentColumn(model)
+                        .frame(maxWidth: landscape ? screen.width * 0.52 : .infinity, alignment: .leading)
+                        .padding(.horizontal, edgePadding)
+                        .padding(.bottom, landscape ? 0 : Spacing.xl)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity,
+                               alignment: landscape ? .leading : .bottom)
+                        .transition(.opacity)
+                }
+            }
         }
         .frame(height: landscape ? screen.height : screen.height * 0.74)
     }
 
     @ViewBuilder
-    private func contentColumn(proxy: ScrollViewProxy) -> some View {
-        if let model {
-            let item = model.displayed
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                TitleLogo(logoURL: logoURL(item), title: item.name,
-                          fallbackFont: .system(size: titleSize, weight: .heavy, design: .rounded),
-                          fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
-                    .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
+    private func contentColumn(_ model: SeriesDetailViewModel) -> some View {
+        let item = model.displayed
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            TitleLogo(logoURL: logoURL(item), title: item.name,
+                      fallbackFont: .system(size: titleSize, weight: .heavy, design: .rounded),
+                      fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
+                .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
 
-                DetailBadges(item: item, seasonCount: model.seasons.count, onDark: true)
+            DetailBadges(item: item, seasonCount: model.seasons.count, onDark: true)
 
-                if let target = model.playTarget, target.type == .episode {
-                    Text(episodeHeadline(target))
-                        .font(.system(size: overviewSize + 2, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .shadow(color: .black.opacity(0.5), radius: 5, y: 2)
-                }
-
-                if let synopsis = (model.playTarget?.overview ?? item.overview), !synopsis.isEmpty {
-                    Text(synopsis)
-                        .font(.system(size: overviewSize))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
-                }
-
-                actionRows(model, proxy: proxy)
-                    .padding(.top, Spacing.xs)
+            if let target = model.playTarget, target.type == .episode {
+                Text(episodeHeadline(target))
+                    .font(.system(size: overviewSize + 2, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .shadow(color: .black.opacity(0.5), radius: 5, y: 2)
             }
+
+            if let synopsis = (model.playTarget?.overview ?? item.overview), !synopsis.isEmpty {
+                Text(synopsis)
+                    .font(.system(size: overviewSize))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
+            }
+
+            actionRows(model)
+                .padding(.top, Spacing.xs)
         }
     }
 
-    private func actionRows(_ model: SeriesDetailViewModel, proxy: ScrollViewProxy) -> some View {
+    private func actionRows(_ model: SeriesDetailViewModel) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             if let target = model.playTarget {
                 let prog = target.playbackProgress
@@ -209,7 +222,7 @@ struct SeriesDetailView: View {
                 }
             }
             DetailActionRow(icon: "rectangle.stack.fill", title: "Episodes and more") {
-                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("episodes", anchor: .top) }
+                withAnimation(.easeInOut(duration: 0.3)) { showEpisodes = true }
             }
             DetailActionRow(icon: model.isFavorite ? "checkmark" : "plus",
                             title: model.isFavorite ? "In My List" : "Add to My List") { model.toggleFavorite() }
@@ -229,22 +242,55 @@ struct SeriesDetailView: View {
         return appState.client?.imageURL(itemID: item.id, kind: .logo, tag: tag, maxWidth: 800)
     }
 
-    // MARK: - Below the fold (episodes / more like this)
+    // MARK: - Inline episode browser (fills the hero card area)
 
-    @ViewBuilder
-    private func belowSection(_ model: SeriesDetailViewModel) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            DetailTabBar(tabs: ["Episodes", "More Like This"], selection: $tab)
+    private func episodesPanel(_ model: SeriesDetailViewModel) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(spacing: Spacing.md) {
+                Button { withAnimation(.easeInOut(duration: 0.25)) { showEpisodes = false } } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
 
-            if tab == 0 {
-                seasonPicker(model)
-                episodeList(model)
-            } else {
-                similarRail(model)
+                Text(model.displayed.name)
+                    .font(.system(size: titleSize * 0.55, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Spacer()
+            }
+
+            seasonPicker(model)
+
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: Spacing.md) {
+                    ForEach(model.episodes) { episode in
+                        Button { play(episode) } label: {
+                            EpisodeRow(episode: episode, imageURL: episodeImageURL(episode))
+                        }
+                        .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: true))
+                    }
+                }
+                .padding(.vertical, 2)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // MARK: - Below the fold (more like this)
+
+    private func moreLikeThis(_ model: SeriesDetailViewModel) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text("More Like This")
+                .font(.system(size: titleSize * 0.5, weight: .bold, design: .rounded))
+                .foregroundStyle(UltrafinColors.primaryText)
+            similarRail(model)
+        }
         .padding(.horizontal, edgePadding)
-        .padding(.top, Spacing.xl)
+        .padding(.top, Spacing.lg)
     }
 
     // MARK: - Seasons & episodes
@@ -269,17 +315,6 @@ struct SeriesDetailView: View {
             .padding(.vertical, Spacing.sm)
         }
         .scrollClipDisabled()
-    }
-
-    private func episodeList(_ model: SeriesDetailViewModel) -> some View {
-        LazyVStack(spacing: Spacing.md) {
-            ForEach(model.episodes) { episode in
-                Button { play(episode) } label: {
-                    EpisodeRow(episode: episode, imageURL: episodeImageURL(episode))
-                }
-                .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: true))
-            }
-        }
     }
 
     private func similarRail(_ model: SeriesDetailViewModel) -> some View {
@@ -426,19 +461,19 @@ private struct EpisodeRow: View {
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(episodeHeadline)
-                    .font(.system(size: headlineSize, weight: .semibold, design: .rounded))
+                    .font(.system(size: headlineSize, weight: .bold, design: .rounded))
                     .foregroundStyle(UltrafinColors.primaryText)
                     .lineLimit(1)
                 if let runtime = episode.runtimeText {
                     Text(runtime)
-                        .font(Typography.caption)
+                        .font(.system(size: metaSize, weight: .medium))
                         .foregroundStyle(UltrafinColors.tertiaryText)
                 }
                 if let overview = episode.overview, !overview.isEmpty {
                     Text(overview)
-                        .font(Typography.caption)
+                        .font(.system(size: overviewSize))
                         .foregroundStyle(UltrafinColors.secondaryText)
-                        .lineLimit(2)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -460,9 +495,23 @@ private struct EpisodeRow: View {
 
     private var headlineSize: CGFloat {
         #if os(tvOS)
-        24
+        30
         #else
-        16
+        19
+        #endif
+    }
+    private var metaSize: CGFloat {
+        #if os(tvOS)
+        20
+        #else
+        14
+        #endif
+    }
+    private var overviewSize: CGFloat {
+        #if os(tvOS)
+        22
+        #else
+        15
         #endif
     }
 }
