@@ -206,6 +206,18 @@ actor JellyfinClient {
         ]).items
     }
 
+    /// Full-library search across movies, shows and episodes.
+    func search(query: String, userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "searchTerm", value: query),
+            .init(name: "recursive", value: "true"),
+            .init(name: "includeItemTypes", value: "Movie,Series,Episode"),
+            .init(name: "limit", value: "60"),
+            .init(name: "imageTypeLimit", value: "1"),
+            .init(name: "fields", value: "Overview,Genres,CriticRating,PrimaryImageAspectRatio")
+        ]).items
+    }
+
     /// Recently added items of a specific type, e.g. `Series`.
     func latestItems(userID: String, includeItemTypes: String) async throws -> [MediaItem] {
         try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: [

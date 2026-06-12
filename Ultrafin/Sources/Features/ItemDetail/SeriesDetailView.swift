@@ -108,8 +108,8 @@ struct SeriesDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     heroSection(landscape: landscape, screen: screen.size)
-                    if let model, !showEpisodes, !model.similar.isEmpty {
-                        moreLikeThis(model)
+                    if let model, !showEpisodes {
+                        belowContent(model)
                     }
                 }
                 .padding(.bottom, Spacing.xxl)
@@ -282,12 +282,21 @@ struct SeriesDetailView: View {
 
     // MARK: - Below the fold (more like this)
 
-    private func moreLikeThis(_ model: SeriesDetailViewModel) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            Text("More Like This")
-                .font(.system(size: titleSize * 0.5, weight: .bold, design: .rounded))
-                .foregroundStyle(UltrafinColors.primaryText)
-            similarRail(model)
+    @ViewBuilder
+    private func belowContent(_ model: SeriesDetailViewModel) -> some View {
+        let people = model.displayed.people ?? []
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            if !people.isEmpty {
+                CastRow(people: people)
+            }
+            if !model.similar.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text("More Like This")
+                        .font(.system(size: titleSize * 0.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(UltrafinColors.primaryText)
+                    similarRail(model)
+                }
+            }
         }
         .padding(.horizontal, edgePadding)
         .padding(.top, Spacing.lg)

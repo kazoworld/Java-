@@ -11,6 +11,7 @@ struct MainTabView: View {
     @State private var selection = 0
     @State private var homePath = NavigationPath()
     @State private var libraryPath = NavigationPath()
+    @State private var searchPath = NavigationPath()
     @State private var settingsPath = NavigationPath()
 
     var body: some View {
@@ -27,11 +28,17 @@ struct MainTabView: View {
             .tabItem { Label("Library", systemImage: "square.stack.fill") }
             .tag(1)
 
+            NavigationStack(path: $searchPath) {
+                SearchView()
+            }
+            .tabItem { Label("Search", systemImage: "magnifyingglass") }
+            .tag(2)
+
             NavigationStack(path: $settingsPath) {
                 SettingsView()
             }
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-            .tag(2)
+            .tag(3)
         }
         .tint(SettingsStore.shared.theme.accent.color)
         .onChange(of: selection) { _, newValue in
@@ -39,7 +46,8 @@ struct MainTabView: View {
             switch newValue {
             case 0: homePath = NavigationPath()
             case 1: libraryPath = NavigationPath()
-            case 2: settingsPath = NavigationPath()
+            case 2: searchPath = NavigationPath()
+            case 3: settingsPath = NavigationPath()
             default: break
             }
         }

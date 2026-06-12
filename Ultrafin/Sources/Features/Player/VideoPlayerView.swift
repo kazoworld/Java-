@@ -9,7 +9,7 @@ enum PlayerPanel: Equatable { case none, quality, episodes }
 /// buttons. Sharing one `@FocusState` lets us move focus reliably between the
 /// video and the controls on tvOS.
 enum PlayerFocusTarget: Hashable {
-    case surface, previous, back, playPause, forward, next, captions, quality, episodes, skipIntro
+    case surface, previous, back, playPause, forward, next, captions, quality, episodes, skipIntro, upNext
 }
 
 /// A request to open the player on a queue of items at a starting index — used
@@ -125,6 +125,19 @@ struct VideoPlayerView: View {
                     .transition(.opacity)
                 }
 
+                // "Up Next" auto-play card near the end of an episode.
+                if model.showUpNext, let next = model.nextItem {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            upNextCard(next: next, model: model)
+                        }
+                    }
+                    .padding(skipPadding)
+                    .transition(.opacity)
+                }
+
                 if let error = model.errorMessage {
                     errorOverlay(error)
                 } else if controlsVisible {
@@ -163,6 +176,11 @@ struct VideoPlayerView: View {
             if skip != nil { focus = .skipIntro }
             else if !controlsVisible { focus = .surface }
         }
+        .onChange(of: model?.showUpNext ?? false) { _, show in
+            // Highlight the Up Next card when it appears so a click plays next.
+            if show && !controlsVisible { focus = .upNext }
+            else if !show && !controlsVisible && model?.activeSkip == nil { focus = .surface }
+        }
         #endif
         #if os(iOS)
         .statusBarHidden()
@@ -188,6 +206,77 @@ struct VideoPlayerView: View {
         .animation(.smooth(duration: 0.2), value: panel)
         .animation(.smooth(duration: 0.2), value: skipFeedback)
         .animation(.smooth(duration: 0.25), value: model?.activeSkip)
+        .animation(.smooth(duration: 0.25), value: model?.showUpNext)
+    }
+
+    // MARK: - Up Next
+
+    private func upNextCard(next: MediaItem, model: VideoPlayerViewModel) -> some View {
+        Button {
+            Task { await model.playNext() }
+            resetHide()
+        } label: {
+            HStack(spacing: Spacing.md) {
+                RemoteImage(url: model.episodeImageURL(next))
+                    .frame(width: upNextThumb, height: upNextThumb * 9 / 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Up Next · Playing in \(model.timeRemaining)s")
+                        .font(.system(size: upNextCaption, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text(upNextTitle(next))
+                        .font(.system(size: upNextTitleSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                }
+                Image(systemName: "play.fill")
+                    .font(.system(size: upNextTitleSize, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.leading, Spacing.sm)
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.white.opacity(0.2), lineWidth: 1))
+            .frame(maxWidth: upNextMaxWidth)
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))
+        .focused($focus, equals: .upNext)
+    }
+
+    private func upNextTitle(_ item: MediaItem) -> String {
+        if let tag = item.episodeTag { return "\(tag) · \(item.name)" }
+        return item.name
+    }
+
+    private var upNextThumb: CGFloat {
+        #if os(tvOS)
+        150
+        #else
+        92
+        #endif
+    }
+    private var upNextCaption: CGFloat {
+        #if os(tvOS)
+        18
+        #else
+        12
+        #endif
+    }
+    private var upNextTitleSize: CGFloat {
+        #if os(tvOS)
+        24
+        #else
+        16
+        #endif
+    }
+    private var upNextMaxWidth: CGFloat {
+        #if os(tvOS)
+        640
+        #else
+        380
+        #endif
     }
 
     private var skipFont: CGFloat {

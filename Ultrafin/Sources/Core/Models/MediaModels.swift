@@ -111,12 +111,14 @@ struct Person: Codable, Hashable, Sendable, Identifiable {
     let name: String
     let type: String
     let role: String?
+    let primaryImageTag: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
         case name = "Name"
         case type = "Type"
         case role = "Role"
+        case primaryImageTag = "PrimaryImageTag"
     }
 }
 

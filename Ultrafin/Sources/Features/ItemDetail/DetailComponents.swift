@@ -1,5 +1,99 @@
 import SwiftUI
 
+/// A horizontal "Cast" rail with circular headshots, names and roles — the
+/// richer detail treatment. Each member is focusable on tvOS so the row scrolls.
+struct CastRow: View {
+    @Environment(AppState.self) private var appState
+    let people: [Person]
+
+    private var cast: [Person] {
+        // Prefer billed actors; fall back to whatever people exist.
+        let actors = people.filter { $0.type == "Actor" }
+        return Array((actors.isEmpty ? people : actors).prefix(20))
+    }
+
+    var body: some View {
+        if !cast.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Text("Cast")
+                    .font(.system(size: headingSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(UltrafinColors.primaryText)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: Spacing.lg) {
+                        ForEach(cast) { person in
+                            Button {} label: { CastMember(person: person, imageURL: imageURL(person)) }
+                                .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
+                        }
+                    }
+                    .padding(.vertical, Spacing.sm)
+                }
+                .scrollClipDisabled()
+            }
+        }
+    }
+
+    private func imageURL(_ person: Person) -> URL? {
+        guard let tag = person.primaryImageTag else { return nil }
+        return appState.client?.imageURL(itemID: person.id, kind: .primary, tag: tag, maxWidth: 240)
+    }
+
+    private var headingSize: CGFloat {
+        #if os(tvOS)
+        30
+        #else
+        20
+        #endif
+    }
+}
+
+private struct CastMember: View {
+    let person: Person
+    let imageURL: URL?
+
+    var body: some View {
+        VStack(spacing: Spacing.sm) {
+            RemoteImage(url: imageURL)
+                .frame(width: avatar, height: avatar)
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(UltrafinColors.separator, lineWidth: 1))
+            Text(person.name)
+                .font(.system(size: nameSize, weight: .semibold, design: .rounded))
+                .foregroundStyle(UltrafinColors.primaryText)
+                .lineLimit(1)
+            if let role = person.role, !role.isEmpty {
+                Text(role)
+                    .font(.system(size: roleSize))
+                    .foregroundStyle(UltrafinColors.tertiaryText)
+                    .lineLimit(1)
+            }
+        }
+        .frame(width: avatar + 28)
+        .multilineTextAlignment(.center)
+    }
+
+    private var avatar: CGFloat {
+        #if os(tvOS)
+        150
+        #else
+        88
+        #endif
+    }
+    private var nameSize: CGFloat {
+        #if os(tvOS)
+        20
+        #else
+        13
+        #endif
+    }
+    private var roleSize: CGFloat {
+        #if os(tvOS)
+        17
+        #else
+        11
+        #endif
+    }
+}
+
 /// A row of metadata badges: ★ rating · year · rating-box · seasons/runtime.
 struct DetailBadges: View {
     let item: MediaItem

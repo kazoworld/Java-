@@ -135,12 +135,20 @@ struct ItemDetailView: View {
 
     @ViewBuilder
     private var belowSection: some View {
-        if !similar.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("More Like This")
-                    .font(.system(size: titleSize * 0.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(UltrafinColors.primaryText)
-                similarRail
+        let people = displayed.people ?? []
+        if !people.isEmpty || !similar.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                if !people.isEmpty {
+                    CastRow(people: people)
+                }
+                if !similar.isEmpty {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        Text("More Like This")
+                            .font(.system(size: titleSize * 0.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(UltrafinColors.primaryText)
+                        similarRail
+                    }
+                }
             }
             .padding(.horizontal, edgePadding)
             .padding(.top, Spacing.lg)

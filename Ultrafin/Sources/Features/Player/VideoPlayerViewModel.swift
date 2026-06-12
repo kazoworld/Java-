@@ -84,11 +84,32 @@ final class VideoPlayerViewModel {
         self.resumeEnabled = resume
     }
 
+    /// Set true when the user dismisses the "Up Next" prompt, to stop the
+    /// automatic advance for the current item. Reset on each load.
+    private(set) var autoplayCancelled = false
+
     // MARK: - Derived
 
     var currentItem: MediaItem? { queue.indices.contains(index) ? queue[index] : nil }
     var hasNext: Bool { index < queue.count - 1 }
     var hasPrevious: Bool { index > 0 }
+
+    /// The next episode in the queue, if any.
+    var nextItem: MediaItem? { hasNext ? queue[index + 1] : nil }
+
+    /// Seconds left before the current item ends (for the Up Next countdown).
+    var timeRemaining: Int { max(0, Int((state.duration - state.currentTime).rounded())) }
+
+    /// Show the "Up Next" card during the last ~25s of an episode that has a
+    /// following one queued (unless the user cancelled autoplay).
+    var showUpNext: Bool {
+        guard !autoplayCancelled, currentItem?.type == .episode, nextItem != nil,
+              state.duration > 0 else { return false }
+        let remaining = state.duration - state.currentTime
+        return remaining > 0 && remaining <= 25
+    }
+
+    func cancelAutoplay() { autoplayCancelled = true }
     var seekInterval: Double { Double(settings.seekInterval) }
 
     var subtitleTracks: [MediaTrack] { engine?.subtitleTracks ?? [] }
@@ -148,6 +169,7 @@ final class VideoPlayerViewModel {
         engine?.teardown()
         cancellable?.cancel()
         appliedCaptions = false
+        autoplayCancelled = false
         errorMessage = nil
         state = PlaybackState()
 
@@ -255,6 +277,7 @@ final class VideoPlayerViewModel {
     /// Called when the current item ends — advance, or report end-of-queue.
     /// Returns true if it advanced.
     func handlePlaybackEnded() async -> Bool {
+        if autoplayCancelled { return false }
         if hasNext {
             await playNext()
             return true
