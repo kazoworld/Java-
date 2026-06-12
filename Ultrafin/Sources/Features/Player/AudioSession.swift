@@ -14,26 +14,29 @@ enum AudioSession {
     /// Configure the shared session for full-screen video and open the route.
     /// Safe to call repeatedly; cheap once already configured/active.
     static func activateForPlayback() {
-        let session = AVAudioSession.sharedInstance()
-        // `.moviePlayback` + the long-form-video routing policy is the
-        // recommended pairing for full-screen video (correct AirPlay 2 / HDMI
-        // routing and multichannel passthrough), with a plain fallback.
-        do {
-            try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo)
-        } catch {
-            try? session.setCategory(.playback, mode: .moviePlayback)
-        }
-        try? session.setActive(true)
+        configureCategory()
+        try? AVAudioSession.sharedInstance().setActive(true)
     }
 
     /// Just set the category (no route grab) — call at launch so the first
     /// activation is as fast as possible.
     static func prepare() {
+        configureCategory()
+    }
+
+    /// `.moviePlayback` + (on iOS) the long-form-video routing policy is the
+    /// recommended pairing for full-screen video. The route-sharing policy is
+    /// iOS-only — `.longFormVideo` is unavailable on tvOS — so it's guarded.
+    private static func configureCategory() {
         let session = AVAudioSession.sharedInstance()
+        #if os(iOS)
         do {
             try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo)
         } catch {
             try? session.setCategory(.playback, mode: .moviePlayback)
         }
+        #else
+        try? session.setCategory(.playback, mode: .moviePlayback)
+        #endif
     }
 }
