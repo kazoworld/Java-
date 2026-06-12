@@ -66,7 +66,18 @@ struct LibraryRootView: View {
     }
 }
 
-/// Contents of a single library, rendered as an adaptive poster grid.
+/// How a library grid is ordered. Recently Added is the default.
+enum LibrarySort: String, CaseIterable, Identifiable {
+    case recentlyAdded, alphabetical
+    var id: String { rawValue }
+    var label: String { self == .recentlyAdded ? "Recently Added" : "A–Z" }
+    var icon: String { self == .recentlyAdded ? "clock.fill" : "textformat" }
+    var sortBy: String { self == .recentlyAdded ? "DateCreated,SortName" : "SortName" }
+    var sortOrder: String { self == .recentlyAdded ? "Descending" : "Ascending" }
+}
+
+/// Contents of a single library, rendered as an adaptive poster grid with a
+/// sort control (Recently Added / A–Z).
 struct LibraryContentsView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
@@ -74,6 +85,7 @@ struct LibraryContentsView: View {
 
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
+    @State private var sort: LibrarySort = .recentlyAdded
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -92,26 +104,79 @@ struct LibraryContentsView: View {
 
     var body: some View {
         ScrollView {
-            if isLoading {
-                ProgressView().padding(.top, Spacing.xxl)
-            } else {
-                LazyVGrid(columns: columns, spacing: Spacing.lg) {
-                    ForEach(items) { item in
-                        NavigationLink(value: item) {
-                            MediaCard(item: item, style: .poster, fillWidth: true)
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                sortBar
+                if isLoading {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, Spacing.xxl)
+                } else {
+                    LazyVGrid(columns: columns, spacing: Spacing.lg) {
+                        ForEach(items) { item in
+                            NavigationLink(value: item) {
+                                MediaCard(item: item, style: .poster, fillWidth: true)
+                            }
+                            .mediaCardButtonStyle()
                         }
-                        .mediaCardButtonStyle()
                     }
                 }
-                .padding(Spacing.lg)
             }
+            .padding(Spacing.lg)
         }
         .background(AmbientBackground())
         .navigationTitle(library.name)
-        .task {
+        .task(id: sort) {
             guard let session, let client = appState.client else { return }
-            items = (try? await client.items(in: library.id, userID: session.userID)) ?? []
+            isLoading = items.isEmpty
+            items = (try? await client.items(in: library.id, userID: session.userID,
+                                             sortBy: sort.sortBy, sortOrder: sort.sortOrder)) ?? []
             isLoading = false
         }
+    }
+
+    /// A row of circular sort buttons, trailing-aligned, with the active one
+    /// highlighted in the accent color.
+    private var sortBar: some View {
+        HStack(spacing: Spacing.sm) {
+            Spacer()
+            ForEach(LibrarySort.allCases) { option in
+                sortButton(option)
+            }
+        }
+    }
+
+    private func sortButton(_ option: LibrarySort) -> some View {
+        let active = sort == option
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) { sort = option }
+        } label: {
+            Image(systemName: option.icon)
+                .font(.system(size: sortIconSize, weight: .semibold))
+                .foregroundStyle(active ? .white : UltrafinColors.primaryText)
+                .frame(width: sortDiameter, height: sortDiameter)
+                .background {
+                    if active {
+                        Circle().fill(settings.theme.accent.color.gradient)
+                    } else {
+                        Circle().fill(.ultraThinMaterial)
+                    }
+                }
+                .overlay(Circle().strokeBorder(active ? Color.clear : UltrafinColors.separator, lineWidth: 1))
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.12, lift: false))
+        .accessibilityLabel("Sort by \(option.label)")
+    }
+
+    private var sortIconSize: CGFloat {
+        #if os(tvOS)
+        24
+        #else
+        16
+        #endif
+    }
+    private var sortDiameter: CGFloat {
+        #if os(tvOS)
+        58
+        #else
+        42
+        #endif
     }
 }

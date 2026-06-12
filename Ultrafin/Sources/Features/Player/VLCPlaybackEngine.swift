@@ -43,11 +43,12 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
     func load(url: URL, startAt seconds: Double) {
         pendingStart = seconds
         let media = VLCMedia(url: url)
-        // Larger caches smooth out high-bitrate 4K streams where short stalls
-        // would otherwise cause dropped frames; VideoToolbox HW decode is on by
-        // default on Apple TV so the CPU isn't the bottleneck on real hardware.
-        media.addOption(":network-caching=3500")
-        media.addOption(":file-caching=3500")
+        // Keep the startup cache modest so playback (and audio) begins quickly
+        // after pressing Play — 3500ms here meant a multi-second delay before
+        // anything started. 1500ms still smooths high-bitrate 4K while feeling
+        // responsive (VideoToolbox HW decode is on by default on Apple TV).
+        media.addOption(":network-caching=1500")
+        media.addOption(":file-caching=1500")
         media.addOption(":clock-jitter=0")
         media.addOption(":clock-synchro=0")
         // Loudness normalization evens out loud/quiet passages (VLC volnorm).

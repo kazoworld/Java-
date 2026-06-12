@@ -19,40 +19,17 @@ struct DetailArtBackdrop: View {
             ZStack {
                 base
 
-                if landscape {
-                    RemoteImage(url: backdropURL)
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width * 0.66, height: geo.size.height)
-                        .clipped()
-                        .frame(width: geo.size.width, alignment: .trailing)
-                        .mask(
-                            LinearGradient(stops: [
-                                .init(color: .clear, location: 0.0),
-                                .init(color: .black.opacity(0.5), location: 0.30),
-                                .init(color: .black, location: 0.55)
-                            ], startPoint: .leading, endPoint: .trailing)
-                        )
-                } else {
-                    RemoteImage(url: backdropURL)
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                        .mask(
-                            LinearGradient(stops: [
-                                .init(color: .black, location: 0.0),
-                                .init(color: .black, location: 0.45),
-                                .init(color: .clear, location: 1.0)
-                            ], startPoint: .top, endPoint: .bottom)
-                        )
-                }
-
-                // Feather the art into the base on *every* edge so it reaches the
-                // screen edges with no hard cut (full-bleed on Apple TV 4K).
-                edgeFeather
+                // The art is feathered with two stacked masks (horizontal +
+                // vertical) so it dissolves into the base on its internal edges
+                // like a soft vignette — no hard line against the grey. The outer
+                // screen edges stay full-bleed.
+                art(geo: geo)
+                    .mask(horizontalFeather)
+                    .mask(verticalFeather)
 
                 // Blend the art into the page at the bottom so the column reads.
                 LinearGradient(stops: [
-                    .init(color: .clear, location: landscape ? 0.45 : 0.5),
+                    .init(color: .clear, location: landscape ? 0.5 : 0.5),
                     .init(color: base.opacity(0.85), location: 0.9),
                     .init(color: base, location: 1.0)
                 ], startPoint: .top, endPoint: .bottom)
@@ -67,36 +44,57 @@ struct DetailArtBackdrop: View {
         .animation(.easeInOut(duration: 0.4), value: artColor)
     }
 
-    /// Soft base-color washes hugging every edge so the cover dissolves into the
-    /// screen on all four sides — no instant cutoff at the boundary. Each uses a
-    /// mid stop for a smooth (rather than linear) falloff.
-    private var edgeFeather: some View {
-        ZStack {
-            // Top
-            LinearGradient(stops: [
-                .init(color: base, location: 0.0),
-                .init(color: base.opacity(0.4), location: 0.08),
-                .init(color: .clear, location: 0.22)
-            ], startPoint: .top, endPoint: .bottom)
-            // Bottom
-            LinearGradient(stops: [
-                .init(color: .clear, location: 0.80),
-                .init(color: base.opacity(0.45), location: 0.92),
-                .init(color: base, location: 1.0)
-            ], startPoint: .top, endPoint: .bottom)
-            // Right
-            LinearGradient(stops: [
-                .init(color: .clear, location: 0.82),
-                .init(color: base.opacity(0.5), location: 0.93),
-                .init(color: base, location: 1.0)
+    @ViewBuilder
+    private func art(geo: GeometryProxy) -> some View {
+        if landscape {
+            RemoteImage(url: backdropURL)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: geo.size.width * 0.64, height: geo.size.height)
+                .clipped()
+                .frame(width: geo.size.width, alignment: .trailing)
+        } else {
+            RemoteImage(url: backdropURL)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+        }
+    }
+
+    /// Left↔right feather. Landscape fades the art's left edge into the dark
+    /// column; portrait just softens the side edges.
+    private var horizontalFeather: LinearGradient {
+        if landscape {
+            return LinearGradient(stops: [
+                .init(color: .clear, location: 0.28),
+                .init(color: .black.opacity(0.45), location: 0.50),
+                .init(color: .black, location: 0.74)
             ], startPoint: .leading, endPoint: .trailing)
-            // Left (mostly the dark column side in landscape; feathers portrait)
-            LinearGradient(stops: [
-                .init(color: base, location: 0.0),
-                .init(color: .clear, location: 0.14)
+        } else {
+            return LinearGradient(stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: .black, location: 0.07),
+                .init(color: .black, location: 0.93),
+                .init(color: .clear, location: 1.0)
             ], startPoint: .leading, endPoint: .trailing)
         }
-        .allowsHitTesting(false)
+    }
+
+    /// Top↕bottom feather, softening both horizontal edges of the art.
+    private var verticalFeather: LinearGradient {
+        if landscape {
+            return LinearGradient(stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: .black, location: 0.13),
+                .init(color: .black, location: 0.80),
+                .init(color: .clear, location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+        } else {
+            return LinearGradient(stops: [
+                .init(color: .black, location: 0.0),
+                .init(color: .black, location: 0.45),
+                .init(color: .clear, location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+        }
     }
 }
 

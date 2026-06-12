@@ -117,7 +117,7 @@ struct PlayerControlsView: View {
     private var glassBar: some View {
         VStack(spacing: Spacing.md) {
             #if os(tvOS)
-            ProgressTrack(progress: model.state.progress, buffered: bufferedFraction, height: 8)
+            ProgressTrack(progress: model.state.progress, buffered: bufferedFraction, height: 14)
             #else
             Scrubber(progress: isScrubbing ? scrubProgress : model.state.progress,
                      buffered: bufferedFraction,
@@ -166,22 +166,36 @@ struct PlayerControlsView: View {
 
     private func glassButton(_ system: String, target: PlayerFocusTarget, prominent: Bool = false,
                              active: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        // Highlighted (focused) buttons turn into a bright, glowing "shiny" pill
+        // so it's obvious which control you're about to press while moving the
+        // remote.
+        let isFocused = (focus.wrappedValue == target)
+        return Button(action: action) {
             Image(systemName: system)
                 .font(.system(size: prominent ? buttonSize + 8 : buttonSize, weight: .semibold))
-                .foregroundStyle(active && !prominent ? accent : .white)
+                .foregroundStyle(isFocused ? .black : (active && !prominent ? accent : .white))
                 .frame(width: buttonDiameter, height: buttonDiameter)
                 .background {
-                    if prominent {
+                    if isFocused {
+                        Circle().fill(Color.white)
+                            .overlay(
+                                Circle().fill(
+                                    LinearGradient(colors: [.white, .white.opacity(0.7)],
+                                                   startPoint: .top, endPoint: .bottom))
+                            )
+                    } else if prominent {
                         Circle().fill(accent.gradient)
                     } else {
                         Circle().fill(.ultraThinMaterial)
                     }
                 }
-                .overlay(Circle().strokeBorder(active ? accent : .white.opacity(0.18),
-                                               lineWidth: active ? 2 : 1))
+                .overlay(Circle().strokeBorder(
+                    isFocused ? .white : (active ? accent : .white.opacity(0.18)),
+                    lineWidth: isFocused ? 2.5 : (active ? 2 : 1)))
+                .shadow(color: isFocused ? .white.opacity(0.65) : .clear,
+                        radius: isFocused ? 18 : 0)
         }
-        .buttonStyle(UltrafinButtonStyle(focusScale: 1.18, lift: true))
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.2, lift: true))
         .focused(focus, equals: target)
     }
 
@@ -499,10 +513,11 @@ private struct Scrubber: View {
                 Capsule().fill(Color.white.opacity(0.2))
                 Capsule().fill(Color.white.opacity(0.3)).frame(width: width * buffered.clamped01())
                 Capsule().fill(settings.theme.accent.color).frame(width: width * progress.clamped01())
-                Circle().fill(.white).frame(width: 14, height: 14)
-                    .offset(x: width * progress.clamped01() - 7)
+                Circle().fill(.white).frame(width: 18, height: 18)
+                    .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+                    .offset(x: width * progress.clamped01() - 9)
             }
-            .frame(height: 6)
+            .frame(height: 10)
             .frame(maxHeight: .infinity, alignment: .center)
             .contentShape(Rectangle())
             .gesture(
@@ -511,7 +526,7 @@ private struct Scrubber: View {
                     .onEnded { onScrubEnded(($0.location.x / width).clamped01()) }
             )
         }
-        .frame(height: 28)
+        .frame(height: 34)
     }
 }
 #endif

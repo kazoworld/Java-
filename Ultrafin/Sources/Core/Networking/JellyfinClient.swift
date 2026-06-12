@@ -153,11 +153,12 @@ actor JellyfinClient {
     }
 
     /// Children of a library or container (movies in a library, episodes in a season, …).
-    func items(in parentID: String, userID: String) async throws -> [MediaItem] {
+    func items(in parentID: String, userID: String,
+               sortBy: String = "SortName", sortOrder: String = "Ascending") async throws -> [MediaItem] {
         try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
             .init(name: "parentId", value: parentID),
-            .init(name: "sortBy", value: "SortName"),
-            .init(name: "sortOrder", value: "Ascending"),
+            .init(name: "sortBy", value: sortBy),
+            .init(name: "sortOrder", value: sortOrder),
             .init(name: "fields", value: "Overview,Genres,CriticRating,PrimaryImageAspectRatio")
         ]).items
     }
