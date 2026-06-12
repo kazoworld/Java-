@@ -44,13 +44,11 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         pendingStart = seconds
         let media = VLCMedia(url: url)
         // Keep the startup cache modest so playback (and audio) begins quickly
-        // after pressing Play — 3500ms here meant a multi-second delay before
-        // anything started. 1500ms still smooths high-bitrate 4K while feeling
-        // responsive (VideoToolbox HW decode is on by default on Apple TV).
+        // after pressing Play. (Dropped the non-default clock-jitter/synchro
+        // options — they forced a clock re-sync on resume that contributed to
+        // the audio gap after un-pausing.)
         media.addOption(":network-caching=1500")
         media.addOption(":file-caching=1500")
-        media.addOption(":clock-jitter=0")
-        media.addOption(":clock-synchro=0")
         // Loudness normalization evens out loud/quiet passages (VLC volnorm).
         let audio = SettingsStore.shared.audio
         if audio.loudnessNormalization {
@@ -70,6 +68,11 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         }
 
         mediaPlayer.media = media
+        // Decode audio to PCM unless the user explicitly wants bitstream
+        // passthrough. Passthrough makes the receiver re-lock the audio format
+        // after a pause (the multi-second audio gap on resume); decoding keeps a
+        // stable PCM route that resumes instantly, like other streaming apps.
+        mediaPlayer.audio?.passthrough = audio.passthrough
         subject.value.status = .buffering
     }
 
