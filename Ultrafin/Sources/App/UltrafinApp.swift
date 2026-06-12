@@ -10,6 +10,12 @@ struct UltrafinApp: App {
     @State private var appState = AppState()
     @State private var settings = SettingsStore.shared
 
+    init() {
+        // Set the audio category up front so the first playback can open the
+        // route instantly instead of negotiating it cold.
+        AudioSession.prepare()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

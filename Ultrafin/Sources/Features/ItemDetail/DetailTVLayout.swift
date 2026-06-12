@@ -67,18 +67,33 @@ struct DetailArtBackdrop: View {
         .animation(.easeInOut(duration: 0.4), value: artColor)
     }
 
-    /// Soft base-color washes hugging the top and right edges (left and bottom
-    /// are already feathered by the art mask and the bottom blend), so the cover
-    /// dissolves into the screen on all four sides.
+    /// Soft base-color washes hugging every edge so the cover dissolves into the
+    /// screen on all four sides — no instant cutoff at the boundary. Each uses a
+    /// mid stop for a smooth (rather than linear) falloff.
     private var edgeFeather: some View {
         ZStack {
+            // Top
+            LinearGradient(stops: [
+                .init(color: base, location: 0.0),
+                .init(color: base.opacity(0.4), location: 0.08),
+                .init(color: .clear, location: 0.22)
+            ], startPoint: .top, endPoint: .bottom)
+            // Bottom
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0.80),
+                .init(color: base.opacity(0.45), location: 0.92),
+                .init(color: base, location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
+            // Right
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0.82),
+                .init(color: base.opacity(0.5), location: 0.93),
+                .init(color: base, location: 1.0)
+            ], startPoint: .leading, endPoint: .trailing)
+            // Left (mostly the dark column side in landscape; feathers portrait)
             LinearGradient(stops: [
                 .init(color: base, location: 0.0),
                 .init(color: .clear, location: 0.14)
-            ], startPoint: .top, endPoint: .bottom)
-            LinearGradient(stops: [
-                .init(color: .clear, location: 0.9),
-                .init(color: base, location: 1.0)
             ], startPoint: .leading, endPoint: .trailing)
         }
         .allowsHitTesting(false)

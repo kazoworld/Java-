@@ -163,7 +163,12 @@ struct VideoPlayerView: View {
         .onChange(of: model?.state.status) { _, status in
             if status == .ended { handleEnded() }
         }
-        .onAppear { scheduleHide() }
+        .onAppear {
+            // Open the audio route as soon as the player appears — before the
+            // stream finishes loading — so audio is ready when video starts.
+            AudioSession.activateForPlayback()
+            scheduleHide()
+        }
         .onDisappear { model?.stop() }
         .animation(.smooth(duration: 0.25), value: controlsVisible)
         .animation(.smooth(duration: 0.2), value: panel)

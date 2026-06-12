@@ -117,10 +117,9 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
     }
 
     private func configureAudioSession() {
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-        try? AVAudioSession.sharedInstance().setActive(true)
-        #endif
+        // Cross-platform now (previously iOS-only, which left tvOS audio cold and
+        // dropping the first seconds on each playback).
+        AudioSession.activateForPlayback()
     }
 
     // MARK: - Subtitles (legible media selection)
