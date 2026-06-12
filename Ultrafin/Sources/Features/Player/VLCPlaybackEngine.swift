@@ -43,12 +43,13 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
     func load(url: URL, startAt seconds: Double) {
         pendingStart = seconds
         let media = VLCMedia(url: url)
-        // Keep the startup cache modest so playback (and audio) begins quickly
-        // after pressing Play. (Dropped the non-default clock-jitter/synchro
-        // options — they forced a clock re-sync on resume that contributed to
-        // the audio gap after un-pausing.)
-        media.addOption(":network-caching=1500")
-        media.addOption(":file-caching=1500")
+        // Small input cache so VLC reschedules audio quickly after a resume
+        // (it presents the first post-pause sample ~network-caching out, which
+        // is why audio lagged the already-on-screen video). 500ms keeps a
+        // LAN/streaming buffer while making pause/resume feel instant.
+        media.addOption(":network-caching=500")
+        media.addOption(":file-caching=500")
+        media.addOption(":audio-desync=0")
         // Loudness normalization evens out loud/quiet passages (VLC volnorm).
         let audio = SettingsStore.shared.audio
         if audio.loudnessNormalization {
