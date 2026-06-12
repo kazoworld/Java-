@@ -74,6 +74,7 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
     }
 
     func play() {
+        AudioSession.ensureActive()
         mediaPlayer.play()
         subject.value.status = .playing
     }

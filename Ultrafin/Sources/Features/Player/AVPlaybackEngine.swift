@@ -17,7 +17,9 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
     override init() {
         super.init()
         layerView.playerLayer.player = player
-        player.automaticallyWaitsToMinimizeStalling = true
+        // Don't wait to minimize stalling — resume/seek should start the instant
+        // we ask, not after a re-buffer evaluation (a source of resume lag).
+        player.automaticallyWaitsToMinimizeStalling = false
         configureAudioSession()
     }
 
@@ -43,9 +45,10 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
     }
 
     func play() {
-        // `playImmediately` resumes at full rate without re-buffering first —
-        // plain `play()` with `automaticallyWaitsToMinimizeStalling` would stall
-        // for a second or two (audio dropping out) every time you un-pause.
+        // Make sure the audio route is up before resuming so audio returns with
+        // the picture instead of fading in a couple seconds later, then resume
+        // immediately (no re-buffer wait).
+        AudioSession.ensureActive()
         if player.currentItem != nil {
             player.playImmediately(atRate: 1.0)
         } else {

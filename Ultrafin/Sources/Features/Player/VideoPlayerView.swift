@@ -100,13 +100,20 @@ struct VideoPlayerView: View {
                         HStack {
                             Spacer()
                             Button { model.skipCurrentSegment() } label: {
-                                Label(skip.label, systemImage: "forward.fill")
-                                    .font(.system(size: skipFont, weight: .bold, design: .rounded))
-                                    .padding(.horizontal, Spacing.lg)
-                                    .padding(.vertical, Spacing.md)
-                                    .background(.ultraThinMaterial, in: Capsule())
-                                    .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
-                                    .foregroundStyle(.white)
+                                HStack(spacing: Spacing.sm) {
+                                    #if os(tvOS)
+                                    // Hint: press the remote's center (select) button.
+                                    RemoteSelectGlyph(height: skipFont * 1.35)
+                                    #endif
+                                    Text(skip.label)
+                                    Image(systemName: "forward.fill")
+                                }
+                                .font(.system(size: skipFont, weight: .bold, design: .rounded))
+                                .padding(.horizontal, Spacing.lg)
+                                .padding(.vertical, Spacing.md)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+                                .foregroundStyle(.white)
                             }
                             .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
                             .focused($focus, equals: .skipIntro)
@@ -299,4 +306,27 @@ struct PlayerSurface: UIViewRepresentable {
     let view: PlatformView
     func makeUIView(context: Context) -> PlatformView { view }
     func updateUIView(_ uiView: PlatformView, context: Context) {}
+}
+
+/// A small glyph of the Siri Remote with its center (select) button glowing —
+/// hints that pressing the remote's middle button triggers the action it sits
+/// next to (the Skip Intro button, which is auto-focused when it appears).
+private struct RemoteSelectGlyph: View {
+    var height: CGFloat
+
+    var body: some View {
+        let w = height * 0.56
+        ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: w * 0.42, style: .continuous)
+                .stroke(Color.white.opacity(0.85), lineWidth: max(1, height * 0.06))
+                .frame(width: w, height: height)
+            Circle()
+                .fill(Color.white)
+                .frame(width: w * 0.62, height: w * 0.62)
+                .padding(.top, w * 0.24)
+                .shadow(color: .white.opacity(0.85), radius: height * 0.12)
+        }
+        .frame(width: w, height: height)
+        .accessibilityHidden(true)
+    }
 }

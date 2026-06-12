@@ -24,6 +24,13 @@ enum AudioSession {
         configureCategory()
     }
 
+    /// Re-assert that the session is active (cheap no-op if it already is). Call
+    /// on every resume so the audio route is guaranteed up before playback
+    /// continues, in case it went idle while paused.
+    static func ensureActive() {
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+
     /// `.moviePlayback` + (on iOS) the long-form-video routing policy is the
     /// recommended pairing for full-screen video. The route-sharing policy is
     /// iOS-only — `.longFormVideo` is unavailable on tvOS — so it's guarded.
