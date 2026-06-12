@@ -43,12 +43,13 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
     func load(url: URL, startAt seconds: Double) {
         pendingStart = seconds
         let media = VLCMedia(url: url)
-        // Small input cache so VLC reschedules audio quickly after a resume
-        // (it presents the first post-pause sample ~network-caching out, which
-        // is why audio lagged the already-on-screen video). 500ms keeps a
-        // LAN/streaming buffer while making pause/resume feel instant.
-        media.addOption(":network-caching=500")
-        media.addOption(":file-caching=500")
+        // A healthy buffer keeps audio and video in sync — too small starves the
+        // (heavier) video decoder so it slips behind the audio (lips lag the
+        // talking). Resume speed is handled by AudioRouteKeeper, not this buffer,
+        // so we can afford a proper 2s buffer here without re-introducing the
+        // resume delay.
+        media.addOption(":network-caching=2000")
+        media.addOption(":file-caching=2000")
         media.addOption(":audio-desync=0")
         // Loudness normalization evens out loud/quiet passages (VLC volnorm).
         let audio = SettingsStore.shared.audio
