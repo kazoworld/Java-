@@ -42,6 +42,8 @@ struct VideoPlayerView: View {
     @State private var skipFeedback: Int?
     @State private var skipFeedbackTask: Task<Void, Never>?
     @State private var panel: PlayerPanel = .none
+    /// Holds the HDMI/eARC audio route open so VLC resume isn't delayed.
+    @State private var routeKeeper = AudioRouteKeeper()
 
     @FocusState private var focus: PlayerFocusTarget?
 
@@ -172,11 +174,16 @@ struct VideoPlayerView: View {
         }
         .onAppear {
             // Open the audio route as soon as the player appears — before the
-            // stream finishes loading — so audio is ready when video starts.
+            // stream finishes loading — so audio is ready when video starts, and
+            // keep it warm so pausing doesn't drop the eARC/soundbar link.
             AudioSession.activateForPlayback()
+            routeKeeper.start()
             scheduleHide()
         }
-        .onDisappear { model?.stop() }
+        .onDisappear {
+            routeKeeper.stop()
+            model?.stop()
+        }
         .animation(.smooth(duration: 0.25), value: controlsVisible)
         .animation(.smooth(duration: 0.2), value: panel)
         .animation(.smooth(duration: 0.2), value: skipFeedback)
