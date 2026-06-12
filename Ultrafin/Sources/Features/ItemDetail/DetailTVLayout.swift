@@ -34,8 +34,9 @@ struct DetailArtBackdrop: View {
                     .init(color: base, location: 1.0)
                 ], startPoint: .top, endPoint: .bottom)
 
-                // A faint art-color wash on the dark side.
-                LinearGradient(colors: [tint.opacity(0.16), .clear],
+                // A whisper of art-color on the dark side (kept subtle so the
+                // photo and the dark column read as one surface, not two).
+                LinearGradient(colors: [tint.opacity(0.10), .clear],
                                startPoint: landscape ? .leading : .bottom,
                                endPoint: landscape ? .center : .top)
                     .allowsHitTesting(false)
@@ -61,13 +62,15 @@ struct DetailArtBackdrop: View {
     }
 
     /// Left↔right feather. Landscape fades the art's left edge into the dark
-    /// column; portrait just softens the side edges.
+    /// column over a wide, gradual band so there's no visible seam; portrait
+    /// just softens the side edges.
     private var horizontalFeather: LinearGradient {
         if landscape {
             return LinearGradient(stops: [
-                .init(color: .clear, location: 0.28),
-                .init(color: .black.opacity(0.45), location: 0.50),
-                .init(color: .black, location: 0.74)
+                .init(color: .clear, location: 0.20),
+                .init(color: .black.opacity(0.22), location: 0.42),
+                .init(color: .black.opacity(0.7), location: 0.62),
+                .init(color: .black, location: 0.82)
             ], startPoint: .leading, endPoint: .trailing)
         } else {
             return LinearGradient(stops: [

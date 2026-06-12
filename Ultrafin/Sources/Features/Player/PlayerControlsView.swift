@@ -51,6 +51,9 @@ struct PlayerControlsView: View {
                     glassBar
                 }
                 .padding(platformPadding)
+                // Land focus on Play/Pause when the controls first appear
+                // (instead of the focus engine defaulting to the leftmost button).
+                .onAppear { if focus.wrappedValue == nil { focus.wrappedValue = .playPause } }
             } else if panel == .episodes {
                 episodesPanel
             } else {
@@ -72,11 +75,11 @@ struct PlayerControlsView: View {
     private var topBar: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(model.currentItem?.name ?? "")
+                Text(titlePrimary)
                     .font(.system(size: titleSize, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                if let tag = model.currentItem?.episodeTag {
-                    Text(tag).font(Typography.caption).foregroundStyle(.white.opacity(0.7))
+                if let sub = titleSecondary {
+                    Text(sub).font(Typography.caption).foregroundStyle(.white.opacity(0.7))
                 }
             }
             Spacer()
@@ -84,6 +87,22 @@ struct PlayerControlsView: View {
                 .font(Typography.caption)
                 .foregroundStyle(.white.opacity(0.55))
         }
+    }
+
+    /// Series name for episodes (e.g. "The Office"), otherwise the item title.
+    private var titlePrimary: String {
+        guard let item = model.currentItem else { return "" }
+        if item.type == .episode { return item.seriesName ?? item.name }
+        return item.name
+    }
+
+    /// For episodes: "Season 3: EP 1 - Weight Loss".
+    private var titleSecondary: String? {
+        guard let item = model.currentItem, item.type == .episode else { return nil }
+        let s = item.parentIndexNumber.map { "Season \($0)" }
+        let e = item.indexNumber.map { "EP \($0)" }
+        let prefix = [s, e].compactMap { $0 }.joined(separator: ": ")
+        return prefix.isEmpty ? item.name : "\(prefix) - \(item.name)"
     }
 
     // MARK: - Center
