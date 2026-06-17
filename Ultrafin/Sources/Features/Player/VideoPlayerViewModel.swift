@@ -71,6 +71,11 @@ final class VideoPlayerViewModel {
     private var appliedCaptions = false
     private var captionDisengageTask: Task<Void, Never>?
 
+    /// Publishes play/pause + metadata to the system so Control Center, the
+    /// Siri Remote and Home Assistant (pyatv) see this app's playback state.
+    private let nowPlaying = NowPlayingController()
+    private var nowPlayingIsPlaying: Bool?
+
     init(queue: [MediaItem], startIndex: Int, userID: String, client: JellyfinClient,
          settings: PlaybackPreferences, captionMode: SubtitlePreferences.CaptionMode,
          defaultQuality: QualityOption = .auto, resume: Bool = true) {
@@ -160,7 +165,23 @@ final class VideoPlayerViewModel {
     // MARK: - Lifecycle
 
     func start() async {
+        nowPlaying.configure(
+            onPlay: { [weak self] in self?.engine?.play() },
+            onPause: { [weak self] in self?.engine?.pause() },
+            onToggle: { [weak self] in self?.togglePlayPause() },
+            onSeek: { [weak self] in self?.engine?.seek(to: $0) }
+        )
         await loadCurrent(startAt: resumeSeconds())
+    }
+
+    /// Pushes the current title + play/pause state to the system Now Playing
+    /// center (so Control Center / Home Assistant see it).
+    private func updateNowPlaying() {
+        guard let item = currentItem else { return }
+        let subtitle = item.type == .episode ? item.seriesName : nil
+        nowPlaying.update(title: item.name, subtitle: subtitle,
+                          duration: state.duration, elapsed: state.currentTime,
+                          isPlaying: state.status == .playing)
     }
 
     /// Tears down any current engine and (re)loads the current queue item.
@@ -238,6 +259,12 @@ final class VideoPlayerViewModel {
                     self.appliedCaptions = true
                     self.applyCaptionDefault()
                 }
+                // Mirror play/pause to the system Now Playing center on change.
+                let isPlaying = newState.status == .playing
+                if isPlaying != self.nowPlayingIsPlaying {
+                    self.nowPlayingIsPlaying = isPlaying
+                    self.updateNowPlaying()
+                }
                 self.reportProgressIfNeeded(newState)
             }
     }
@@ -253,11 +280,13 @@ final class VideoPlayerViewModel {
         let target = max(0, min(state.duration, state.currentTime + seconds))
         engine?.seek(to: target)
         engageCaptionsIfNeeded()
+        updateNowPlaying()
     }
 
     func seek(toProgress progress: Double) {
         engine?.seek(to: progress * state.duration)
         engageCaptionsIfNeeded()
+        updateNowPlaying()
     }
 
     func playNext() async {
@@ -289,6 +318,7 @@ final class VideoPlayerViewModel {
         captionDisengageTask?.cancel()
         engine?.teardown()
         cancellable?.cancel()
+        nowPlaying.clear()
         Task { await reportStopped() }
     }
 
@@ -367,6 +397,8 @@ final class VideoPlayerViewModel {
         let second = Int(state.currentTime)
         guard second != lastReportedSecond, second % 5 == 0, state.status == .playing else { return }
         lastReportedSecond = second
+        // Keep the system Now Playing elapsed time honest as we go.
+        updateNowPlaying()
         let ticks = Int64(state.currentTime * 10_000_000)
         Task {
             await client.reportPlaybackProgress(
