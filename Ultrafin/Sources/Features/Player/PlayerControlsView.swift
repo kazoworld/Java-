@@ -22,6 +22,9 @@ struct PlayerControlsView: View {
     @FocusState private var episodeFocus: String?
     @State private var isScrubbing = false
     @State private var scrubProgress: Double = 0
+    // Acceleration for held left/right scrubbing on tvOS.
+    @State private var scrubVelocity: Int = 1
+    @State private var lastScrubAt: Date = .distantPast
 
     private var accent: Color { settings.theme.accent.color }
 
@@ -105,21 +108,8 @@ struct PlayerControlsView: View {
         #endif
     }
 
-    /// Series name for episodes (e.g. "The Office"), otherwise the item title.
-    private var titlePrimary: String {
-        guard let item = model.currentItem else { return "" }
-        if item.type == .episode { return item.seriesName ?? item.name }
-        return item.name
-    }
-
-    /// For episodes: "Season 3: EP 1 - Weight Loss".
-    private var titleSecondary: String? {
-        guard let item = model.currentItem, item.type == .episode else { return nil }
-        let s = item.parentIndexNumber.map { "Season \($0)" }
-        let e = item.indexNumber.map { "EP \($0)" }
-        let prefix = [s, e].compactMap { $0 }.joined(separator: ": ")
-        return prefix.isEmpty ? item.name : "\(prefix) - \(item.name)"
-    }
+    private var titlePrimary: String { model.displayTitle }
+    private var titleSecondary: String? { model.displaySubtitle }
 
     // MARK: - Center
 
@@ -235,7 +225,7 @@ struct PlayerControlsView: View {
             }
         }
         .onChange(of: focus.wrappedValue) { _, value in
-            if value == .scrubBar { scrubProgress = model.state.progress }
+            if value == .scrubBar { scrubProgress = model.state.progress; scrubVelocity = 1 }
         }
         #else
         Scrubber(progress: isScrubbing ? scrubProgress : model.state.progress,
@@ -249,7 +239,17 @@ struct PlayerControlsView: View {
 
     private func adjustScrub(_ direction: Int) {
         guard model.state.duration > 0 else { return }
-        let step = 15.0 / model.state.duration // ~15s per press
+        // Holding the direction fires rapid repeats — accelerate so you can fly
+        // across a long movie, then reset to fine steps once you let go.
+        let now = Date()
+        if now.timeIntervalSince(lastScrubAt) < 0.30 {
+            scrubVelocity = min(scrubVelocity + 1, 12)
+        } else {
+            scrubVelocity = 1
+        }
+        lastScrubAt = now
+        let seconds = 8.0 * Double(scrubVelocity) // 8s → up to ~96s per press
+        let step = seconds / model.state.duration
         scrubProgress = min(1, max(0, scrubProgress + Double(direction) * step))
     }
 

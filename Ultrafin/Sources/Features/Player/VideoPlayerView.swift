@@ -75,6 +75,15 @@ struct VideoPlayerView: View {
                         #endif
                 }
 
+                // Paused state: once the controls auto-hide, dim the frozen frame
+                // and keep the title showing so it's clearly paused (the title
+                // sits above the dim, unaffected).
+                if model.state.status == .paused && !controlsVisible && model.errorMessage == nil {
+                    pausedOverlay(model)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+
                 #if os(tvOS)
                 // While controls are hidden, an invisible focusable layer owns
                 // the remote: swipe to scrub, click to reveal the controls.
@@ -233,6 +242,68 @@ struct VideoPlayerView: View {
         .animation(.smooth(duration: 0.2), value: skipFeedback)
         .animation(.smooth(duration: 0.25), value: model?.activeSkip)
         .animation(.smooth(duration: 0.25), value: model?.showUpNext)
+        .animation(.smooth(duration: 0.35), value: model?.state.status)
+    }
+
+    // MARK: - Paused state
+
+    private func pausedOverlay(_ model: VideoPlayerViewModel) -> some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                TitleLogo(logoURL: model.titleLogoURL, title: model.displayTitle,
+                          fallbackFont: .system(size: pausedTitleSize, weight: .heavy, design: .rounded),
+                          fallbackColor: .white, maxWidth: pausedLogoWidth, maxHeight: pausedLogoHeight)
+                    .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
+                if let sub = model.displaySubtitle {
+                    Text(sub)
+                        .font(.system(size: pausedSubtitleSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                Label("Paused", systemImage: "pause.fill")
+                    .font(.system(size: pausedSubtitleSize * 0.9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.top, Spacing.xs)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(pausedPadding)
+        }
+    }
+
+    private var pausedTitleSize: CGFloat {
+        #if os(tvOS)
+        66
+        #else
+        38
+        #endif
+    }
+    private var pausedSubtitleSize: CGFloat {
+        #if os(tvOS)
+        26
+        #else
+        16
+        #endif
+    }
+    private var pausedLogoWidth: CGFloat {
+        #if os(tvOS)
+        620
+        #else
+        320
+        #endif
+    }
+    private var pausedLogoHeight: CGFloat {
+        #if os(tvOS)
+        150
+        #else
+        90
+        #endif
+    }
+    private var pausedPadding: CGFloat {
+        #if os(tvOS)
+        80
+        #else
+        28
+        #endif
     }
 
     // MARK: - Up Next

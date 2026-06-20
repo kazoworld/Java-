@@ -129,6 +129,22 @@ final class VideoPlayerViewModel {
     /// browser button should appear.
     var isEpisode: Bool { currentItem?.type == .episode && currentItem?.seriesId != nil }
 
+    /// Series name for episodes (e.g. "The Office"), otherwise the item title.
+    var displayTitle: String {
+        guard let item = currentItem else { return "" }
+        if item.type == .episode { return item.seriesName ?? item.name }
+        return item.name
+    }
+
+    /// For episodes: "Season 3: EP 1 - Weight Loss".
+    var displaySubtitle: String? {
+        guard let item = currentItem, item.type == .episode else { return nil }
+        let s = item.parentIndexNumber.map { "Season \($0)" }
+        let e = item.indexNumber.map { "EP \($0)" }
+        let prefix = [s, e].compactMap { $0 }.joined(separator: ": ")
+        return prefix.isEmpty ? item.name : "\(prefix) - \(item.name)"
+    }
+
     /// Logo art for the title bar — the item's own logo (movies) or the parent
     /// series logo (episodes), matching the magical look of the Home hero.
     var titleLogoURL: URL? {
