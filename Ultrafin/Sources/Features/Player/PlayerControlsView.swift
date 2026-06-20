@@ -183,9 +183,29 @@ struct PlayerControlsView: View {
         #if os(tvOS)
         let scrubbing = (focus.wrappedValue == .scrubBar)
         Button { onSeekProgress(scrubProgress) } label: {
-            ProgressTrack(progress: scrubbing ? scrubProgress : model.state.progress,
-                          buffered: bufferedFraction, height: scrubbing ? 22 : 14)
-                .animation(.smooth(duration: 0.15), value: scrubbing)
+            GeometryReader { geo in
+                let w = geo.size.width
+                let p = (scrubbing ? scrubProgress : model.state.progress).clamped01()
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.22))
+                    Capsule().fill(Color.white.opacity(0.30)).frame(width: w * bufferedFraction.clamped01())
+                    Capsule().fill(accent).frame(width: w * p)
+                }
+                .frame(height: scrubbing ? 16 : 7)
+                .frame(maxHeight: .infinity, alignment: .center)
+                // A clear scrubber head while focused, so it's obvious you're
+                // moving the playhead.
+                .overlay(alignment: .leading) {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: scrubbing ? 30 : 0, height: scrubbing ? 30 : 0)
+                        .shadow(color: .black.opacity(0.45), radius: 5, y: 2)
+                        .overlay(Circle().stroke(accent, lineWidth: scrubbing ? 3 : 0))
+                        .offset(x: w * p - (scrubbing ? 15 : 0))
+                }
+                .animation(.smooth(duration: 0.18), value: scrubbing)
+            }
+            .frame(height: 44)
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.0, lift: false))
         .focused(focus, equals: .scrubBar)
@@ -197,10 +217,21 @@ struct PlayerControlsView: View {
             default: break
             }
         }
+        // Big Trickplay preview + timecode floats above the bar while scrubbing.
         .overlay(alignment: .top) {
-            if scrubbing, let src = model.trickplaySource {
-                TrickplayThumbnail(source: src, time: scrubProgress * model.state.duration, width: 360)
-                    .offset(y: -150)
+            if scrubbing {
+                VStack(spacing: Spacing.sm) {
+                    if let src = model.trickplaySource {
+                        TrickplayThumbnail(source: src, time: scrubProgress * model.state.duration, width: 340)
+                    }
+                    Text(timecode(scrubProgress * model.state.duration))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, Spacing.md).padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .frame(maxWidth: .infinity)
+                .offset(y: -190)
             }
         }
         .onChange(of: focus.wrappedValue) { _, value in

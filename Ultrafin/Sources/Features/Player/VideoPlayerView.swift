@@ -122,6 +122,8 @@ struct VideoPlayerView: View {
                             .focused($focus, equals: .skipIntro)
                         }
                     }
+                    // Lift the box above the control bar while it's showing.
+                    .padding(.bottom, controlsVisible ? skipControlClearance : 0)
                     .padding(skipPadding)
                     .transition(.opacity)
                     .zIndex(3) // keep the prompt above the controls, never behind
@@ -181,9 +183,12 @@ struct VideoPlayerView: View {
         .onPlayPauseCommand { togglePlayPause() }
         .onExitCommand { handleBack() }
         .onChange(of: controlsVisible) { _, visible in
-            // A live Skip prompt always keeps focus so a click skips it.
-            if model?.activeSkip != nil { focus = .skipIntro }
-            else { focus = visible ? .playPause : .surface }
+            // With controls up, keep focus on the transport (the Skip box sits
+            // above the bar — press up to reach it). With controls hidden, a
+            // Skip prompt grabs focus so a single click skips it.
+            if visible { focus = .playPause }
+            else if model?.activeSkip != nil { focus = .skipIntro }
+            else { focus = .surface }
         }
         .onChange(of: panel) { _, newPanel in
             if newPanel == .none && controlsVisible { focus = .playPause }
@@ -192,9 +197,10 @@ struct VideoPlayerView: View {
             if controlsVisible && panel == .none { resetHide() }
         }
         .onChange(of: model?.activeSkip) { _, skip in
-            // Pull focus to the Skip button while it's showing, then release.
-            if skip != nil { focus = .skipIntro }
-            else if !controlsVisible { focus = .surface }
+            // Only auto-focus the Skip box when controls are hidden; with controls
+            // up the user navigates up to it so the transport stays usable.
+            if skip != nil && !controlsVisible { focus = .skipIntro }
+            else if skip == nil && !controlsVisible { focus = .surface }
         }
         .onChange(of: model?.showUpNext ?? false) { _, show in
             // Highlight the Up Next card when it appears so a click plays next.
@@ -333,6 +339,14 @@ struct VideoPlayerView: View {
         Spacing.xxl
         #else
         Spacing.xl
+        #endif
+    }
+    /// Extra lift so the Skip box clears the control bar when it's visible.
+    private var skipControlClearance: CGFloat {
+        #if os(tvOS)
+        240
+        #else
+        150
         #endif
     }
 
