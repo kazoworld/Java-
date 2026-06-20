@@ -9,6 +9,7 @@ final class HomeViewModel {
     var comingUp: [MediaItem] = []
     var recentShows: [MediaItem] = []
     var favorites: [MediaItem] = []
+    var hiddenGems: [MediaItem] = []
     /// Latest items from the media bar's chosen libraries (when not "all").
     var featuredPool: [MediaItem] = []
     var isLoading = true
@@ -27,12 +28,14 @@ final class HomeViewModel {
         async let comingTask = try? client.nextUp(userID: userID)
         async let showsTask = try? client.latestItems(userID: userID, includeItemTypes: "Series")
         async let favTask = try? client.favorites(userID: userID)
+        async let gemsTask = try? client.hiddenGems(userID: userID)
         resume = await resumeTask ?? []
         latest = await latestTask ?? []
         libraries = await viewsTask ?? []
         comingUp = await comingTask ?? []
         recentShows = await showsTask ?? []
         favorites = await favTask ?? []
+        hiddenGems = await gemsTask ?? []
 
         // When the media bar is scoped to specific libraries, pull their latest.
         if !featured.sourceLibraryIDs.isEmpty {
@@ -161,6 +164,17 @@ struct HomeView: View {
         }
     }
 
+    /// "Play Something": pick a smart, immediately-playable item — a next-up or
+    /// in-progress episode if available, otherwise a random unwatched gem/recent.
+    private func playSomething() {
+        let playable: (MediaItem) -> Bool = { $0.type == .movie || $0.type == .episode }
+        let primary = (model.comingUp + model.resume).filter(playable)
+        let fallback = (model.hiddenGems + model.latest + model.recentShows).filter(playable)
+        if let pick = primary.randomElement() ?? fallback.randomElement() {
+            playingItem = pick
+        }
+    }
+
     /// Renders the content for a configured Home row, or nothing if there's no
     /// data for it yet.
     @ViewBuilder
@@ -170,9 +184,9 @@ struct HomeView: View {
             if !featured.isEmpty {
                 FeaturedHero(items: featured,
                              rotationSeconds: settings.featured.rotationSeconds,
-                             autoAdvance: settings.featured.autoAdvance) { item in
-                    playingItem = item
-                }
+                             autoAdvance: settings.featured.autoAdvance,
+                             onPlay: { item in playingItem = item },
+                             onShuffle: { playSomething() })
             }
         case .continueWatching:
             if !continueWatching.isEmpty {
@@ -192,6 +206,10 @@ struct HomeView: View {
         case .favorites:
             if !model.favorites.isEmpty {
                 MediaRail(title: "Favorites", items: model.favorites, style: .poster)
+            }
+        case .hiddenGems:
+            if !model.hiddenGems.isEmpty {
+                MediaRail(title: "Hidden Gems", items: model.hiddenGems, style: .poster)
             }
         case .libraries:
             if !model.libraries.isEmpty {

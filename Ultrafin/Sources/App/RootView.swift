@@ -24,6 +24,9 @@ struct RootView: View {
             case .authenticated:
                 MainTabView()
                     .transition(.opacity)
+            case .connectionLost(let session):
+                ConnectionLostView(session: session)
+                    .transition(.opacity)
             }
         }
         .animation(.smooth(duration: 0.35), value: appState.phase)

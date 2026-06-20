@@ -8,6 +8,8 @@ struct FeaturedHero: View {
     let items: [MediaItem]
     let autoAdvance: Bool
     let onPlay: (MediaItem) -> Void
+    /// Optional "Play Something" shuffle action shown as an extra hero button.
+    let onShuffle: (() -> Void)?
 
     @Environment(AppState.self) private var appState
 
@@ -19,15 +21,16 @@ struct FeaturedHero: View {
     @State private var colorCache: [String: ArtworkColor] = [:]
     @FocusState private var focus: HeroFocus?
 
-    private enum HeroFocus: Hashable { case play, info, prev, next }
+    private enum HeroFocus: Hashable { case play, info, shuffle, prev, next }
 
     private let rotation: Publishers.Autoconnect<Timer.TimerPublisher>
 
     init(items: [MediaItem], rotationSeconds: Int = 8, autoAdvance: Bool = true,
-         onPlay: @escaping (MediaItem) -> Void) {
+         onPlay: @escaping (MediaItem) -> Void, onShuffle: (() -> Void)? = nil) {
         self.items = items
         self.autoAdvance = autoAdvance
         self.onPlay = onPlay
+        self.onShuffle = onShuffle
         self.rotation = Timer.publish(every: TimeInterval(max(3, rotationSeconds)), on: .main, in: .common)
             .autoconnect()
     }
@@ -190,6 +193,20 @@ struct FeaturedHero: View {
             }
             .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
             .focused($focus, equals: .info)
+
+            if let onShuffle {
+                Button { onShuffle() } label: {
+                    Label("Play Something", systemImage: "shuffle")
+                        .font(.system(size: actionFont, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, Spacing.xl)
+                        .padding(.vertical, Spacing.md)
+                        .background(.black.opacity(0.35), in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
+                .focused($focus, equals: .shuffle)
+            }
 
             Spacer()
 

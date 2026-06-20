@@ -7,6 +7,8 @@ enum AppPhase: Equatable {
     case serverConnect
     case login(server: ServerConnection)
     case authenticated(session: UserSession)
+    /// Saved session exists but the server is unreachable (offline / IP changed).
+    case connectionLost(session: UserSession)
 }
 
 /// Owns authentication state and the active Jellyfin client.
@@ -35,14 +37,26 @@ final class AppState {
             return
         }
         let client = JellyfinClient(server: session.server, accessToken: session.accessToken)
-        // Validate the token is still good before trusting the cached session.
-        if await client.validateSession() {
+        do {
+            try await client.checkConnection()
             self.client = client
             phase = .authenticated(session: session)
-        } else {
+        } catch APIError.unauthorized {
+            // Server reachable, but the token expired — re-login.
             sessionStore.clear()
             phase = .login(server: session.server)
+        } catch {
+            // Server unreachable (offline, or its address changed). Keep the
+            // session and let the user retry or sign out to a new server.
+            phase = .connectionLost(session: session)
         }
+    }
+
+    /// Re-attempt connecting with the saved session (from the connection-lost
+    /// screen).
+    func retryConnection() async {
+        phase = .launching
+        await bootstrap()
     }
 
     func didConnect(to server: ServerConnection) {

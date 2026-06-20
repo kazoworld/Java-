@@ -280,6 +280,7 @@ enum HomeRowKind: String, Codable, CaseIterable, Identifiable {
     case recentlyAdded
     case recentShows
     case favorites
+    case hiddenGems
     case libraries
 
     /// Rows that appear in the Home Layout editor (Coming Up is folded into
@@ -296,6 +297,7 @@ enum HomeRowKind: String, Codable, CaseIterable, Identifiable {
         case .recentlyAdded: "Recently Added"
         case .recentShows: "Recently Added TV Shows"
         case .favorites: "Favorites"
+        case .hiddenGems: "Hidden Gems"
         case .libraries: "Your Libraries"
         }
     }
@@ -308,6 +310,7 @@ enum HomeRowKind: String, Codable, CaseIterable, Identifiable {
         case .recentlyAdded: "sparkles"
         case .recentShows: "tv"
         case .favorites: "heart"
+        case .hiddenGems: "diamond"
         case .libraries: "square.stack"
         }
     }

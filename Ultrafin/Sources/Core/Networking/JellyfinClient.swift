@@ -120,6 +120,16 @@ actor JellyfinClient {
         }
     }
 
+    /// Fast launch reachability + auth check. Throws `.unauthorized` when the
+    /// token is rejected (server reachable but session expired), or a network
+    /// error when the server can't be reached (offline / address changed). Uses
+    /// a short timeout so a dead address doesn't hang the splash screen.
+    func checkConnection() async throws {
+        var request = try makeRequest(path: "/System/Info")
+        request.timeoutInterval = 8
+        _ = try await perform(request)
+    }
+
     func reportSessionEnded() async {
         guard let request = try? makeRequest(path: "/Sessions/Logout", method: "POST") else { return }
         _ = try? await perform(request)
@@ -202,6 +212,20 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Shows/NextUp", query: [
             .init(name: "userId", value: userID),
             .init(name: "limit", value: "24"),
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
+        ]).items
+    }
+
+    /// "Hidden Gems" — unwatched movies/shows with the highest community rating.
+    func hiddenGems(userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "recursive", value: "true"),
+            .init(name: "includeItemTypes", value: "Movie,Series"),
+            .init(name: "filters", value: "IsUnplayed"),
+            .init(name: "sortBy", value: "CommunityRating"),
+            .init(name: "sortOrder", value: "Descending"),
+            .init(name: "limit", value: "24"),
+            .init(name: "imageTypeLimit", value: "1"),
             .init(name: "fields", value: "Overview,Genres,CriticRating")
         ]).items
     }
