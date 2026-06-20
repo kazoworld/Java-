@@ -6,6 +6,9 @@ import SwiftUI
 /// like a hard cut. Each branch owns its own navigation stack.
 struct RootView: View {
     @Environment(AppState.self) private var appState
+    /// Cold-launch intro overlay; shown once, fades out after its animation
+    /// (which also covers the first frames of content loading underneath).
+    @State private var showIntro = true
 
     var body: some View {
         ZStack {
@@ -27,6 +30,14 @@ struct RootView: View {
             case .connectionLost(let session):
                 ConnectionLostView(session: session)
                     .transition(.opacity)
+            }
+
+            if showIntro {
+                IntroView {
+                    withAnimation(.easeInOut(duration: 0.55)) { showIntro = false }
+                }
+                .transition(.opacity)
+                .zIndex(10)
             }
         }
         .animation(.smooth(duration: 0.35), value: appState.phase)
