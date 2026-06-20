@@ -326,10 +326,11 @@ struct HomeRowConfig: Codable, Identifiable, Equatable {
 struct FeaturedPreferences: Codable {
     /// Where the featured items are drawn from.
     enum Source: String, Codable, CaseIterable, Identifiable {
-        case recentlyAdded, continueWatching, both
+        case shuffle, recentlyAdded, continueWatching, both
         var id: String { rawValue }
         var label: String {
             switch self {
+            case .shuffle: "Shuffle (whole library)"
             case .recentlyAdded: "Recently Added"
             case .continueWatching: "Continue Watching"
             case .both: "Both"
@@ -351,7 +352,7 @@ struct FeaturedPreferences: Codable {
     }
 
     var contentType: ContentType = .all
-    var source: Source = .both
+    var source: Source = .shuffle
     /// Number of items in the media bar; 0 means "show all".
     var itemCount: Int = 15
     /// Libraries that feed the bar. Empty means all libraries.

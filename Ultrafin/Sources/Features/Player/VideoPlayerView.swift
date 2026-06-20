@@ -250,19 +250,19 @@ struct VideoPlayerView: View {
     private func pausedOverlay(_ model: VideoPlayerViewModel) -> some View {
         ZStack {
             Color.black.opacity(0.55).ignoresSafeArea()
-            VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Same title block, same place as the top bar shown when playing, so
+            // it doesn't jump when you pause.
+            VStack(alignment: .leading, spacing: 4) {
                 TitleLogo(logoURL: model.titleLogoURL, title: model.displayTitle,
-                          fallbackFont: .system(size: pausedTitleSize, weight: .heavy, design: .rounded),
+                          fallbackFont: .system(size: pausedTitleSize, weight: .bold, design: .rounded),
                           fallbackColor: .white, maxWidth: pausedLogoWidth, maxHeight: pausedLogoHeight)
-                    .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
+                    .shadow(color: .black.opacity(0.55), radius: 12, y: 3)
                 if let sub = model.displaySubtitle {
-                    Text(sub)
-                        .font(.system(size: pausedSubtitleSize, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.85))
+                    Text(sub).font(Typography.caption).foregroundStyle(.white.opacity(0.75))
                 }
                 Label("Paused", systemImage: "pause.fill")
-                    .font(.system(size: pausedSubtitleSize * 0.9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(Typography.caption)
+                    .foregroundStyle(.white.opacity(0.55))
                     .padding(.top, Spacing.xs)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -270,39 +270,33 @@ struct VideoPlayerView: View {
         }
     }
 
+    // Match the control-bar top title exactly so it stays put on pause.
     private var pausedTitleSize: CGFloat {
         #if os(tvOS)
-        66
+        34
         #else
-        38
-        #endif
-    }
-    private var pausedSubtitleSize: CGFloat {
-        #if os(tvOS)
-        26
-        #else
-        16
+        18
         #endif
     }
     private var pausedLogoWidth: CGFloat {
         #if os(tvOS)
-        620
+        460
         #else
-        320
+        240
         #endif
     }
     private var pausedLogoHeight: CGFloat {
         #if os(tvOS)
-        150
-        #else
         90
+        #else
+        54
         #endif
     }
     private var pausedPadding: CGFloat {
         #if os(tvOS)
-        80
+        Spacing.xl
         #else
-        28
+        Spacing.lg
         #endif
     }
 

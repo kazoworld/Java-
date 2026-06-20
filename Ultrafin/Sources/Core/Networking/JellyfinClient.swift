@@ -232,6 +232,20 @@ actor JellyfinClient {
         ]).items
     }
 
+    /// A fresh random spread of movies/shows from across the whole library, with
+    /// backdrops — used to shuffle the media bar each launch.
+    func randomItems(userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "recursive", value: "true"),
+            .init(name: "includeItemTypes", value: "Movie,Series"),
+            .init(name: "sortBy", value: "Random"),
+            .init(name: "limit", value: "40"),
+            .init(name: "imageTypeLimit", value: "1"),
+            .init(name: "imageTypes", value: "Backdrop"),
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
+        ]).items
+    }
+
     /// "Hidden Gems" — unwatched movies/shows with the highest community rating.
     func hiddenGems(userID: String) async throws -> [MediaItem] {
         try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [

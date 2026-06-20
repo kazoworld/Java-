@@ -61,11 +61,15 @@ struct FeaturedHero: View {
         .frame(maxWidth: .infinity)
         .clipped()
         .onReceive(rotation) { _ in advance() }
-        .task { await loadColor() }
+        .task {
+            await loadColor()
+            prefetchBackdrops() // warm the cache so rotations don't hitch on decode
+        }
         .onChange(of: index) { _, _ in
             Task { await loadColor() }
         }
-        .animation(.easeInOut(duration: 0.4), value: artColor)
+        // Color updates instantly (no 0.4s of re-compositing the masked hero on
+        // every rotation — that was a periodic Home hitch).
         #if os(tvOS)
         .focusSection()
         #endif
@@ -264,6 +268,15 @@ struct FeaturedHero: View {
         guard autoAdvance, items.count > 1, !isFocused else { return }
         withAnimation(.easeInOut(duration: 0.6)) {
             index = (index + 1) % items.count
+        }
+    }
+
+    /// Pre-decode every hero backdrop into the shared cache so rotating to the
+    /// next one is instant instead of spiking on a fresh decode.
+    private func prefetchBackdrops() {
+        for item in items {
+            guard let url = backdropURL(for: item) else { continue }
+            Task.detached(priority: .utility) { _ = await ImageLoader.shared.image(for: url) }
         }
     }
 

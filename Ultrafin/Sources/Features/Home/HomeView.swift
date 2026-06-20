@@ -10,6 +10,8 @@ final class HomeViewModel {
     var recentShows: [MediaItem] = []
     var favorites: [MediaItem] = []
     var hiddenGems: [MediaItem] = []
+    /// A fresh random spread for the media bar (shuffled each launch).
+    var shuffled: [MediaItem] = []
     /// Latest items from the media bar's chosen libraries (when not "all").
     var featuredPool: [MediaItem] = []
     var isLoading = true
@@ -29,6 +31,7 @@ final class HomeViewModel {
         async let showsTask = try? client.latestItems(userID: userID, includeItemTypes: "Series")
         async let favTask = try? client.favorites(userID: userID)
         async let gemsTask = try? client.hiddenGems(userID: userID)
+        async let shuffledTask = try? client.randomItems(userID: userID)
         resume = await resumeTask ?? []
         latest = await latestTask ?? []
         libraries = await viewsTask ?? []
@@ -36,6 +39,7 @@ final class HomeViewModel {
         recentShows = await showsTask ?? []
         favorites = await favTask ?? []
         hiddenGems = await gemsTask ?? []
+        shuffled = await shuffledTask ?? []
 
         // When the media bar is scoped to specific libraries, pull their latest.
         if !featured.sourceLibraryIDs.isEmpty {
@@ -77,6 +81,7 @@ struct HomeView: View {
             pool = model.featuredPool
         } else {
             switch prefs.source {
+            case .shuffle: pool = model.shuffled
             case .recentlyAdded: pool = model.latest
             case .continueWatching: pool = model.resume
             case .both: pool = model.resume + model.latest
