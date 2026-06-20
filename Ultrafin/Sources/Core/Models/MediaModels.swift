@@ -24,6 +24,8 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let genres: [String]?
     let childCount: Int?
     let people: [Person]?
+    /// Trickplay sprite metadata, keyed by media-source id then resolution width.
+    let trickplay: [String: [String: TrickplayInfo]]?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -46,6 +48,7 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case genres = "Genres"
         case childCount = "ChildCount"
         case people = "People"
+        case trickplay = "Trickplay"
     }
 
     /// Rotten Tomatoes Tomatometer percentage (Jellyfin's CriticRating).

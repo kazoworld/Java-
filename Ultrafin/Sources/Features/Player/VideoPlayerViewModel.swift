@@ -52,6 +52,9 @@ final class VideoPlayerViewModel {
     private(set) var index: Int
     private(set) var quality: QualityOption = .auto
     private(set) var segments: [MediaSegment] = []
+    /// Scrubber-preview sprites for the current item (nil until loaded / if the
+    /// server hasn't generated trickplay for it).
+    private(set) var trickplaySource: TrickplaySource?
 
     // Episode browser (in-player season/episode picker for TV shows).
     private(set) var browseSeasons: [MediaItem] = []
@@ -191,8 +194,13 @@ final class VideoPlayerViewModel {
         cancellable?.cancel()
         appliedCaptions = false
         autoplayCancelled = false
+        trickplaySource = nil
         errorMessage = nil
         state = PlaybackState()
+
+        // Scrubber-preview sprites (best-effort; not all items have them).
+        let trickplayItemID = item.id
+        Task { trickplaySource = await client.trickplay(itemID: trickplayItemID, userID: userID) }
 
         do {
             let resolution = try await client.resolvePlayback(for: item, userID: userID, maxBitrate: quality.bitrate)

@@ -140,6 +140,8 @@ struct PlayerControlsView: View {
             #else
             Scrubber(progress: isScrubbing ? scrubProgress : model.state.progress,
                      buffered: bufferedFraction,
+                     trickplay: model.trickplaySource,
+                     duration: model.state.duration,
                      onScrubChanged: { isScrubbing = true; scrubProgress = $0 },
                      onScrubEnded: { onSeekProgress($0); isScrubbing = false })
             #endif
@@ -516,14 +518,21 @@ struct ProgressTrack: View {
 }
 
 #if !os(tvOS)
-/// A draggable progress bar for touch platforms.
+/// A draggable progress bar for touch platforms, with a Trickplay preview frame
+/// that follows the thumb while scrubbing.
 private struct Scrubber: View {
     let progress: Double
     let buffered: Double
+    var trickplay: TrickplaySource? = nil
+    var duration: Double = 0
     let onScrubChanged: (Double) -> Void
     let onScrubEnded: (Double) -> Void
 
+    @State private var dragging = false
+    @State private var dragProgress: Double = 0
     @Environment(SettingsStore.self) private var settings
+
+    private let previewWidth: CGFloat = 200
 
     var body: some View {
         GeometryReader { geo in
@@ -538,11 +547,25 @@ private struct Scrubber: View {
             }
             .frame(height: 10)
             .frame(maxHeight: .infinity, alignment: .center)
+            .overlay(alignment: .topLeading) {
+                if dragging, let trickplay {
+                    TrickplayThumbnail(source: trickplay, time: dragProgress * duration, width: previewWidth)
+                        .offset(x: min(max(0, width * dragProgress - previewWidth / 2), max(0, width - previewWidth)),
+                                y: -130)
+                }
+            }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { onScrubChanged(($0.location.x / width).clamped01()) }
-                    .onEnded { onScrubEnded(($0.location.x / width).clamped01()) }
+                    .onChanged {
+                        dragging = true
+                        dragProgress = ($0.location.x / width).clamped01()
+                        onScrubChanged(dragProgress)
+                    }
+                    .onEnded {
+                        onScrubEnded(($0.location.x / width).clamped01())
+                        dragging = false
+                    }
             )
         }
         .frame(height: 34)
