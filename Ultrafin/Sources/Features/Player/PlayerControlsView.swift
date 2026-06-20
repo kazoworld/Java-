@@ -75,11 +75,12 @@ struct PlayerControlsView: View {
     private var topBar: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(titlePrimary)
-                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                TitleLogo(logoURL: model.titleLogoURL, title: titlePrimary,
+                          fallbackFont: .system(size: titleSize, weight: .bold, design: .rounded),
+                          fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
+                    .shadow(color: .black.opacity(0.5), radius: 10, y: 3)
                 if let sub = titleSecondary {
-                    Text(sub).font(Typography.caption).foregroundStyle(.white.opacity(0.7))
+                    Text(sub).font(Typography.caption).foregroundStyle(.white.opacity(0.75))
                 }
             }
             Spacer()
@@ -87,6 +88,21 @@ struct PlayerControlsView: View {
                 .font(Typography.caption)
                 .foregroundStyle(.white.opacity(0.55))
         }
+    }
+
+    private var logoMaxWidth: CGFloat {
+        #if os(tvOS)
+        460
+        #else
+        240
+        #endif
+    }
+    private var logoMaxHeight: CGFloat {
+        #if os(tvOS)
+        90
+        #else
+        54
+        #endif
     }
 
     /// Series name for episodes (e.g. "The Office"), otherwise the item title.
@@ -135,27 +151,75 @@ struct PlayerControlsView: View {
 
     private var glassBar: some View {
         VStack(spacing: Spacing.md) {
-            #if os(tvOS)
-            ProgressTrack(progress: model.state.progress, buffered: bufferedFraction, height: 14)
-            #else
-            Scrubber(progress: isScrubbing ? scrubProgress : model.state.progress,
-                     buffered: bufferedFraction,
-                     trickplay: model.trickplaySource,
-                     duration: model.state.duration,
-                     onScrubChanged: { isScrubbing = true; scrubProgress = $0 },
-                     onScrubEnded: { onSeekProgress($0); isScrubbing = false })
-            #endif
+            scrubBar
 
             HStack {
-                Text(timecode(model.state.currentTime))
+                Text(timecode(scrubTime))
                 Spacer()
-                Text("-" + timecode(max(0, model.state.duration - model.state.currentTime)))
+                Text("-" + timecode(max(0, model.state.duration - scrubTime)))
             }
             .font(Typography.monoTimecode)
             .foregroundStyle(.white.opacity(0.85))
 
             buttonBar
         }
+    }
+
+    /// The time shown on the bar: the scrub target while actively scrubbing,
+    /// otherwise the live position.
+    private var scrubTime: Double {
+        let duration = model.state.duration
+        #if os(tvOS)
+        if focus.wrappedValue == .scrubBar { return scrubProgress * duration }
+        #endif
+        if isScrubbing { return scrubProgress * duration }
+        return model.state.currentTime
+    }
+
+    /// The progress bar. On tvOS it's focusable — move up from the buttons to it,
+    /// then left/right to scrub (with a Trickplay preview) and click to seek.
+    @ViewBuilder
+    private var scrubBar: some View {
+        #if os(tvOS)
+        let scrubbing = (focus.wrappedValue == .scrubBar)
+        Button { onSeekProgress(scrubProgress) } label: {
+            ProgressTrack(progress: scrubbing ? scrubProgress : model.state.progress,
+                          buffered: bufferedFraction, height: scrubbing ? 22 : 14)
+                .animation(.smooth(duration: 0.15), value: scrubbing)
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.0, lift: false))
+        .focused(focus, equals: .scrubBar)
+        .onMoveCommand { direction in
+            switch direction {
+            case .left: adjustScrub(-1)
+            case .right: adjustScrub(1)
+            case .down: onSeekProgress(scrubProgress); focus.wrappedValue = .playPause
+            default: break
+            }
+        }
+        .overlay(alignment: .top) {
+            if scrubbing, let src = model.trickplaySource {
+                TrickplayThumbnail(source: src, time: scrubProgress * model.state.duration, width: 360)
+                    .offset(y: -150)
+            }
+        }
+        .onChange(of: focus.wrappedValue) { _, value in
+            if value == .scrubBar { scrubProgress = model.state.progress }
+        }
+        #else
+        Scrubber(progress: isScrubbing ? scrubProgress : model.state.progress,
+                 buffered: bufferedFraction,
+                 trickplay: model.trickplaySource,
+                 duration: model.state.duration,
+                 onScrubChanged: { isScrubbing = true; scrubProgress = $0 },
+                 onScrubEnded: { onSeekProgress($0); isScrubbing = false })
+        #endif
+    }
+
+    private func adjustScrub(_ direction: Int) {
+        guard model.state.duration > 0 else { return }
+        let step = 15.0 / model.state.duration // ~15s per press
+        scrubProgress = min(1, max(0, scrubProgress + Double(direction) * step))
     }
 
     private var buttonBar: some View {

@@ -177,18 +177,20 @@ actor JellyfinClient {
         try await get(MediaItem.self, path: "/Users/\(userID)/Items/\(itemID)")
     }
 
-    /// Resolves Trickplay (scrubber preview) sprites for an item, picking the
-    /// highest available resolution. Returns nil when the server hasn't
-    /// generated trickplay images for it.
-    func trickplay(itemID: String, userID: String) async -> TrickplaySource? {
-        let item = try? await get(MediaItem.self, path: "/Users/\(userID)/Items/\(itemID)",
-                                  query: [.init(name: "fields", value: "Trickplay")])
-        guard let item,
-              let bySource = item.trickplay, let byWidth = bySource.values.first,
-              let best = byWidth.max(by: { (Int($0.key) ?? 0) < (Int($1.key) ?? 0) }),
-              let width = Int(best.key) else { return nil }
-        return TrickplaySource(itemID: itemID, width: width, info: best.value,
-                               baseURL: server.baseURL, token: accessToken)
+    /// Fetches the full item for the player (logo art, parent logo) plus its
+    /// Trickplay scrubber-preview sprites (highest resolution; nil when the
+    /// server hasn't generated trickplay for it).
+    func playbackDetail(itemID: String, userID: String) async -> (item: MediaItem, trickplay: TrickplaySource?)? {
+        guard let item = try? await get(MediaItem.self, path: "/Users/\(userID)/Items/\(itemID)",
+                                        query: [.init(name: "fields", value: "Trickplay")]) else { return nil }
+        var source: TrickplaySource?
+        if let bySource = item.trickplay, let byWidth = bySource.values.first,
+           let best = byWidth.max(by: { (Int($0.key) ?? 0) < (Int($1.key) ?? 0) }),
+           let width = Int(best.key) {
+            source = TrickplaySource(itemID: itemID, width: width, info: best.value,
+                                     baseURL: server.baseURL, token: accessToken)
+        }
+        return (item, source)
     }
 
     // MARK: - Series (seasons / episodes / next up)

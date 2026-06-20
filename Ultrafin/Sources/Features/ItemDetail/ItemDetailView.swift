@@ -15,6 +15,7 @@ struct ItemDetailView: View {
     @State private var isWatched = false
     @State private var presentPlayer = false
     @State private var resumePlayback = true
+    @State private var showEpisodes = false
     @State private var artColor: ArtworkColor?
 
     private var session: UserSession? {
@@ -50,6 +51,9 @@ struct ItemDetailView: View {
             if let session {
                 VideoPlayerView(item: displayed, userID: session.userID, resume: resumePlayback)
             }
+        }
+        .fullScreenCoverCompat(isPresented: $showEpisodes) {
+            SeasonEpisodesView(episode: displayed)
         }
     }
 
@@ -116,6 +120,11 @@ struct ItemDetailView: View {
             } else {
                 DetailActionRow(icon: "play.fill", title: "Play", prominent: true) {
                     resumePlayback = true; presentPlayer = true
+                }
+            }
+            if displayed.type == .episode {
+                DetailActionRow(icon: "rectangle.stack.fill", title: "More Episodes") {
+                    showEpisodes = true
                 }
             }
             DetailActionRow(icon: isFavorite ? "checkmark" : "plus",

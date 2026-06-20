@@ -429,7 +429,7 @@ struct SeriesDetailView: View {
 
 /// A single episode row: thumbnail with resume progress, number, title, runtime
 /// and synopsis.
-private struct EpisodeRow: View {
+struct EpisodeRow: View {
     let episode: MediaItem
     let imageURL: URL?
 

@@ -26,6 +26,9 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let people: [Person]?
     /// Trickplay sprite metadata, keyed by media-source id then resolution width.
     let trickplay: [String: [String: TrickplayInfo]]?
+    /// Parent (series) logo, used so episodes can show the show's logo art.
+    let parentLogoItemId: String?
+    let parentLogoImageTag: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -49,6 +52,8 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case childCount = "ChildCount"
         case people = "People"
         case trickplay = "Trickplay"
+        case parentLogoItemId = "ParentLogoItemId"
+        case parentLogoImageTag = "ParentLogoImageTag"
     }
 
     /// Rotten Tomatoes Tomatometer percentage (Jellyfin's CriticRating).

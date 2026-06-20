@@ -55,6 +55,8 @@ final class VideoPlayerViewModel {
     /// Scrubber-preview sprites for the current item (nil until loaded / if the
     /// server hasn't generated trickplay for it).
     private(set) var trickplaySource: TrickplaySource?
+    /// Full item detail (logo art, parent logo) fetched for the current item.
+    private(set) var currentDetail: MediaItem?
 
     // Episode browser (in-player season/episode picker for TV shows).
     private(set) var browseSeasons: [MediaItem] = []
@@ -127,6 +129,19 @@ final class VideoPlayerViewModel {
     /// browser button should appear.
     var isEpisode: Bool { currentItem?.type == .episode && currentItem?.seriesId != nil }
 
+    /// Logo art for the title bar — the item's own logo (movies) or the parent
+    /// series logo (episodes), matching the magical look of the Home hero.
+    var titleLogoURL: URL? {
+        guard let item = currentDetail ?? currentItem else { return nil }
+        if let tag = item.imageTags?["Logo"] {
+            return client.imageURL(itemID: item.id, kind: .logo, tag: tag, maxWidth: 600)
+        }
+        if let parentID = item.parentLogoItemId, let tag = item.parentLogoImageTag {
+            return client.imageURL(itemID: parentID, kind: .logo, tag: tag, maxWidth: 600)
+        }
+        return nil
+    }
+
     // MARK: - Episode browser
 
     nonisolated func episodeImageURL(_ item: MediaItem) -> URL? {
@@ -195,12 +210,18 @@ final class VideoPlayerViewModel {
         appliedCaptions = false
         autoplayCancelled = false
         trickplaySource = nil
+        currentDetail = nil
         errorMessage = nil
         state = PlaybackState()
 
-        // Scrubber-preview sprites (best-effort; not all items have them).
-        let trickplayItemID = item.id
-        Task { trickplaySource = await client.trickplay(itemID: trickplayItemID, userID: userID) }
+        // Full detail (logo art) + scrubber-preview sprites (both best-effort).
+        let detailItemID = item.id
+        Task {
+            if let result = await client.playbackDetail(itemID: detailItemID, userID: userID) {
+                currentDetail = result.item
+                trickplaySource = result.trickplay
+            }
+        }
 
         do {
             let resolution = try await client.resolvePlayback(for: item, userID: userID, maxBitrate: quality.bitrate)

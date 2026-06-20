@@ -9,7 +9,7 @@ enum PlayerPanel: Equatable { case none, quality, episodes }
 /// buttons. Sharing one `@FocusState` lets us move focus reliably between the
 /// video and the controls on tvOS.
 enum PlayerFocusTarget: Hashable {
-    case surface, previous, back, playPause, forward, next, captions, quality, episodes, skipIntro, upNext
+    case surface, scrubBar, previous, back, playPause, forward, next, captions, quality, episodes, skipIntro, upNext
 }
 
 /// A request to open the player on a queue of items at a starting index — used
@@ -78,7 +78,8 @@ struct VideoPlayerView: View {
                 #if os(tvOS)
                 // While controls are hidden, an invisible focusable layer owns
                 // the remote: swipe to scrub, click to reveal the controls.
-                if !controlsVisible && model.errorMessage == nil {
+                // Suppressed while a Skip prompt is up so the prompt keeps focus.
+                if !controlsVisible && model.errorMessage == nil && model.activeSkip == nil {
                     Color.clear
                         .contentShape(Rectangle())
                         .focusable()
@@ -123,6 +124,7 @@ struct VideoPlayerView: View {
                     }
                     .padding(skipPadding)
                     .transition(.opacity)
+                    .zIndex(3) // keep the prompt above the controls, never behind
                 }
 
                 // "Up Next" auto-play card near the end of an episode.
@@ -179,7 +181,9 @@ struct VideoPlayerView: View {
         .onPlayPauseCommand { togglePlayPause() }
         .onExitCommand { handleBack() }
         .onChange(of: controlsVisible) { _, visible in
-            focus = visible ? .playPause : .surface
+            // A live Skip prompt always keeps focus so a click skips it.
+            if model?.activeSkip != nil { focus = .skipIntro }
+            else { focus = visible ? .playPause : .surface }
         }
         .onChange(of: panel) { _, newPanel in
             if newPanel == .none && controlsVisible { focus = .playPause }
@@ -405,7 +409,8 @@ struct VideoPlayerView: View {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(for: .seconds(3.5))
-            guard !Task.isCancelled, panel == .none else { return }
+            // Don't hide while the user is parked on the scrub bar.
+            guard !Task.isCancelled, panel == .none, focus != .scrubBar else { return }
             let status = model?.state.status
             if status == .playing || status == .paused {
                 controlsVisible = false
