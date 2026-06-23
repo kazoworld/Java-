@@ -49,21 +49,35 @@ struct RootView: View {
     }
 }
 
-/// Branded splash shown while the saved session is validated.
+/// Minimal, premium splash shown while the saved session is validated (a
+/// fallback under the cold-launch intro).
 struct LaunchView: View {
+    @Environment(SettingsStore.self) private var settings
     @State private var pulse = false
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: 72, weight: .thin))
-                .foregroundStyle(UltrafinColors.accentGradient)
-                .scaleEffect(pulse ? 1.05 : 0.95)
-                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: pulse)
-            Text("Ultrafin")
-                .font(Typography.displayTitle)
-                .foregroundStyle(UltrafinColors.primaryText)
+            Text("ULTRAFIN")
+                .font(.system(size: launchSize, weight: .light, design: .default))
+                .tracking(launchSize * 0.34)
+                .foregroundStyle(LinearGradient(colors: [.white, .white.opacity(0.74)],
+                                                startPoint: .top, endPoint: .bottom))
+                .padding(.leading, launchSize * 0.34)
+
+            Capsule()
+                .fill(settings.theme.accent.color)
+                .frame(width: 56, height: 3)
+                .opacity(pulse ? 1 : 0.25)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
         }
         .onAppear { pulse = true }
+    }
+
+    private var launchSize: CGFloat {
+        #if os(tvOS)
+        56
+        #else
+        34
+        #endif
     }
 }

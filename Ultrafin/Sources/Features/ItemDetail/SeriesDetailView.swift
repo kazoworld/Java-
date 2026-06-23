@@ -95,6 +95,7 @@ struct SeriesDetailView: View {
     @State private var model: SeriesDetailViewModel?
     @State private var playback: PlaybackRequest?
     @State private var showEpisodes = false
+    @State private var toast: String?
     @State private var artColor: ArtworkColor?
 
     private var session: UserSession? {
@@ -137,6 +138,7 @@ struct SeriesDetailView: View {
                                 userID: session.userID, resume: request.resume)
             }
         }
+        .toast($toast)
     }
 
     private func loadIfNeeded() async {
@@ -225,9 +227,15 @@ struct SeriesDetailView: View {
                 withAnimation(.easeInOut(duration: 0.3)) { showEpisodes = true }
             }
             DetailActionRow(icon: model.isFavorite ? "checkmark" : "plus",
-                            title: model.isFavorite ? "In My List" : "Add to My List") { model.toggleFavorite() }
+                            title: model.isFavorite ? "In My List" : "Add to My List") {
+                model.toggleFavorite()
+                toast = model.isFavorite ? "Added to My List" : "Removed from My List"
+            }
             DetailActionRow(icon: model.isWatched ? "eye.fill" : "eye",
-                            title: model.isWatched ? "Watched" : "Mark as Watched") { model.toggleWatched() }
+                            title: model.isWatched ? "Watched" : "Mark as Watched") {
+                model.toggleWatched()
+                toast = model.isWatched ? "Marked as Watched" : "Marked as Unwatched"
+            }
         }
         .frame(maxWidth: actionMaxWidth)
     }

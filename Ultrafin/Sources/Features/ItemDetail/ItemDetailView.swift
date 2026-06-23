@@ -16,6 +16,7 @@ struct ItemDetailView: View {
     @State private var presentPlayer = false
     @State private var resumePlayback = true
     @State private var showEpisodes = false
+    @State private var toast: String?
     @State private var artColor: ArtworkColor?
 
     private var session: UserSession? {
@@ -55,6 +56,7 @@ struct ItemDetailView: View {
         .fullScreenCoverCompat(isPresented: $showEpisodes) {
             SeasonEpisodesView(episode: displayed)
         }
+        .toast($toast)
     }
 
     private func load() async {
@@ -184,6 +186,7 @@ struct ItemDetailView: View {
     private func toggleFavorite() {
         isFavorite.toggle()
         let value = isFavorite
+        toast = value ? "Added to My List" : "Removed from My List"
         guard let session, let client = appState.client else { return }
         Task { await client.setFavorite(itemID: item.id, userID: session.userID, isFavorite: value) }
     }
@@ -191,6 +194,7 @@ struct ItemDetailView: View {
     private func toggleWatched() {
         isWatched.toggle()
         let value = isWatched
+        toast = value ? "Marked as Watched" : "Marked as Unwatched"
         guard let session, let client = appState.client else { return }
         Task { await client.setPlayed(itemID: item.id, userID: session.userID, isPlayed: value) }
     }

@@ -128,6 +128,9 @@ struct MediaCard: View {
                     .strokeBorder(isFocused ? UltrafinColors.accent : UltrafinColors.separator,
                                   lineWidth: isFocused ? 3 : 1)
             )
+            // A soft accent glow when focused for a premium, lit feel.
+            .shadow(color: isFocused ? settings.theme.accent.color.opacity(0.55) : .clear,
+                    radius: isFocused ? 22 : 0, y: isFocused ? 6 : 0)
 
             Text(item.name)
                 .font(titleFont)

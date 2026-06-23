@@ -144,9 +144,11 @@ private struct DetailActionRowContent: View {
             Image(systemName: icon)
                 .font(.system(size: iconSize, weight: .semibold))
                 .frame(width: iconSize + 4)
+                .contentTransition(.symbolEffect(.replace))
             Text(title)
                 .font(.system(size: titleSize, weight: .semibold, design: .rounded))
                 .lineLimit(1)
+                .contentTransition(.opacity)
             Spacer(minLength: Spacing.md)
             if let progress {
                 ZStack(alignment: .leading) {

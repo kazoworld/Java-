@@ -289,6 +289,7 @@ struct PlayerControlsView: View {
         return Button(action: action) {
             Image(systemName: system)
                 .font(.system(size: prominent ? buttonSize + 8 : buttonSize, weight: .semibold))
+                .contentTransition(.symbolEffect(.replace))
                 .foregroundStyle(isFocused ? .black : (active && !prominent ? accent : .white))
                 .frame(width: buttonDiameter, height: buttonDiameter)
                 .background {
