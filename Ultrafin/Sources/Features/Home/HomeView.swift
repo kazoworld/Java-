@@ -66,6 +66,7 @@ struct HomeView: View {
     @Environment(SettingsStore.self) private var settings
     @State private var model = HomeViewModel()
     @State private var playingItem: MediaItem?
+    @State private var revealed = false
 
     private var session: UserSession? {
         if case .authenticated(let session) = appState.phase { return session }
@@ -123,10 +124,15 @@ struct HomeView: View {
                     loadingRows
                 } else {
                     // Rows render in the user's configured order, skipping any
-                    // they've disabled or that have no content.
-                    ForEach(settings.homeLayout.rows) { config in
+                    // they've disabled or that have no content. They settle in
+                    // with a gentle staggered reveal on first load (one-time,
+                    // change-driven — no continuous animation cost).
+                    ForEach(Array(settings.homeLayout.rows.enumerated()), id: \.element.id) { idx, config in
                         if config.isEnabled {
                             row(for: config.kind)
+                                .opacity(revealed ? 1 : 0)
+                                .offset(y: revealed ? 0 : 18)
+                                .animation(.smooth(duration: 0.5).delay(Double(idx) * 0.07), value: revealed)
                         }
                     }
                     if let error = model.errorMessage {
@@ -163,9 +169,16 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.large)
         #endif
         .task {
-            guard let session, let client = appState.client else { return }
-            if model.didLoad { return }
-            await model.load(client: client, userID: session.userID, featured: settings.featured)
+            guard let session, let client = appState.client else {
+                revealed = true
+                return
+            }
+            if !model.didLoad {
+                await model.load(client: client, userID: session.userID, featured: settings.featured)
+            }
+            // Let the rows render hidden once, then trigger the staggered reveal.
+            try? await Task.sleep(for: .milliseconds(40))
+            revealed = true
         }
     }
 

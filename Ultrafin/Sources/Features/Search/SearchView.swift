@@ -62,6 +62,7 @@ struct SearchView: View {
                     }
                 }
                 .padding(Spacing.lg)
+                .animation(.smooth(duration: 0.3), value: model.results)
             }
         }
         .searchable(text: $model.query, prompt: "Movies, shows, episodes")
