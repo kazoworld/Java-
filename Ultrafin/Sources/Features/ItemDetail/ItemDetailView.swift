@@ -112,11 +112,11 @@ struct ItemDetailView: View {
 
     private var actionRows: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            if let p = displayed.playbackProgress, p > 0.01, p < 0.95, settings.playback.autoResume {
+            if let p = displayed.playbackProgress, p > 0.01, p < 0.95 {
                 DetailActionRow(icon: "play.fill", title: "Resume", progress: p, prominent: true) {
                     resumePlayback = true; presentPlayer = true
                 }
-                DetailActionRow(icon: "arrow.counterclockwise", title: "Play from beginning") {
+                DetailActionRow(icon: "arrow.counterclockwise", title: "Restart") {
                     resumePlayback = false; presentPlayer = true
                 }
             } else {

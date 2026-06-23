@@ -161,7 +161,8 @@ struct HomeView: View {
         }
         .fullScreenCover(item: $playingItem) { item in
             if let session {
-                VideoPlayerView(item: item, userID: session.userID)
+                VideoPlayerView(item: item, userID: session.userID,
+                                resume: settings.playback.autoResume)
             }
         }
         #if os(iOS)

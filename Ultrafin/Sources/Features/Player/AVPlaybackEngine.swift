@@ -151,6 +151,30 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
             item.select(nil, in: group)
         }
     }
+
+    // MARK: - Audio tracks
+
+    private var audibleGroup: AVMediaSelectionGroup? {
+        player.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .audible)
+    }
+
+    var audioTracks: [MediaTrack] {
+        guard let group = audibleGroup else { return [] }
+        return group.options.enumerated().map { MediaTrack(id: $0.offset, name: $0.element.displayName) }
+    }
+
+    var currentAudioID: Int? {
+        guard let group = audibleGroup, let item = player.currentItem,
+              let selected = item.currentMediaSelection.selectedMediaOption(in: group)
+        else { return nil }
+        return group.options.firstIndex(of: selected)
+    }
+
+    func selectAudio(id: Int) {
+        guard let group = audibleGroup, let item = player.currentItem,
+              group.options.indices.contains(id) else { return }
+        item.select(group.options[id], in: group)
+    }
 }
 
 /// A `UIView` whose backing layer is an `AVPlayerLayer`, giving us GPU-composited

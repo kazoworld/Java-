@@ -299,10 +299,11 @@ final class VideoPlayerViewModel {
             .sink { [weak self] newState in
                 guard let self else { return }
                 self.state = newState
-                // Subtitle tracks are only known once playback starts.
+                // Tracks are only known once playback starts.
                 if newState.status == .playing, !self.appliedCaptions {
                     self.appliedCaptions = true
                     self.applyCaptionDefault()
+                    self.applyAudioDefault()
                 }
                 // Mirror play/pause to the system Now Playing center on change.
                 let isPlaying = newState.status == .playing
@@ -414,6 +415,30 @@ final class VideoPlayerViewModel {
         revision += 1
     }
 
+    /// Auto-select the preferred audio language (English by default) so a title
+    /// doesn't start in another language. An explicit preference wins.
+    private func applyAudioDefault() {
+        guard let engine else { return }
+        let tracks = engine.audioTracks
+        guard tracks.count > 1 else { return } // nothing to choose
+        let prefs = SettingsStore.shared
+        var terms: [String] = []
+        if !prefs.audio.preferredLanguage.isEmpty {
+            let code = prefs.audio.preferredLanguage
+            let label = MediaLanguage.options.first { $0.code == code }?.label.lowercased()
+            terms = [label, code].compactMap { $0 }
+        } else if prefs.preferEnglishAudio {
+            terms = ["english", "eng"]
+        }
+        guard !terms.isEmpty else { return }
+        if let match = tracks.first(where: { track in
+            terms.contains { track.name.lowercased().contains($0) }
+        }) {
+            engine.selectAudio(id: match.id)
+            revision += 1
+        }
+    }
+
     /// "Off unless engaged": briefly enable captions while scrubbing, then hide.
     private func engageCaptionsIfNeeded() {
         guard captionMode == .whenEngaged, let engine,
@@ -432,7 +457,9 @@ final class VideoPlayerViewModel {
     // MARK: - Progress reporting
 
     private func resumeSeconds() -> Double {
-        guard resumeEnabled, settings.autoResume,
+        // `resumeEnabled` is the explicit choice (e.g. the Resume button vs.
+        // Restart); callers pass the auto-resume setting for default plays.
+        guard resumeEnabled,
               let ticks = currentItem?.userData?.playbackPositionTicks, ticks > 0 else { return 0 }
         return Double(ticks) / 10_000_000.0
     }

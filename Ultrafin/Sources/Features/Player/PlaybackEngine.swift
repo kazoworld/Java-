@@ -41,6 +41,13 @@ protocol PlaybackEngine: AnyObject {
     var currentSubtitleID: Int? { get }
     /// Select a subtitle track, or `nil` to turn captions off.
     func selectSubtitle(id: Int?)
+
+    /// Selectable audio tracks for the loaded media.
+    var audioTracks: [MediaTrack] { get }
+    /// The selected audio track id.
+    var currentAudioID: Int? { get }
+    /// Select an audio track by id.
+    func selectAudio(id: Int)
 }
 
 // Default (no-op) track support so engines without subtitles still conform.
@@ -48,6 +55,9 @@ extension PlaybackEngine {
     var subtitleTracks: [MediaTrack] { [] }
     var currentSubtitleID: Int? { nil }
     func selectSubtitle(id: Int?) {}
+    var audioTracks: [MediaTrack] { [] }
+    var currentAudioID: Int? { nil }
+    func selectAudio(id: Int) {}
 }
 
 #if canImport(UIKit)

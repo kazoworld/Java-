@@ -57,8 +57,13 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
             media.addOption(":audio-filter=normvol")
             media.addOption(":norm-max-level=2.0")
         }
+        // Auto-select the preferred audio language at open (English by default),
+        // so files that default to another language (e.g. Russian) start in the
+        // right one. An explicit preference wins over the English default.
         if !audio.preferredLanguage.isEmpty {
             media.addOption(":audio-language=\(audio.preferredLanguage)")
+        } else if SettingsStore.shared.preferEnglishAudio {
+            media.addOption(":audio-language=eng,en,english")
         }
 
         // Subtitle appearance + language.
@@ -118,6 +123,27 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
 
     func selectSubtitle(id: Int?) {
         mediaPlayer.currentVideoSubTitleIndex = Int32(id ?? -1)
+    }
+
+    // MARK: - Audio tracks
+
+    var audioTracks: [MediaTrack] {
+        let indexes = (mediaPlayer.audioTrackIndexes as? [NSNumber])?.map(\.intValue) ?? []
+        let names = (mediaPlayer.audioTrackNames as? [String]) ?? []
+        var tracks: [MediaTrack] = []
+        for (i, idx) in indexes.enumerated() where idx >= 0 { // -1 is "Disable"
+            tracks.append(MediaTrack(id: idx, name: i < names.count ? names[i] : "Audio \(idx)"))
+        }
+        return tracks
+    }
+
+    var currentAudioID: Int? {
+        let current = Int(mediaPlayer.currentAudioTrackIndex)
+        return current >= 0 ? current : nil
+    }
+
+    func selectAudio(id: Int) {
+        mediaPlayer.currentAudioTrackIndex = Int32(id)
     }
 
     // MARK: - VLCMediaPlayerDelegate

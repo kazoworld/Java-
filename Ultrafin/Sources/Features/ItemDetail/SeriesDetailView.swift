@@ -11,6 +11,8 @@ final class SeriesDetailViewModel {
     var seasons: [MediaItem] = []
     var selectedSeasonID: String?
     var episodes: [MediaItem] = []
+    /// Episodes cached per season so re-selecting one is instant (no re-fetch).
+    private var episodesBySeason: [String: [MediaItem]] = [:]
     var similar: [MediaItem] = []
     var playTarget: MediaItem?
     var isFavorite = false
@@ -51,7 +53,9 @@ final class SeriesDetailViewModel {
         let initialID = playTarget?.seasonId ?? seasons.first?.id
         selectedSeasonID = initialID
         if let sid = initialID {
-            episodes = (try? await client.episodes(seriesID: series.id, seasonID: sid, userID: userID)) ?? []
+            let eps = (try? await client.episodes(seriesID: series.id, seasonID: sid, userID: userID)) ?? []
+            episodesBySeason[sid] = eps
+            episodes = eps
         }
         if playTarget == nil { playTarget = episodes.first }
         isLoading = false
@@ -60,7 +64,13 @@ final class SeriesDetailViewModel {
     func selectSeason(_ id: String) async {
         guard id != selectedSeasonID else { return }
         selectedSeasonID = id
-        episodes = (try? await client.episodes(seriesID: series.id, seasonID: id, userID: userID)) ?? []
+        if let cached = episodesBySeason[id] {
+            episodes = cached // instant
+            return
+        }
+        let eps = (try? await client.episodes(seriesID: series.id, seasonID: id, userID: userID)) ?? []
+        episodesBySeason[id] = eps
+        episodes = eps
     }
 
     /// Episodes of the earliest season, for "Play from beginning".
@@ -283,6 +293,8 @@ struct SeriesDetailView: View {
                     }
                 }
                 .padding(.vertical, 2)
+                // Cross-fade the list when switching seasons.
+                .animation(.smooth(duration: 0.35), value: model.episodes)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -312,24 +324,31 @@ struct SeriesDetailView: View {
 
     // MARK: - Seasons & episodes
 
+    /// Netflix-style season selector: clean accent-filled pills, instant switch
+    /// (episodes are cached per season), with a smooth selection animation.
     private func seasonPicker(_ model: SeriesDetailViewModel) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.md) {
+            HStack(spacing: Spacing.sm) {
                 ForEach(model.seasons) { season in
+                    let active = season.id == model.selectedSeasonID
                     Button { Task { await model.selectSeason(season.id) } } label: {
                         Text(season.name)
                             .font(.system(size: actionFont, weight: .semibold, design: .rounded))
+                            .lineLimit(1)
                             .padding(.horizontal, Spacing.lg)
                             .padding(.vertical, Spacing.sm)
-                            .background(Capsule().fill(season.id == model.selectedSeasonID
-                                                       ? settings.theme.accent.color.opacity(0.9) : Color.clear))
-                            .overlay(Capsule().strokeBorder(UltrafinColors.separator, lineWidth: 1))
-                            .foregroundStyle(season.id == model.selectedSeasonID ? .white : UltrafinColors.primaryText)
+                            .foregroundStyle(active ? .white : UltrafinColors.primaryText)
+                            .background {
+                                if active { Capsule().fill(settings.theme.accent.color.gradient) }
+                                else { Capsule().fill(.ultraThinMaterial) }
+                            }
+                            .overlay(Capsule().strokeBorder(active ? Color.clear : UltrafinColors.separator, lineWidth: 1))
                     }
-                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: false))
+                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
                 }
             }
             .padding(.vertical, Spacing.sm)
+            .animation(.smooth(duration: 0.3), value: model.selectedSeasonID)
         }
         .scrollClipDisabled()
     }

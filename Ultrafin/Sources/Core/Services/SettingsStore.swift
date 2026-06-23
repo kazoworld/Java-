@@ -44,6 +44,12 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(nextUpFirst, forKey: Keys.nextUpFirst) }
     }
 
+    /// When true (default), playback auto-selects an English audio track when the
+    /// media has one, so titles don't start in another language.
+    var preferEnglishAudio: Bool {
+        didSet { UserDefaults.standard.set(preferEnglishAudio, forKey: Keys.preferEnglishAudio) }
+    }
+
     private enum Keys {
         static let theme = "settings.theme"
         static let appearance = "settings.appearance"
@@ -55,6 +61,7 @@ final class SettingsStore {
         static let subtitles = "settings.subtitles"
         static let downloads = "settings.downloads"
         static let nextUpFirst = "settings.nextUpFirst"
+        static let preferEnglishAudio = "settings.preferEnglishAudio"
     }
 
     private init() {
@@ -67,6 +74,7 @@ final class SettingsStore {
         subtitles = Self.load(Keys.subtitles) ?? SubtitlePreferences()
         downloads = Self.load(Keys.downloads) ?? DownloadPreferences()
         nextUpFirst = UserDefaults.standard.object(forKey: Keys.nextUpFirst) as? Bool ?? true
+        preferEnglishAudio = UserDefaults.standard.object(forKey: Keys.preferEnglishAudio) as? Bool ?? true
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout

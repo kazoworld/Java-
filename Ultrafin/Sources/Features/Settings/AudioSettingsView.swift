@@ -20,6 +20,10 @@ struct AudioSettingsView: View {
             }
 
             Section {
+                Toggle("Play in English by default", isOn: Binding(
+                    get: { settings.preferEnglishAudio },
+                    set: { settings.preferEnglishAudio = $0 }
+                ))
                 Toggle("Surround passthrough", isOn: $settings.audio.passthrough)
                 Picker("Preferred language", selection: $settings.audio.preferredLanguage) {
                     ForEach(MediaLanguage.options, id: \.code) { Text($0.label).tag($0.code) }
@@ -27,7 +31,7 @@ struct AudioSettingsView: View {
             } header: {
                 Text("Output")
             } footer: {
-                Text("Pass Dolby/DTS straight to your receiver, and prefer a default audio language when available.")
+                Text("Auto-select an English audio track when a title has one. Set a specific Preferred language to override, or pass Dolby/DTS straight to your receiver.")
             }
         }
         .glassRows()
