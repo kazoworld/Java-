@@ -75,6 +75,9 @@ final class VideoPlayerViewModel {
     private var lastReportedSecond: Int = -1
     private var appliedCaptions = false
     private var captionDisengageTask: Task<Void, Never>?
+    /// Set once the player is dismissed, so an in-flight load that finishes after
+    /// you back out doesn't spin up an orphaned engine that keeps playing.
+    private var stopped = false
 
     /// Publishes play/pause + metadata to the system so Control Center, the
     /// Siri Remote and Home Assistant (pyatv) see this app's playback state.
@@ -199,6 +202,7 @@ final class VideoPlayerViewModel {
     // MARK: - Lifecycle
 
     func start() async {
+        stopped = false
         nowPlaying.configure(
             onPlay: { [weak self] in self?.engine?.play() },
             onPause: { [weak self] in self?.engine?.pause() },
@@ -241,6 +245,9 @@ final class VideoPlayerViewModel {
 
         do {
             let resolution = try await client.resolvePlayback(for: item, userID: userID, maxBitrate: quality.bitrate)
+            // The user may have backed out while we were resolving — don't start
+            // an engine that would play with no screen attached.
+            guard !stopped else { return }
             self.resolution = resolution
             let engine = makeEngine(for: resolution)
             bind(to: engine)
@@ -319,7 +326,12 @@ final class VideoPlayerViewModel {
 
     func togglePlayPause() {
         guard let engine else { return }
-        if state.status == .playing { engine.pause() } else { engine.play() }
+        // Treat buffering as "wants to play" so a quick pause while it's still
+        // loading actually pauses instead of being swallowed (and then re-played).
+        switch state.status {
+        case .playing, .buffering: engine.pause()
+        default: engine.play()
+        }
     }
 
     func skip(by seconds: Double) {
@@ -361,8 +373,12 @@ final class VideoPlayerViewModel {
     }
 
     func stop() {
+        guard !stopped else { return } // idempotent: dismiss + close both call this
+        stopped = true
         captionDisengageTask?.cancel()
+        engine?.pause()
         engine?.teardown()
+        engine = nil
         cancellable?.cancel()
         nowPlaying.clear()
         Task { await reportStopped() }
