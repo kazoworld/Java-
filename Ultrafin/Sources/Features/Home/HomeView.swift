@@ -67,6 +67,9 @@ struct HomeView: View {
     @State private var model = HomeViewModel()
     @State private var playingItem: MediaItem?
     @State private var revealed = false
+    /// The featured title's artwork color — tints the ambient background so the
+    /// whole screen breathes with what's in the media bar.
+    @State private var heroTint: Color?
 
     private var session: UserSession? {
         if case .authenticated(let session) = appState.phase { return session }
@@ -149,7 +152,7 @@ struct HomeView: View {
         // Full-bleed so the hero media bar reaches every edge; rails self-pad
         // to stay within the tvOS title-safe area.
         .ignoresSafeArea()
-        .background(AmbientBackground())
+        .background(AmbientBackground(tint: heroTint))
         .navigationDestination(for: MediaItem.self) { item in
             if item.type == .collectionFolder || item.type == .folder || item.type == .boxSet {
                 LibraryContentsView(library: item)
@@ -205,7 +208,8 @@ struct HomeView: View {
                              rotationSeconds: settings.featured.rotationSeconds,
                              autoAdvance: settings.featured.autoAdvance,
                              onPlay: { item in playingItem = item },
-                             onShuffle: { playSomething() })
+                             onShuffle: { playSomething() },
+                             onColorChange: { heroTint = $0 })
             }
         case .continueWatching:
             if !continueWatching.isEmpty {

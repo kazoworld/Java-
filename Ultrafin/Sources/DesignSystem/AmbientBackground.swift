@@ -8,9 +8,16 @@ import SwiftUI
 /// Built from `RadialGradient`s (not a `blur` pass) so it stays GPU-cheap and
 /// never costs frame rate, even on Apple TV.
 struct AmbientBackground: View {
+    /// Optional content color (e.g. the featured title's artwork) the wash leans
+    /// toward, so the whole screen subtly "lights up" in the mood of what you're
+    /// browsing and shifts as the media bar rotates. Falls back to the accent.
+    var tint: Color? = nil
+
     @Environment(SettingsStore.self) private var settings
 
     private var accent: Color { settings.theme.accent.color }
+    /// The dominant wash color — the content tint when present, else the accent.
+    private var primary: Color { tint ?? accent }
 
     /// Show the colorful wash only when enabled and not in OLED mode (OLED wants
     /// true black for deeper contrast and lower power).
@@ -26,11 +33,15 @@ struct AmbientBackground: View {
                 // Fixed radii (no GeometryReader) so the wash is a single static
                 // layer the GPU can cache — cheaper when tabs swap in and out.
                 ZStack {
-                    blob(accent, center: UnitPoint(x: 0.0, y: 0.0), radius: 900)
-                    blob(accent.complement, center: UnitPoint(x: 1.0, y: 0.1), radius: 760)
-                    blob(accent.analogous, center: UnitPoint(x: 0.9, y: 1.0), radius: 950)
+                    blob(primary, center: UnitPoint(x: 0.0, y: 0.0), radius: 900)
+                    blob(primary.complement, center: UnitPoint(x: 1.0, y: 0.1), radius: 760)
+                    blob(primary.analogous, center: UnitPoint(x: 0.9, y: 1.0), radius: 950)
                 }
                 .opacity(0.5)
+                // A gentle crossfade as the featured color changes — the room
+                // breathes with the content. (Just a gradient recolor, no mask,
+                // so it stays GPU-cheap.)
+                .animation(.easeInOut(duration: 0.9), value: tint)
             }
         }
         .ignoresSafeArea()

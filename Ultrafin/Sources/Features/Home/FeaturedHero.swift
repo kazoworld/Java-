@@ -10,6 +10,9 @@ struct FeaturedHero: View {
     let onPlay: (MediaItem) -> Void
     /// Optional "Play Something" shuffle action shown as an extra hero button.
     let onShuffle: (() -> Void)?
+    /// Reports the current title's sampled artwork color so Home can tint its
+    /// ambient background to match.
+    let onColorChange: ((Color?) -> Void)?
 
     @Environment(AppState.self) private var appState
 
@@ -26,11 +29,13 @@ struct FeaturedHero: View {
     private let rotation: Publishers.Autoconnect<Timer.TimerPublisher>
 
     init(items: [MediaItem], rotationSeconds: Int = 8, autoAdvance: Bool = true,
-         onPlay: @escaping (MediaItem) -> Void, onShuffle: (() -> Void)? = nil) {
+         onPlay: @escaping (MediaItem) -> Void, onShuffle: (() -> Void)? = nil,
+         onColorChange: ((Color?) -> Void)? = nil) {
         self.items = items
         self.autoAdvance = autoAdvance
         self.onPlay = onPlay
         self.onShuffle = onShuffle
+        self.onColorChange = onColorChange
         self.rotation = Timer.publish(every: TimeInterval(max(3, rotationSeconds)), on: .main, in: .common)
             .autoconnect()
     }
@@ -281,14 +286,16 @@ struct FeaturedHero: View {
     }
 
     private func loadColor() async {
-        guard let current else { artColor = nil; return }
+        guard let current else { artColor = nil; onColorChange?(nil); return }
         if let cached = colorCache[current.id] {
             artColor = cached
+            onColorChange?(cached.color)
             return
         }
         let color = await ImageColor.vibrant(from: colorURL(current))
         if let color { colorCache[current.id] = color }
         artColor = color
+        onColorChange?(color?.color)
     }
 
     // MARK: - Image URLs
