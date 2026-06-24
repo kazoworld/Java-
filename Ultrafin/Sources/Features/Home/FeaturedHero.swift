@@ -186,7 +186,10 @@ struct FeaturedHero: View {
                     .padding(.horizontal, Spacing.xl)
                     .padding(.vertical, Spacing.md)
                     .background(tint, in: Capsule())
+                    .overlay(Capsule().fill(LiquidGlass.sheen))
+                    .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.6), lineWidth: 1))
                     .foregroundStyle(playTextColor)
+                    .shadow(color: tint.opacity(0.45), radius: 14, y: 6)
             }
             .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
             .focused($focus, equals: .play)
@@ -196,8 +199,7 @@ struct FeaturedHero: View {
                     .font(.system(size: actionFont, weight: .semibold, design: .rounded))
                     .padding(.horizontal, Spacing.xl)
                     .padding(.vertical, Spacing.md)
-                    .background(.black.opacity(0.35), in: Capsule())
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                    .glassCapsule()
                     .foregroundStyle(.white)
             }
             .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
@@ -209,8 +211,7 @@ struct FeaturedHero: View {
                         .font(.system(size: actionFont, weight: .semibold, design: .rounded))
                         .padding(.horizontal, Spacing.xl)
                         .padding(.vertical, Spacing.md)
-                        .background(.black.opacity(0.35), in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                        .glassCapsule()
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
@@ -237,8 +238,7 @@ struct FeaturedHero: View {
                 .font(.system(size: actionFont * 0.85, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(Spacing.sm)
-                .background(.black.opacity(0.3), in: Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                .glassCircle()
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.18, lift: true))
         .focused($focus, equals: target)

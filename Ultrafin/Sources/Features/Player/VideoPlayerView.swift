@@ -123,8 +123,7 @@ struct VideoPlayerView: View {
                                 .font(.system(size: skipFont, weight: .bold, design: .rounded))
                                 .padding(.horizontal, Spacing.lg)
                                 .padding(.vertical, Spacing.md)
-                                .background(.ultraThinMaterial, in: Capsule())
-                                .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+                                .glassCapsule(dim: 0.18)
                                 .foregroundStyle(.white)
                             }
                             .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
@@ -327,9 +326,7 @@ struct VideoPlayerView: View {
             }
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.white.opacity(0.2), lineWidth: 1))
+            .liquidGlass(cornerRadius: 18)
             .frame(maxWidth: upNextMaxWidth)
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))

@@ -17,8 +17,7 @@ struct ToastView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.sm)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .glassCapsule(dim: 0.12)
         .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
         .environment(\.colorScheme, .dark)
     }

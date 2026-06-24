@@ -4,17 +4,13 @@ import UIKit
 // MARK: - Glass surface
 
 /// A frosted, slightly elevated container used for cards, sheets and controls.
-/// The material + thin stroke reads as "glass" without expensive blur on tvOS.
+/// Now backed by the ``LiquidGlass`` layer — material + top sheen + rim light +
+/// soft lift — so it reads as a lit pane of glass without expensive blur on tvOS.
 struct GlassCard: ViewModifier {
     var cornerRadius: CGFloat = Spacing.cornerRadius
 
     func body(content: Content) -> some View {
-        content
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(UltrafinColors.separator, lineWidth: 1)
-            )
+        content.liquidGlass(cornerRadius: cornerRadius)
     }
 }
 
@@ -24,15 +20,15 @@ extension View {
     }
 
     /// Frosted-glass row backgrounds for Forms/Lists shown over the ambient.
-    /// Propagates to every row in the list.
+    /// Carries the liquid-glass sheen + rim, but no lift shadow (rows shouldn't
+    /// float). Propagates to every row in the list.
     func glassRows() -> some View {
-        listRowBackground(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return listRowBackground(
+            shape
                 .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(UltrafinColors.separator, lineWidth: 1)
-                )
+                .overlay(shape.fill(LiquidGlass.sheen))
+                .overlay(shape.strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1))
                 .padding(.vertical, 2)
         )
     }
@@ -60,7 +56,16 @@ struct PrimaryButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, Spacing.md)
-            .background(settings.theme.accent.color, in: RoundedRectangle(cornerRadius: Spacing.md, style: .continuous))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: Spacing.md, style: .continuous)
+                let accent = settings.theme.accent.color
+                shape
+                    .fill(LinearGradient(colors: [accent, accent.opacity(0.82)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .overlay(shape.fill(LiquidGlass.sheen))
+                    .overlay(shape.strokeBorder(LiquidGlass.rim(0.7), lineWidth: 1))
+                    .shadow(color: accent.opacity(0.4), radius: 12, y: 6)
+            }
             .foregroundStyle(.white)
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))

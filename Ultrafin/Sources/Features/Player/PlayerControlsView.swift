@@ -123,8 +123,7 @@ struct PlayerControlsView: View {
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(Spacing.lg)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 1))
+                .glassCapsule(dim: 0.12)
                 .transition(.scale.combined(with: .opacity))
         }
     }
@@ -218,7 +217,7 @@ struct PlayerControlsView: View {
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .padding(.horizontal, Spacing.md).padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .glassCapsule(dim: 0.12)
                 }
                 .frame(maxWidth: .infinity)
                 .offset(y: -190)
@@ -333,11 +332,7 @@ struct PlayerControlsView: View {
         }
         .padding(Spacing.xl)
         .frame(maxWidth: 560, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: barRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: barRadius, style: .continuous)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-        )
+        .liquidGlass(cornerRadius: barRadius)
         .onAppear { panelFocus = 0 }
     }
 
@@ -434,9 +429,7 @@ struct PlayerControlsView: View {
         }
         .padding(Spacing.xl)
         .frame(width: episodesPanelWidth, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: barRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: barRadius, style: .continuous)
-            .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .liquidGlass(cornerRadius: barRadius)
         .padding(platformPadding)
         .task {
             await model.loadEpisodeBrowserIfNeeded()

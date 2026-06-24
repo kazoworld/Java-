@@ -270,7 +270,7 @@ struct SeriesDetailView: View {
                         .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(width: 46, height: 46)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .glassCircle(dim: 0.12)
                 }
                 .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
 
@@ -339,10 +339,15 @@ struct SeriesDetailView: View {
                             .padding(.vertical, Spacing.sm)
                             .foregroundStyle(active ? .white : UltrafinColors.primaryText)
                             .background {
-                                if active { Capsule().fill(settings.theme.accent.color.gradient) }
-                                else { Capsule().fill(.ultraThinMaterial) }
+                                if active {
+                                    Capsule().fill(settings.theme.accent.color.gradient)
+                                    Capsule().fill(LiquidGlass.sheen)
+                                } else {
+                                    Capsule().fill(.ultraThinMaterial)
+                                    Capsule().fill(LiquidGlass.sheen)
+                                }
                             }
-                            .overlay(Capsule().strokeBorder(active ? Color.clear : UltrafinColors.separator, lineWidth: 1))
+                            .overlay(Capsule().strokeBorder(active ? LiquidGlass.rim(0.6) : LiquidGlass.rim(0.4), lineWidth: 1))
                     }
                     .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
                 }

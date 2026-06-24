@@ -123,6 +123,13 @@ struct MediaCard: View {
                     .padding(.bottom, Spacing.sm)
                 }
             }
+            // A glassy specular sheen sweeps across the art when focused, so a
+            // lit poster catches the light like a pane of glass.
+            .overlay(
+                RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
+                    .fill(LiquidGlass.sheen)
+                    .opacity(isFocused ? 1 : 0)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
                     .strokeBorder(isFocused ? UltrafinColors.accent : UltrafinColors.separator,

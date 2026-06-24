@@ -196,10 +196,15 @@ struct LibraryContentsView: View {
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
             .background {
-                if active { Capsule().fill(settings.theme.accent.color.gradient) }
-                else { Capsule().fill(.ultraThinMaterial) }
+                if active {
+                    Capsule().fill(settings.theme.accent.color.gradient)
+                    Capsule().fill(LiquidGlass.sheen)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                    Capsule().fill(LiquidGlass.sheen)
+                }
             }
-            .overlay(Capsule().strokeBorder(active ? Color.clear : UltrafinColors.separator, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(active ? LiquidGlass.rim(0.6) : LiquidGlass.rim(0.4), lineWidth: 1))
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
         .accessibilityLabel("Sort by \(option.label)")
