@@ -468,13 +468,23 @@ struct EpisodeRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // A uniform minimum height keeps every row's frosted box the same size,
-        // so the list lines up cleanly regardless of how much synopsis an
-        // episode has.
+        // A uniform minimum height keeps every row's box the same size, so the
+        // list lines up cleanly regardless of how much synopsis an episode has.
         .frame(maxWidth: .infinity, minHeight: thumbWidth * 9 / 16, alignment: .leading)
         .padding(Spacing.sm)
-        .glassCard()
-        .animation(.smooth(duration: 0.2), value: isFocused)
+        // A cheap opaque card (no per-row blur or shadow) so a long episode list
+        // scrolls and swaps seasons smoothly on tvOS. Focus is shown by the
+        // thumbnail's accent border above.
+        .background(
+            RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous)
+                .fill(isFocused ? UltrafinColors.elevatedSurface : UltrafinColors.surface.opacity(0.5))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous)
+                .strokeBorder(isFocused ? UltrafinColors.accent.opacity(0.6) : UltrafinColors.separator,
+                              lineWidth: 1)
+        )
+        .animation(.easeOut(duration: 0.15), value: isFocused)
     }
 
     private var episodeHeadline: String {

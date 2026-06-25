@@ -86,45 +86,16 @@ struct SeasonEpisodeBrowser: View {
     }
 
     private func seasonRow(_ season: MediaItem) -> some View {
-        let active = season.id == selectedSeasonID
-        return Button { onSelectSeason(season.id) } label: {
-            HStack(spacing: Spacing.sm) {
-                // A slim accent bar marks the active season at a glance.
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(active ? settings.theme.accent.color : .clear)
-                    .frame(width: 3, height: seasonFont * 0.9)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(season.name)
-                        .font(.system(size: seasonFont, weight: active ? .bold : .semibold, design: .rounded))
-                        .foregroundStyle(active ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
-                        .lineLimit(1)
-                    if let count = season.childCount, count > 0 {
-                        Text("\(count) episode\(count == 1 ? "" : "s")")
-                            .font(.system(size: seasonFont * 0.62, weight: .medium))
-                            .foregroundStyle(UltrafinColors.tertiaryText)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .background {
-                if active {
-                    let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    shape.fill(.ultraThinMaterial)
-                    shape.fill(LiquidGlass.sheen)
-                    shape.strokeBorder(LiquidGlass.rim(0.5), lineWidth: 1)
-                }
-            }
+        Button { onSelectSeason(season.id) } label: {
+            SeasonRowLabel(season: season,
+                           active: season.id == selectedSeasonID,
+                           seasonFont: seasonFont,
+                           accent: settings.theme.accent.color)
         }
-        .buttonStyle(UltrafinButtonStyle(focusScale: 1.03, lift: false))
+        // No focus scale — a scaled row would spill its highlight outside the
+        // season column. The focused look is a solid pill drawn inside the row.
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.0, lift: false))
         .focused($focusedSeason, equals: season.id)
-        // Netflix feel: focusing a season (tvOS) swaps the episode list live.
-        .onChange(of: focusedSeason) { _, id in
-            if let id, id == season.id, id != selectedSeasonID { onSelectSeason(id) }
-        }
     }
 
     // MARK: - Compact season picker (iPhone portrait)
@@ -181,8 +152,6 @@ struct SeasonEpisodeBrowser: View {
                     }
                 }
                 .padding(.vertical, 2)
-                // Cross-fade the list when switching seasons.
-                .animation(.smooth(duration: 0.35), value: episodes)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .onChange(of: selectedSeasonID) { _, _ in
@@ -244,9 +213,59 @@ struct SeasonEpisodeBrowser: View {
     }
     private var seasonFont: CGFloat {
         #if os(tvOS)
-        26
+        28
         #else
-        17
+        18
         #endif
     }
+}
+
+/// A single season entry. Reads the focus engine so the focused row becomes a
+/// bright, high-contrast pill (Netflix-style) entirely inside the column — no
+/// scaling, so the highlight never spills past the season list.
+private struct SeasonRowLabel: View {
+    let season: MediaItem
+    let active: Bool
+    let seasonFont: CGFloat
+    let accent: Color
+
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            // A slim accent bar marks the current season (hidden while focused,
+            // where the bright pill already signals position).
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(active && !isFocused ? accent : .clear)
+                .frame(width: 4, height: seasonFont)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(season.name)
+                    .font(.system(size: seasonFont, weight: .semibold, design: .rounded))
+                    .foregroundStyle(textColor)
+                    .lineLimit(1)
+                if let count = season.childCount, count > 0 {
+                    Text("\(count) episode\(count == 1 ? "" : "s")")
+                        .font(.system(size: seasonFont * 0.6, weight: .medium))
+                        .foregroundStyle(subColor)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(fillColor)
+        )
+        .animation(.easeOut(duration: 0.15), value: isFocused)
+    }
+
+    private var fillColor: Color {
+        if isFocused { return .white }            // bright focus pill
+        if active { return .white.opacity(0.10) } // current season, subtle
+        return .clear
+    }
+    private var textColor: Color { isFocused ? .black : .white }
+    private var subColor: Color { isFocused ? .black.opacity(0.6) : .white.opacity(0.62) }
 }
