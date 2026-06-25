@@ -264,38 +264,27 @@ struct SeriesDetailView: View {
 
     private func episodesPanel(_ model: SeriesDetailViewModel) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            HStack(spacing: Spacing.md) {
-                Button { withAnimation(.easeInOut(duration: 0.25)) { showEpisodes = false } } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 46, height: 46)
-                        .glassCircle(dim: 0.12)
+            Button { withAnimation(.easeInOut(duration: 0.25)) { showEpisodes = false } } label: {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "chevron.left").font(.system(size: 20, weight: .bold))
+                    Text("Back").font(.system(size: 18, weight: .semibold, design: .rounded))
                 }
-                .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
-
-                Text(model.displayed.name)
-                    .font(.system(size: titleSize * 0.55, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Spacer()
+                .foregroundStyle(.white)
+                .padding(.horizontal, Spacing.md).padding(.vertical, Spacing.sm)
+                .glassCapsule(dim: 0.12)
             }
+            .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: false))
 
-            seasonPicker(model)
-
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: Spacing.md) {
-                    ForEach(model.episodes) { episode in
-                        Button { play(episode) } label: {
-                            EpisodeRow(episode: episode, imageURL: episodeImageURL(episode))
-                        }
-                        .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: true))
-                    }
-                }
-                .padding(.vertical, 2)
-                // Cross-fade the list when switching seasons.
-                .animation(.smooth(duration: 0.35), value: model.episodes)
-            }
+            SeasonEpisodeBrowser(
+                seriesName: model.displayed.name,
+                seasons: model.seasons,
+                selectedSeasonID: model.selectedSeasonID,
+                episodes: model.episodes,
+                currentEpisodeID: model.playTarget?.id,
+                episodeImageURL: episodeImageURL,
+                onSelectSeason: { id in Task { await model.selectSeason(id) } },
+                onPlay: { play($0) }
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -323,40 +312,6 @@ struct SeriesDetailView: View {
     }
 
     // MARK: - Seasons & episodes
-
-    /// Netflix-style season selector: clean accent-filled pills, instant switch
-    /// (episodes are cached per season), with a smooth selection animation.
-    private func seasonPicker(_ model: SeriesDetailViewModel) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.sm) {
-                ForEach(model.seasons) { season in
-                    let active = season.id == model.selectedSeasonID
-                    Button { Task { await model.selectSeason(season.id) } } label: {
-                        Text(season.name)
-                            .font(.system(size: actionFont, weight: .semibold, design: .rounded))
-                            .lineLimit(1)
-                            .padding(.horizontal, Spacing.lg)
-                            .padding(.vertical, Spacing.sm)
-                            .foregroundStyle(active ? .white : UltrafinColors.primaryText)
-                            .background {
-                                if active {
-                                    Capsule().fill(settings.theme.accent.color.gradient)
-                                    Capsule().fill(LiquidGlass.sheen)
-                                } else {
-                                    Capsule().fill(.ultraThinMaterial)
-                                    Capsule().fill(LiquidGlass.sheen)
-                                }
-                            }
-                            .overlay(Capsule().strokeBorder(active ? LiquidGlass.rim(0.6) : LiquidGlass.rim(0.4), lineWidth: 1))
-                    }
-                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
-                }
-            }
-            .padding(.vertical, Spacing.sm)
-            .animation(.smooth(duration: 0.3), value: model.selectedSeasonID)
-        }
-        .scrollClipDisabled()
-    }
 
     private func similarRail(_ model: SeriesDetailViewModel) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -427,13 +382,6 @@ struct SeriesDetailView: View {
         600
         #else
         .infinity
-        #endif
-    }
-    private var actionFont: CGFloat {
-        #if os(tvOS)
-        24
-        #else
-        16
         #endif
     }
     private var edgePadding: CGFloat {

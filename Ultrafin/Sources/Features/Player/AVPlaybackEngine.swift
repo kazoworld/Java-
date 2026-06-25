@@ -20,6 +20,11 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
         // Don't wait to minimize stalling — resume/seek should start the instant
         // we ask, not after a re-buffer evaluation (a source of resume lag).
         player.automaticallyWaitsToMinimizeStalling = false
+        // Don't let AVFoundation auto-enable subtitles from the system's
+        // accessibility / preferred-language criteria — captions are controlled
+        // explicitly by the app (this was the source of captions turning
+        // themselves on at playback start even with captions set to Off).
+        player.appliesMediaSelectionCriteriaAutomatically = false
         configureAudioSession()
     }
 
@@ -106,6 +111,10 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
                 case .failed:
                     self.subject.value.status = .failed(item.error?.localizedDescription ?? "Playback failed")
                 case .readyToPlay:
+                    // Start with subtitles off by default; the view model turns
+                    // them on only when the user's caption mode asks for it. This
+                    // clears any subtitle the container flags as "default".
+                    if let group = self.legibleGroup { item.select(nil, in: group) }
                     if self.subject.value.status == .buffering { self.play() }
                 default: break
                 }

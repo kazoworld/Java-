@@ -8,6 +8,10 @@ struct SeasonEpisodesView: View {
     @Environment(\.dismiss) private var dismiss
     let episode: MediaItem
 
+    @State private var seasons: [MediaItem] = []
+    @State private var selectedSeasonID: String?
+    /// Episodes cached per season so re-selecting one is instant (no re-fetch).
+    @State private var episodesBySeason: [String: [MediaItem]] = [:]
     @State private var episodes: [MediaItem] = []
     @State private var isLoading = true
     @State private var playback: PlaybackRequest?
@@ -18,38 +22,25 @@ struct SeasonEpisodesView: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    header
-                    if isLoading {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, Spacing.xxl)
-                    } else {
-                        LazyVStack(spacing: Spacing.md) {
-                            ForEach(episodes) { ep in
-                                Button { play(ep) } label: {
-                                    EpisodeRow(episode: ep, imageURL: imageURL(ep))
-                                        .overlay(alignment: .topTrailing) {
-                                            if ep.id == episode.id { nowPlayingBadge }
-                                        }
-                                }
-                                .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: true))
-                                .id(ep.id)
-                            }
-                        }
-                    }
-                }
-                .padding(edgePadding)
-                .frame(maxWidth: 1100)
-                .frame(maxWidth: .infinity)
-            }
-            .onChange(of: episodes) { _, list in
-                guard list.contains(where: { $0.id == episode.id }) else { return }
-                DispatchQueue.main.async {
-                    withAnimation { proxy.scrollTo(episode.id, anchor: .center) }
-                }
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            header
+            if isLoading {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                SeasonEpisodeBrowser(
+                    seriesName: episode.seriesName ?? "Episodes",
+                    seasons: seasons,
+                    selectedSeasonID: selectedSeasonID,
+                    episodes: episodes,
+                    currentEpisodeID: episode.id,
+                    episodeImageURL: imageURL,
+                    onSelectSeason: { id in Task { await selectSeason(id) } },
+                    onPlay: play
+                )
             }
         }
+        .padding(edgePadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(UltrafinColors.background.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
         .task { await load() }
@@ -64,47 +55,42 @@ struct SeasonEpisodesView: View {
     }
 
     private var header: some View {
-        HStack(spacing: Spacing.md) {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .background(.ultraThinMaterial, in: Circle())
+        Button { dismiss() } label: {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "chevron.left").font(.system(size: 20, weight: .bold))
+                Text("Back").font(.system(size: 18, weight: .semibold, design: .rounded))
             }
-            .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(episode.seriesName ?? "Episodes")
-                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(UltrafinColors.primaryText)
-                if let s = episode.parentIndexNumber {
-                    Text("Season \(s)")
-                        .font(.system(size: titleSize * 0.5, weight: .medium))
-                        .foregroundStyle(UltrafinColors.secondaryText)
-                }
-            }
-            Spacer()
-        }
-    }
-
-    private var nowPlayingBadge: some View {
-        Text("Now Viewing")
-            .font(.system(size: 12, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
-            .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
-            .background(UltrafinColors.accent, in: Capsule())
-            .padding(Spacing.sm)
+            .padding(.horizontal, Spacing.md).padding(.vertical, Spacing.sm)
+            .glassCapsule(dim: 0.12)
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: false))
     }
 
     private func load() async {
-        guard let session, let client = appState.client,
-              let seriesID = episode.seriesId, let seasonID = episode.seasonId else {
+        guard let session, let client = appState.client, let seriesID = episode.seriesId else {
             isLoading = false
             return
         }
-        episodes = (try? await client.episodes(seriesID: seriesID, seasonID: seasonID, userID: session.userID)) ?? []
+        seasons = (try? await client.seasons(seriesID: seriesID, userID: session.userID)) ?? []
+        let initial = episode.seasonId ?? seasons.first?.id
+        selectedSeasonID = initial
+        if let initial {
+            let eps = (try? await client.episodes(seriesID: seriesID, seasonID: initial, userID: session.userID)) ?? []
+            episodesBySeason[initial] = eps
+            episodes = eps
+        }
         isLoading = false
+    }
+
+    private func selectSeason(_ id: String) async {
+        guard id != selectedSeasonID, let session, let client = appState.client,
+              let seriesID = episode.seriesId else { return }
+        selectedSeasonID = id
+        if let cached = episodesBySeason[id] { episodes = cached; return }
+        let eps = (try? await client.episodes(seriesID: seriesID, seasonID: id, userID: session.userID)) ?? []
+        episodesBySeason[id] = eps
+        episodes = eps
     }
 
     private func play(_ ep: MediaItem) {
@@ -117,13 +103,6 @@ struct SeasonEpisodesView: View {
         return appState.client?.imageURL(itemID: ep.id, kind: .primary, tag: tag, maxWidth: 600)
     }
 
-    private var titleSize: CGFloat {
-        #if os(tvOS)
-        40
-        #else
-        24
-        #endif
-    }
     private var edgePadding: CGFloat {
         #if os(tvOS)
         60

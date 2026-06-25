@@ -72,6 +72,11 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         media.addOption(":freetype-color=\(subs.textColor.vlcColor)")
         if !subs.preferredLanguage.isEmpty {
             media.addOption(":sub-language=\(subs.preferredLanguage)")
+        } else if subs.captionMode != .always {
+            // Don't auto-enable a subtitle the container flags as "default" when
+            // captions are meant to be off — open with no SPU track selected.
+            // (The view model still turns them on for "Always on" / when engaged.)
+            media.addOption(":sub-track=-1")
         }
 
         mediaPlayer.media = media

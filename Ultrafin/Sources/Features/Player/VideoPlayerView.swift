@@ -462,9 +462,13 @@ struct VideoPlayerView: View {
 
     /// Back/Menu: close a panel first, then hide controls, then exit.
     private func handleBack() {
-        // Close a panel first; otherwise Back/Menu always exits the player (one
-        // press, the way you'd expect) rather than just hiding the controls.
+        // Back/Menu peels one layer at a time, like Netflix/Apple TV:
+        //   1. an open panel (captions/quality/episodes) closes,
+        //   2. then the visible control bar hides (dismiss the toolbar — NOT the
+        //      whole video),
+        //   3. only with nothing showing does it exit the player.
         if panel != .none { panel = .none; return }
+        if controlsVisible { hideControls(); return }
         close()
     }
 
