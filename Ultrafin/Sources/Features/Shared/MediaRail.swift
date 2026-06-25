@@ -158,18 +158,20 @@ struct MediaCard: View {
 
     /// A uniformly-sized, center-cropped artwork box: a fixed-aspect container
     /// the image *fills* (and is clipped to), so every card is identical no
-    /// matter what dimensions the server's image happens to be.
+    /// matter what dimensions the server's image happens to be. When focused on
+    /// tvOS the image zooms slightly *within* its clip — moving faster than the
+    /// card frame for a subtle sense of depth (parallax).
     @ViewBuilder
     private var artwork: some View {
         if fillWidth {
             Color.clear
                 .aspectRatio(aspect, contentMode: .fit)
-                .overlay(RemoteImage(url: artworkURL, contentMode: .fill))
+                .overlay(RemoteImage(url: artworkURL, contentMode: .fill).scaleEffect(isFocused ? 1.07 : 1))
                 .clipped()
         } else {
             Color.clear
                 .frame(width: width, height: height)
-                .overlay(RemoteImage(url: artworkURL, contentMode: .fill))
+                .overlay(RemoteImage(url: artworkURL, contentMode: .fill).scaleEffect(isFocused ? 1.07 : 1))
                 .clipped()
         }
     }

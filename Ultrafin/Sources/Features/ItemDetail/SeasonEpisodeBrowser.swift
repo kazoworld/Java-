@@ -100,7 +100,7 @@ struct SeasonEpisodeBrowser: View {
     }
 
     private func seasonRow(_ season: MediaItem) -> some View {
-        Button { onSelectSeason(season.id) } label: {
+        Button { Haptics.play(.selection); onSelectSeason(season.id) } label: {
             SeasonRowLabel(season: season,
                            active: season.id == selectedSeasonID,
                            seasonFont: seasonFont,

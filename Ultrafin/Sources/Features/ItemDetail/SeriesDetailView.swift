@@ -107,6 +107,8 @@ struct SeriesDetailView: View {
     @State private var showEpisodes = false
     @State private var toast: String?
     @State private var artColor: ArtworkColor?
+    /// Drives the one-time arrival animation (art settles in, content rises).
+    @State private var appeared = false
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -142,6 +144,7 @@ struct SeriesDetailView: View {
         #endif
         .task { await loadIfNeeded() }
         .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
+        .onAppear { appeared = true }
         .fullScreenCover(item: $playback) { request in
             if let session {
                 VideoPlayerView(queue: request.queue, startIndex: request.index,
@@ -163,6 +166,10 @@ struct SeriesDetailView: View {
     private func heroSection(landscape: Bool, screen: CGSize) -> some View {
         ZStack(alignment: landscape ? .leading : .bottomLeading) {
             DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape)
+                // Art settles in from a slight zoom — a gentle Ken-Burns arrival.
+                .scaleEffect(appeared ? 1 : 1.06)
+                .opacity(appeared ? 1 : 0)
+                .animation(.easeOut(duration: 0.7), value: appeared)
 
             if let model {
                 if showEpisodes {
@@ -179,6 +186,10 @@ struct SeriesDetailView: View {
                         .padding(.bottom, landscape ? 0 : Spacing.xl)
                         .frame(maxWidth: .infinity, maxHeight: .infinity,
                                alignment: landscape ? .leading : .bottom)
+                        // Content rises and fades in just behind the art.
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 24)
+                        .animation(.smooth(duration: 0.55).delay(0.12), value: appeared)
                         .transition(.opacity)
                 }
             }
@@ -239,11 +250,13 @@ struct SeriesDetailView: View {
             DetailActionRow(icon: model.isFavorite ? "checkmark" : "plus",
                             title: model.isFavorite ? "In My List" : "Add to My List") {
                 model.toggleFavorite()
+                Haptics.play(.success)
                 toast = model.isFavorite ? "Added to My List" : "Removed from My List"
             }
             DetailActionRow(icon: model.isWatched ? "eye.fill" : "eye",
                             title: model.isWatched ? "Watched" : "Mark as Watched") {
                 model.toggleWatched()
+                Haptics.play(.success)
                 toast = model.isWatched ? "Marked as Watched" : "Marked as Unwatched"
             }
         }
@@ -332,6 +345,7 @@ struct SeriesDetailView: View {
 
     private func play(_ episode: MediaItem, resume: Bool = true) {
         guard let model else { return }
+        Haptics.play(.medium)
         if let idx = model.episodes.firstIndex(where: { $0.id == episode.id }) {
             playback = PlaybackRequest(queue: model.episodes, index: idx, resume: resume)
         } else {

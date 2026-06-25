@@ -18,6 +18,8 @@ struct ItemDetailView: View {
     @State private var showEpisodes = false
     @State private var toast: String?
     @State private var artColor: ArtworkColor?
+    /// Drives the one-time arrival animation (art settles in, content rises).
+    @State private var appeared = false
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -48,6 +50,7 @@ struct ItemDetailView: View {
         #endif
         .task { await load() }
         .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
+        .onAppear { appeared = true }
         .fullScreenCoverCompat(isPresented: $presentPlayer) {
             if let session {
                 VideoPlayerView(item: displayed, userID: session.userID, resume: resumePlayback)
@@ -74,6 +77,10 @@ struct ItemDetailView: View {
     private func heroSection(landscape: Bool, screen: CGSize) -> some View {
         ZStack(alignment: landscape ? .leading : .bottomLeading) {
             DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape)
+                // Art settles in from a slight zoom — a gentle Ken-Burns arrival.
+                .scaleEffect(appeared ? 1 : 1.06)
+                .opacity(appeared ? 1 : 0)
+                .animation(.easeOut(duration: 0.7), value: appeared)
 
             contentColumn
                 .frame(maxWidth: landscape ? screen.width * 0.52 : .infinity, alignment: .leading)
@@ -81,6 +88,10 @@ struct ItemDetailView: View {
                 .padding(.bottom, landscape ? 0 : Spacing.xl)
                 .frame(maxWidth: .infinity, maxHeight: .infinity,
                        alignment: landscape ? .leading : .bottom)
+                // Content rises and fades in just behind the art.
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 24)
+                .animation(.smooth(duration: 0.55).delay(0.12), value: appeared)
         }
         .frame(height: landscape ? screen.height : screen.height * 0.74)
     }
@@ -114,14 +125,14 @@ struct ItemDetailView: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             if let p = displayed.playbackProgress, p > 0.01, p < 0.95 {
                 DetailActionRow(icon: "play.fill", title: "Resume", progress: p, prominent: true) {
-                    resumePlayback = true; presentPlayer = true
+                    Haptics.play(.medium); resumePlayback = true; presentPlayer = true
                 }
                 DetailActionRow(icon: "arrow.counterclockwise", title: "Restart") {
-                    resumePlayback = false; presentPlayer = true
+                    Haptics.play(.medium); resumePlayback = false; presentPlayer = true
                 }
             } else {
                 DetailActionRow(icon: "play.fill", title: "Play", prominent: true) {
-                    resumePlayback = true; presentPlayer = true
+                    Haptics.play(.medium); resumePlayback = true; presentPlayer = true
                 }
             }
             if displayed.type == .episode {
@@ -186,6 +197,7 @@ struct ItemDetailView: View {
     private func toggleFavorite() {
         isFavorite.toggle()
         let value = isFavorite
+        Haptics.play(.success)
         toast = value ? "Added to My List" : "Removed from My List"
         guard let session, let client = appState.client else { return }
         Task { await client.setFavorite(itemID: item.id, userID: session.userID, isFavorite: value) }
@@ -194,6 +206,7 @@ struct ItemDetailView: View {
     private func toggleWatched() {
         isWatched.toggle()
         let value = isWatched
+        Haptics.play(.success)
         toast = value ? "Marked as Watched" : "Marked as Unwatched"
         guard let session, let client = appState.client else { return }
         Task { await client.setPlayed(itemID: item.id, userID: session.userID, isPlayed: value) }

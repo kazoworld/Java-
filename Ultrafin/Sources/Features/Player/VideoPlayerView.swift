@@ -42,6 +42,9 @@ struct VideoPlayerView: View {
     @State private var skipFeedback: Int?
     @State private var skipFeedbackTask: Task<Void, Never>?
     @State private var panel: PlayerPanel = .none
+    /// False until the first frame of the current item is playing, so the video
+    /// can fade up from black instead of popping in (reset on each new episode).
+    @State private var videoRevealed = false
     /// Holds the HDMI/eARC audio route open so VLC resume isn't delayed.
     @State private var routeKeeper = AudioRouteKeeper()
 
@@ -70,6 +73,9 @@ struct VideoPlayerView: View {
                     PlayerSurface(view: engine.playerLayerView)
                         .id(ObjectIdentifier(engine)) // swap cleanly when the engine changes
                         .ignoresSafeArea()
+                        // The first frame fades up from black instead of popping —
+                        // a clean, cinematic open.
+                        .opacity(videoRevealed ? 1 : 0)
                         #if os(iOS)
                         .onTapGesture { if controlsVisible { hideControls() } else { revealControls() } }
                         #endif
@@ -222,8 +228,14 @@ struct VideoPlayerView: View {
         #endif
         .task { await startIfNeeded() }
         .onChange(of: model?.state.status) { _, status in
+            // Fade the picture up from black the moment the first frame plays.
+            if status == .playing && !videoRevealed {
+                withAnimation(.easeOut(duration: 0.45)) { videoRevealed = true }
+            }
             if status == .ended { handleEnded() }
         }
+        // A new episode loads a new engine — re-arm the fade-up for it.
+        .onChange(of: model?.currentItem?.id) { _, _ in videoRevealed = false }
         .onAppear {
             // Open the audio route as soon as the player appears — before the
             // stream finishes loading — so audio is ready when video starts, and
