@@ -38,10 +38,15 @@ struct SeasonEpisodeBrowser: View {
     var body: some View {
         Group {
             if useColumns {
-                HStack(alignment: .top, spacing: columnGap) {
+                HStack(alignment: .center, spacing: columnGap) {
                     seasonColumn
                     episodeColumn
                 }
+                // Cap the block to its content width, then center it on screen
+                // with balanced margins (instead of hugging the left), like
+                // Netflix. Capping first is what lets the centering take effect.
+                .frame(maxWidth: leftWidth + columnGap + episodeMaxWidth)
+                .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     compactSeasonPicker
@@ -59,27 +64,36 @@ struct SeasonEpisodeBrowser: View {
     // MARK: - Season column (left)
 
     private var seasonColumn: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(seriesName)
-                    .font(.system(size: headerSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(UltrafinColors.primaryText)
-                    .lineLimit(2)
-                Text("\(seasons.count) Season\(seasons.count == 1 ? "" : "s")")
-                    .font(.system(size: subHeaderSize, weight: .semibold))
-                    .foregroundStyle(UltrafinColors.secondaryText)
-            }
-            .padding(.bottom, Spacing.xs)
-
+        // The title + season list are vertically centered in the column so the
+        // left side reads as a balanced, centered panel (no big empty space
+        // beneath a top-pinned title). Scrolls only if a show has many seasons.
+        GeometryReader { geo in
             ScrollView(showsIndicators: false) {
-                VStack(spacing: Spacing.xs) {
-                    ForEach(seasons) { season in
-                        seasonRow(season)
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(seriesName)
+                            .font(.system(size: headerSize, weight: .bold, design: .rounded))
+                            .foregroundStyle(UltrafinColors.primaryText)
+                            .lineLimit(2)
+                        Text("\(seasons.count) Season\(seasons.count == 1 ? "" : "s")")
+                            .font(.system(size: subHeaderSize, weight: .semibold))
+                            .foregroundStyle(UltrafinColors.secondaryText)
+                    }
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.bottom, Spacing.xs)
+
+                    VStack(spacing: Spacing.xs) {
+                        ForEach(seasons) { season in
+                            seasonRow(season)
+                        }
                     }
                 }
+                // Inset so the focus pill never touches the column edge.
+                .padding(.horizontal, Spacing.xs)
+                .frame(minHeight: geo.size.height, alignment: .center)
             }
         }
-        .frame(width: leftWidth, alignment: .leading)
+        .frame(width: leftWidth)
         #if os(tvOS)
         .focusSection()
         #endif
@@ -151,9 +165,10 @@ struct SeasonEpisodeBrowser: View {
                         .id(episode.id)
                     }
                 }
-                .padding(.vertical, 2)
+                // Inset so a focused row's lift never clips against the edge.
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.sm)
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
             .onChange(of: selectedSeasonID) { _, _ in
                 // Jump back to the top of the list when the season changes.
                 if let first = episodes.first?.id {
@@ -167,6 +182,9 @@ struct SeasonEpisodeBrowser: View {
                 withAnimation { proxy.scrollTo(currentEpisodeID, anchor: .center) }
             }
         }
+        // Cap the list width so it stays a comfortable reading measure and the
+        // whole season+episode block can center on screen instead of stretching.
+        .frame(maxWidth: episodeMaxWidth)
         #if os(tvOS)
         .focusSection()
         #endif
@@ -195,6 +213,15 @@ struct SeasonEpisodeBrowser: View {
         Spacing.xxl
         #else
         Spacing.xl
+        #endif
+    }
+    /// Cap on the episode list width so rows stay a comfortable reading measure
+    /// and the block can center instead of stretching into empty space.
+    private var episodeMaxWidth: CGFloat {
+        #if os(tvOS)
+        920
+        #else
+        720
         #endif
     }
     private var headerSize: CGFloat {
