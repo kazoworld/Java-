@@ -489,7 +489,10 @@ struct EpisodeRow: View {
         }
         // A fixed height keeps every row identical, so the list shows a whole
         // number of rows with clean top/bottom edges (no jagged partials).
-        .frame(maxWidth: .infinity, height: thumbWidth * 9 / 16, alignment: .leading)
+        // (minHeight == maxHeight fixes the height while maxWidth stays flexible —
+        // a single .frame can't mix the flexible `maxWidth` with a fixed `height`.)
+        .frame(maxWidth: .infinity, minHeight: thumbWidth * 9 / 16,
+               maxHeight: thumbWidth * 9 / 16, alignment: .leading)
         .padding(Spacing.sm)
         // A cheap opaque card (no per-row blur or shadow) so a long episode list
         // scrolls and swaps seasons smoothly on tvOS. Focus is shown by the
