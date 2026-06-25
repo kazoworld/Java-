@@ -150,6 +150,12 @@ struct SeasonEpisodeBrowser: View {
 
     // MARK: - Episode column (right)
 
+    /// Show exactly three episodes at a time; the rest scroll into view one at a
+    /// time as focus moves. (Rows are a fixed height, so this is a clean window.)
+    private var episodeViewportHeight: CGFloat {
+        EpisodeRow.rowHeight * 3 + Spacing.md * 2 + Spacing.sm * 2
+    }
+
     private var episodeColumn: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
@@ -169,22 +175,20 @@ struct SeasonEpisodeBrowser: View {
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, Spacing.sm)
             }
+            // Always open at the top (episode 1); the focus engine scrolls the
+            // rest into view one at a time as you move down.
             .onChange(of: selectedSeasonID) { _, _ in
-                // Jump back to the top of the list when the season changes.
                 if let first = episodes.first?.id {
                     withAnimation(.smooth(duration: 0.3)) { proxy.scrollTo(first, anchor: .top) }
                 }
             }
-            .task(id: currentEpisodeID) {
-                guard let currentEpisodeID,
-                      episodes.contains(where: { $0.id == currentEpisodeID }) else { return }
-                try? await Task.sleep(for: .milliseconds(80))
-                withAnimation { proxy.scrollTo(currentEpisodeID, anchor: .center) }
-            }
         }
-        // Cap the list width so it stays a comfortable reading measure and the
-        // whole season+episode block can center on screen instead of stretching.
+        // A fixed three-row viewport (two-column layouts only), centered in the
+        // column, with a capped width so the block centers on screen. On compact
+        // iPhone the list fills naturally instead.
         .frame(maxWidth: episodeMaxWidth)
+        .frame(height: useColumns ? episodeViewportHeight : nil)
+        .frame(maxHeight: useColumns ? .infinity : nil)
         #if os(tvOS)
         .focusSection()
         #endif

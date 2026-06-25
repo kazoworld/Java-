@@ -429,13 +429,18 @@ struct EpisodeRow: View {
 
     @Environment(\.isFocused) private var isFocused
 
-    private var thumbWidth: CGFloat {
+    static var thumbW: CGFloat {
         #if os(tvOS)
         300
         #else
         160
         #endif
     }
+    /// The fixed total height of one row (thumbnail + vertical padding), exposed
+    /// so the episode list can size its viewport to show a whole number of rows.
+    static var rowHeight: CGFloat { thumbW * 9 / 16 + Spacing.sm * 2 }
+
+    private var thumbWidth: CGFloat { Self.thumbW }
 
     var body: some View {
         HStack(alignment: .center, spacing: Spacing.md) {
@@ -476,15 +481,15 @@ struct EpisodeRow: View {
                     Text(overview)
                         .font(.system(size: overviewSize))
                         .foregroundStyle(UltrafinColors.secondaryText)
-                        .lineLimit(3)
+                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // A uniform minimum height keeps every row's box the same size, so the
-        // list lines up cleanly regardless of how much synopsis an episode has.
-        .frame(maxWidth: .infinity, minHeight: thumbWidth * 9 / 16, alignment: .leading)
+        // A fixed height keeps every row identical, so the list shows a whole
+        // number of rows with clean top/bottom edges (no jagged partials).
+        .frame(maxWidth: .infinity, height: thumbWidth * 9 / 16, alignment: .leading)
         .padding(Spacing.sm)
         // A cheap opaque card (no per-row blur or shadow) so a long episode list
         // scrolls and swaps seasons smoothly on tvOS. Focus is shown by the
