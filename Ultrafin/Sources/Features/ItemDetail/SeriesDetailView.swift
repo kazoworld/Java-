@@ -165,16 +165,24 @@ struct SeriesDetailView: View {
 
     private func heroSection(landscape: Bool, screen: CGSize) -> some View {
         ZStack(alignment: landscape ? .leading : .bottomLeading) {
-            DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape)
-                // Art settles in from a slight zoom — a gentle Ken-Burns arrival.
-                .scaleEffect(appeared ? 1 : 1.06)
-                .opacity(appeared ? 1 : 0)
-                .animation(.easeOut(duration: 0.7), value: appeared)
+            // While browsing episodes, swap the live double-masked backdrop for a
+            // cheap OPAQUE scrim. The opaque base lets the GPU cull the expensive
+            // masked art entirely (the old translucent dim couldn't), which is the
+            // single biggest fix for the season selector's lag — and it makes the
+            // episode synopses far more readable.
+            if showEpisodes {
+                episodesBackground.transition(.opacity)
+            } else {
+                DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape)
+                    // Art settles in from a slight zoom — a gentle Ken-Burns arrival.
+                    .scaleEffect(appeared ? 1 : 1.06)
+                    .opacity(appeared ? 1 : 0)
+                    .animation(.easeOut(duration: 0.7), value: appeared)
+                    .transition(.opacity)
+            }
 
             if let model {
                 if showEpisodes {
-                    // Dim the art a touch so the inline episode list reads.
-                    Color.black.opacity(0.45).transition(.opacity)
                     episodesPanel(model)
                         .padding(.horizontal, edgePadding)
                         .padding(.vertical, edgePadding * 0.6)
@@ -273,6 +281,20 @@ struct SeriesDetailView: View {
         return appState.client?.imageURL(itemID: item.id, kind: .logo, tag: tag, maxWidth: 800)
     }
 
+    /// The cheap, opaque background shown behind the episode browser — a solid
+    /// base (so the masked backdrop behind it is culled) with a whisper of the
+    /// artwork color up top for continuity. No masks, no material → 60fps.
+    private var episodesBackground: some View {
+        ZStack {
+            UltrafinColors.background
+            LinearGradient(stops: [
+                .init(color: (artColor?.color ?? settings.theme.accent.color).opacity(0.22), location: 0.0),
+                .init(color: .clear, location: 0.55)
+            ], startPoint: .top, endPoint: .bottom)
+        }
+        .ignoresSafeArea()
+    }
+
     // MARK: - Inline episode browser (fills the hero card area)
 
     private func episodesPanel(_ model: SeriesDetailViewModel) -> some View {
@@ -298,6 +320,9 @@ struct SeriesDetailView: View {
                 onSelectSeason: { id in Task { await model.selectSeason(id) } },
                 onPlay: { play($0) }
             )
+            // Center the browser in the space below the Back button so the block
+            // is balanced rather than top-heavy.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -479,8 +504,11 @@ struct EpisodeRow: View {
                 }
                 if let overview = episode.overview, !overview.isEmpty {
                     Text(overview)
+                        // Brighter than secondaryText + a little leading: the
+                        // synopsis is the hardest thing to read from the couch.
                         .font(.system(size: overviewSize))
-                        .foregroundStyle(UltrafinColors.secondaryText)
+                        .foregroundStyle(.white.opacity(0.82))
+                        .lineSpacing(3)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -494,19 +522,19 @@ struct EpisodeRow: View {
         .frame(maxWidth: .infinity, minHeight: thumbWidth * 9 / 16,
                maxHeight: thumbWidth * 9 / 16, alignment: .leading)
         .padding(Spacing.sm)
-        // A cheap opaque card (no per-row blur or shadow) so a long episode list
-        // scrolls and swaps seasons smoothly on tvOS. Focus is shown by the
-        // thumbnail's accent border above.
+        // A cheap opaque card (no per-row blur/shadow) so a long list scrolls and
+        // swaps seasons smoothly. The single focus cue is the thumbnail's accent
+        // ring (above) + the row fill brightening; the row border stays a static
+        // hairline (no duplicate accent border), and the button style owns the
+        // one focus animation — no per-row animator competing with it.
         .background(
             RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous)
-                .fill(isFocused ? UltrafinColors.elevatedSurface : UltrafinColors.surface.opacity(0.5))
+                .fill(.white.opacity(isFocused ? 0.12 : 0.05))
         )
         .overlay(
             RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous)
-                .strokeBorder(isFocused ? UltrafinColors.accent.opacity(0.6) : UltrafinColors.separator,
-                              lineWidth: 1)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
         )
-        .animation(.easeOut(duration: 0.15), value: isFocused)
     }
 
     private var episodeHeadline: String {

@@ -200,7 +200,9 @@ private struct Shimmer: ViewModifier {
                 .frame(width: geo.size.width * 1.5)
                 .offset(x: phase * geo.size.width * 1.5)
             }
-            .mask(Rectangle())
+            // .clipped() instead of .mask(Rectangle()) — same clip, no offscreen
+            // mask-compositing pass.
+            .clipped()
         )
         .onAppear {
             withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {

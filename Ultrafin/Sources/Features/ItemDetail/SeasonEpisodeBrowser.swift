@@ -1,19 +1,24 @@
 import SwiftUI
 
-/// Netflix-style season browser: a vertical list of **seasons on the left** and
-/// the selected season's **episodes on the right**. Moving focus up/down the
-/// season list swaps the episode column instantly (seasons are cached by the
-/// caller), and focus crosses cleanly between the two columns on tvOS.
+/// Season + episode browser, tuned for the Apple TV focus engine.
 ///
-/// On a compact width (iPhone portrait) there's no room for two columns, so it
-/// collapses to a season dropdown above the episode list — exactly how Netflix
-/// adapts on phone.
+/// - **Multiple seasons:** a season list on the left, the selected season's
+///   episodes on the right — the Netflix-style two-column look, top-aligned so
+///   vertical focus motion is predictable.
+/// - **Single season** (no choice to make): the season list is dropped entirely
+///   and the episodes get a clean, centered, wider column.
+/// - **Compact iPhone:** a season dropdown above the list.
+///
+/// Performance: this view is meant to be hosted over a *cheap opaque* background
+/// (see `SeriesDetailView`), never over the live masked backdrop — that was the
+/// source of the "laggy" feel. It uses only solid fills + gradients, no per-row
+/// material/blur, so it holds 60fps on Apple TV.
 struct SeasonEpisodeBrowser: View {
     let seriesName: String
     let seasons: [MediaItem]
     let selectedSeasonID: String?
     let episodes: [MediaItem]
-    /// The episode the user came from (gets a "Now Viewing" marker), if any.
+    /// The episode the user is currently on (gets a "Now Viewing" marker), if any.
     var currentEpisodeID: String? = nil
     let episodeImageURL: (MediaItem) -> URL?
     let onSelectSeason: (String) -> Void
@@ -24,6 +29,9 @@ struct SeasonEpisodeBrowser: View {
     @Environment(\.horizontalSizeClass) private var hSize
     #endif
     @FocusState private var focusedSeason: String?
+
+    private var accent: Color { settings.theme.accent.color }
+    private var multiSeason: Bool { seasons.count > 1 }
 
     /// Two columns when there's room (tvOS, iPad, landscape); a dropdown + list
     /// when compact (iPhone portrait).
@@ -37,63 +45,83 @@ struct SeasonEpisodeBrowser: View {
 
     var body: some View {
         Group {
-            if useColumns {
-                HStack(alignment: .center, spacing: columnGap) {
-                    seasonColumn
-                    episodeColumn
-                }
-                // Cap the block to its content width, then center it on screen
-                // with balanced margins (instead of hugging the left), like
-                // Netflix. Capping first is what lets the centering take effect.
-                .frame(maxWidth: leftWidth + columnGap + episodeMaxWidth)
-                .frame(maxWidth: .infinity, alignment: .center)
-            } else {
+            if !useColumns {
+                // iPhone portrait: dropdown (multi-season only) above the list.
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    compactSeasonPicker
-                    episodeColumn
+                    if multiSeason { compactSeasonPicker }
+                    episodeColumn(maxWidth: 720)
                 }
+            } else if multiSeason {
+                twoColumn
+            } else {
+                singleSeason
             }
         }
         .task {
-            // Land focus on the current season so the remote starts in the list.
+            // Land focus on the selected season so the remote starts in the list.
+            // (Single-season shows have no season column — the episode list takes
+            // focus on its own.)
+            guard multiSeason else { return }
             try? await Task.sleep(for: .milliseconds(60))
             if focusedSeason == nil { focusedSeason = selectedSeasonID }
         }
     }
 
-    // MARK: - Season column (left)
+    // MARK: - Layouts
+
+    private var twoColumn: some View {
+        HStack(alignment: .top, spacing: columnGap) {
+            seasonColumn
+            episodeColumn(maxWidth: episodeMaxWidth)
+        }
+        // Cap to content width, then center on screen with balanced margins.
+        .frame(maxWidth: leftWidth + columnGap + episodeMaxWidth)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var singleSeason: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(seriesName)
+                    .font(.system(size: headerSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(UltrafinColors.primaryText)
+                    .lineLimit(1)
+                if let count = seasons.first?.childCount ?? (episodes.isEmpty ? nil : episodes.count), count > 0 {
+                    Text("\(count) Episode\(count == 1 ? "" : "s")")
+                        .font(.system(size: subHeaderSize, weight: .semibold))
+                        .foregroundStyle(UltrafinColors.secondaryText)
+                }
+            }
+            .padding(.leading, Spacing.sm)
+            episodeColumn(maxWidth: singleColumnMaxWidth)
+        }
+        .frame(maxWidth: singleColumnMaxWidth)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    // MARK: - Season column (left, multi-season only)
 
     private var seasonColumn: some View {
-        // The title + season list are vertically centered in the column so the
-        // left side reads as a balanced, centered panel (no big empty space
-        // beneath a top-pinned title). Scrolls only if a show has many seasons.
-        GeometryReader { geo in
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(seriesName)
-                            .font(.system(size: headerSize, weight: .bold, design: .rounded))
-                            .foregroundStyle(UltrafinColors.primaryText)
-                            .lineLimit(2)
-                        Text("\(seasons.count) Season\(seasons.count == 1 ? "" : "s")")
-                            .font(.system(size: subHeaderSize, weight: .semibold))
-                            .foregroundStyle(UltrafinColors.secondaryText)
-                    }
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.bottom, Spacing.xs)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("Seasons")
+                .font(.system(size: subHeaderSize, weight: .semibold))
+                .foregroundStyle(UltrafinColors.tertiaryText)
+                .tracking(0.5)
+                .padding(.leading, Spacing.md)
+                .padding(.bottom, Spacing.xs)
 
-                    VStack(spacing: Spacing.xs) {
-                        ForEach(seasons) { season in
-                            seasonRow(season)
-                        }
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: Spacing.sm) {
+                    ForEach(seasons) { season in
+                        seasonRow(season)
                     }
                 }
-                // Inset so the focus pill never touches the column edge.
-                .padding(.horizontal, Spacing.xs)
-                .frame(minHeight: geo.size.height, alignment: .center)
+                .padding(.horizontal, Spacing.sm)
             }
+            // Match the episode window height so the two columns read as a pair.
+            .frame(maxHeight: episodeViewportHeight)
         }
-        .frame(width: leftWidth)
+        .frame(width: leftWidth, alignment: .leading)
         #if os(tvOS)
         .focusSection()
         #endif
@@ -104,10 +132,10 @@ struct SeasonEpisodeBrowser: View {
             SeasonRowLabel(season: season,
                            active: season.id == selectedSeasonID,
                            seasonFont: seasonFont,
-                           accent: settings.theme.accent.color)
+                           accent: accent)
         }
-        // No focus scale — a scaled row would spill its highlight outside the
-        // season column. The focused look is a solid pill drawn inside the row.
+        // No focus scale (a scaled row spills its highlight past the column); the
+        // button style owns the single focus animation.
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.0, lift: false))
         .focused($focusedSeason, equals: season.id)
     }
@@ -156,7 +184,7 @@ struct SeasonEpisodeBrowser: View {
         EpisodeRow.rowHeight * 3 + Spacing.md * 2 + Spacing.sm * 2
     }
 
-    private var episodeColumn: some View {
+    private func episodeColumn(maxWidth: CGFloat) -> some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: Spacing.md) {
@@ -175,23 +203,16 @@ struct SeasonEpisodeBrowser: View {
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, Spacing.sm)
             }
-            // Always open at the top (episode 1); the focus engine scrolls the
-            // rest into view one at a time as you move down.
+            // Snap (not animate) to the top on season change so it never competes
+            // with the focus engine's own scrolling.
             .onChange(of: selectedSeasonID) { _, _ in
-                if let first = episodes.first?.id {
-                    withAnimation(.smooth(duration: 0.3)) { proxy.scrollTo(first, anchor: .top) }
-                }
+                if let first = episodes.first?.id { proxy.scrollTo(first, anchor: .top) }
             }
         }
-        // A fixed three-row viewport (two-column layouts only), centered in the
-        // column, with a capped width so the block centers on screen. On compact
-        // iPhone the list fills naturally instead.
-        .frame(maxWidth: episodeMaxWidth)
+        // A fixed three-row window (two-column / landscape only); compact iPhone
+        // fills naturally.
+        .frame(maxWidth: maxWidth)
         .frame(height: useColumns ? episodeViewportHeight : nil)
-        .frame(maxHeight: useColumns ? .infinity : nil)
-        #if os(tvOS)
-        .focusSection()
-        #endif
     }
 
     private var nowViewingBadge: some View {
@@ -199,7 +220,7 @@ struct SeasonEpisodeBrowser: View {
             .font(.system(size: 12, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
             .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
-            .background(settings.theme.accent.color, in: Capsule())
+            .background(accent, in: Capsule())
             .padding(Spacing.sm)
     }
 
@@ -207,7 +228,7 @@ struct SeasonEpisodeBrowser: View {
 
     private var leftWidth: CGFloat {
         #if os(tvOS)
-        360
+        340
         #else
         240
         #endif
@@ -219,20 +240,27 @@ struct SeasonEpisodeBrowser: View {
         Spacing.xl
         #endif
     }
-    /// Cap on the episode list width so rows stay a comfortable reading measure
-    /// and the block can center instead of stretching into empty space.
+    /// Episode list width in the two-column layout.
     private var episodeMaxWidth: CGFloat {
         #if os(tvOS)
-        920
+        900
+        #else
+        720
+        #endif
+    }
+    /// Wider episode list when there's no season column to share the row with.
+    private var singleColumnMaxWidth: CGFloat {
+        #if os(tvOS)
+        1040
         #else
         720
         #endif
     }
     private var headerSize: CGFloat {
         #if os(tvOS)
-        32
+        36
         #else
-        22
+        24
         #endif
     }
     private var subHeaderSize: CGFloat {
@@ -244,16 +272,18 @@ struct SeasonEpisodeBrowser: View {
     }
     private var seasonFont: CGFloat {
         #if os(tvOS)
-        28
+        26
         #else
-        18
+        17
         #endif
     }
 }
 
-/// A single season entry. Reads the focus engine so the focused row becomes a
-/// bright, high-contrast pill (Netflix-style) entirely inside the column — no
-/// scaling, so the highlight never spills past the season list.
+/// A single season entry with three calm, distinct states for a 10-foot read:
+/// idle (dim text), selected-but-not-focused (accent-tinted with a leading bar),
+/// and focused (an on-brand frosted-accent pill — not a harsh pure-white block).
+/// No `.animation` here: the enclosing button style owns the single focus
+/// transaction so the fill/text move together without a competing animator.
 private struct SeasonRowLabel: View {
     let season: MediaItem
     let active: Bool
@@ -264,14 +294,14 @@ private struct SeasonRowLabel: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            // A slim accent bar marks the current season (hidden while focused,
-            // where the bright pill already signals position).
+            // A slim accent bar marks the current season when it's not focused
+            // (the focused pill already signals position).
             RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(active && !isFocused ? accent : .clear)
                 .frame(width: 4, height: seasonFont)
             VStack(alignment: .leading, spacing: 1) {
                 Text(season.name)
-                    .font(.system(size: seasonFont, weight: .semibold, design: .rounded))
+                    .font(.system(size: seasonFont, weight: active || isFocused ? .semibold : .medium, design: .rounded))
                     .foregroundStyle(textColor)
                     .lineLimit(1)
                 if let count = season.childCount, count > 0 {
@@ -283,20 +313,35 @@ private struct SeasonRowLabel: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.sm)
+        .padding(.vertical, Spacing.sm + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(fillColor)
-        )
-        .animation(.easeOut(duration: 0.15), value: isFocused)
+        .background(rowBackground)
     }
 
-    private var fillColor: Color {
-        if isFocused { return .white }            // bright focus pill
-        if active { return .white.opacity(0.10) } // current season, subtle
-        return .clear
+    @ViewBuilder
+    private var rowBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        if isFocused {
+            // On-brand frosted-accent focus pill (cheap: one small material pane).
+            ZStack {
+                shape.fill(.ultraThinMaterial)
+                shape.fill(accent.opacity(0.30))
+                shape.fill(LiquidGlass.sheen)
+                shape.strokeBorder(accent.opacity(0.9), lineWidth: 1.5)
+            }
+            .shadow(color: accent.opacity(0.35), radius: 10, y: 4)
+        } else if active {
+            shape.fill(accent.opacity(0.16))
+        } else {
+            Color.clear
+        }
     }
-    private var textColor: Color { isFocused ? .black : .white }
-    private var subColor: Color { isFocused ? .black.opacity(0.6) : .white.opacity(0.62) }
+
+    private var textColor: Color {
+        if isFocused { return .white }
+        if active { return .white }
+        return .white.opacity(0.72)
+    }
+    private var subColor: Color { isFocused ? .white.opacity(0.85) : .white.opacity(0.55) }
 }

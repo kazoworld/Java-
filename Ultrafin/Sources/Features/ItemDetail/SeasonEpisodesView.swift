@@ -37,6 +37,7 @@ struct SeasonEpisodesView: View {
                     onSelectSeason: { id in Task { await selectSeason(id) } },
                     onPlay: play
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
         }
         .padding(edgePadding)
