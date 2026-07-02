@@ -156,12 +156,16 @@ struct MediaCard: View {
                 }
             }
             // A glassy specular sheen sweeps across the art when focused, so a
-            // lit poster catches the light like a pane of glass.
-            .overlay(
-                RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                    .fill(LiquidGlass.sheen)
-                    .opacity(isFocused ? 1 : 0)
-            )
+            // lit poster catches the light like a pane of glass. Built only for
+            // the focused card — an always-present layer at opacity 0 still costs
+            // the compositor across a hundred cards.
+            .overlay {
+                if isFocused {
+                    RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
+                        .fill(LiquidGlass.sheen)
+                        .transition(.opacity)
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
                     .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
@@ -186,8 +190,12 @@ struct MediaCard: View {
         .frame(width: fillWidth ? nil : width)
         .contentShape(Rectangle())
         .animation(.smooth(duration: 0.2), value: isFocused)
-        // Long-press quick actions (touchpad long-press on tvOS) — the fastest
-        // way to tidy a shelf without opening the detail page.
+        #if os(iOS)
+        // Long-press quick actions — the fastest way to tidy a shelf without
+        // opening the detail page. iPhone only: on tvOS a context menu wires
+        // long-press interaction machinery into every cell of every rail, which
+        // measurably drags Home below 60fps (the detail page carries the same
+        // actions there).
         .contextMenu {
             if item.type == .movie || item.type == .episode || item.type == .series {
                 Button { toggleWatched() } label: {
@@ -200,6 +208,7 @@ struct MediaCard: View {
                 }
             }
         }
+        #endif
     }
 
     private func toggleWatched() {

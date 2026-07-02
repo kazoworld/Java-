@@ -56,8 +56,10 @@ struct UltrafinButtonStyle: ButtonStyle {
 }
 
 extension View {
-    /// Convenience for the poster/card focus treatment.
+    /// Convenience for the poster/card focus treatment. No lift shadow: the
+    /// card already draws its own accent glow on focus, and stacking a second
+    /// large blurred shadow per focus move is a real GPU cost across rails.
     func mediaCardButtonStyle() -> some View {
-        buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
+        buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
     }
 }
