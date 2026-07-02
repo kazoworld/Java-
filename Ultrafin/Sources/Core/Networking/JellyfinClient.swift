@@ -189,6 +189,14 @@ actor JellyfinClient {
         try? await get(ServerUser.self, path: "/Users/\(userID)")
     }
 
+    /// Strict, user-scoped token check — throws `.unauthorized` when this token
+    /// can no longer act as `userID`. (Jellyfin revokes a device's previous
+    /// token when the same device signs in as another user, and `/System/Info`
+    /// alone doesn't always catch that.)
+    func requireUserAccess(userID: String) async throws {
+        _ = try await get(ServerUser.self, path: "/Users/\(userID)")
+    }
+
     /// A user's profile image. Served without auth (the server login screen
     /// shows these pre-auth), so it's safe for the shared image loader.
     nonisolated func userImageURL(userID: String, tag: String? = nil, maxWidth: Int = 300) -> URL? {

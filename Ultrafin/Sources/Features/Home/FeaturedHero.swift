@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+#if os(iOS)
+import UIKit
+#endif
 
 /// The "media bar" hero at the top of Home. Its colors come from the **artwork**
 /// (a vivid color sampled from each title's backdrop), not the app theme — so it
@@ -65,6 +68,16 @@ struct FeaturedHero: View {
         .frame(height: heroHeight)
         .frame(maxWidth: .infinity)
         .clipped()
+        #if os(iOS)
+        // Swipe the banner to flip between featured titles (replaces the tvOS
+        // chevron buttons, which don't fit on a phone).
+        .gesture(
+            DragGesture(minimumDistance: 30).onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                advanceManually(value.translation.width < 0 ? 1 : -1)
+            }
+        )
+        #endif
         .onReceive(rotation) { _ in advance() }
         .task {
             await loadColor()
@@ -179,12 +192,12 @@ struct FeaturedHero: View {
     }
 
     private func actions(for current: MediaItem) -> some View {
-        HStack(spacing: Spacing.md) {
+        HStack(spacing: actionSpacing) {
             Button { onPlay(current) } label: {
                 Label("Play", systemImage: "play.fill")
                     .font(.system(size: actionFont, weight: .bold, design: .rounded))
-                    .padding(.horizontal, Spacing.xl)
-                    .padding(.vertical, Spacing.md)
+                    .padding(.horizontal, actionHPadding)
+                    .padding(.vertical, actionVPadding)
                     .background(tint, in: Capsule())
                     .overlay(Capsule().fill(LiquidGlass.sheen))
                     .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.6), lineWidth: 1))
@@ -197,8 +210,9 @@ struct FeaturedHero: View {
             NavigationLink(value: current) {
                 Label("More Info", systemImage: "info.circle")
                     .font(.system(size: actionFont, weight: .semibold, design: .rounded))
-                    .padding(.horizontal, Spacing.xl)
-                    .padding(.vertical, Spacing.md)
+                    .lineLimit(1)
+                    .padding(.horizontal, actionHPadding)
+                    .padding(.vertical, actionVPadding)
                     .glassCapsule()
                     .foregroundStyle(.white)
             }
@@ -207,19 +221,29 @@ struct FeaturedHero: View {
 
             if let onShuffle {
                 Button { onShuffle() } label: {
+                    // Icon-only on the phone — three labeled pills don't fit.
+                    #if os(tvOS)
                     Label("Play Something", systemImage: "shuffle")
                         .font(.system(size: actionFont, weight: .semibold, design: .rounded))
-                        .padding(.horizontal, Spacing.xl)
-                        .padding(.vertical, Spacing.md)
+                        .padding(.horizontal, actionHPadding)
+                        .padding(.vertical, actionVPadding)
                         .glassCapsule()
                         .foregroundStyle(.white)
+                    #else
+                    Image(systemName: "shuffle")
+                        .font(.system(size: actionFont, weight: .semibold))
+                        .padding(actionVPadding + 2)
+                        .glassCircle()
+                        .foregroundStyle(.white)
+                    #endif
                 }
                 .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: true))
                 .focused($focus, equals: .shuffle)
             }
 
-            Spacer()
+            Spacer(minLength: Spacing.sm)
 
+            #if os(tvOS)
             if items.count > 1 {
                 chevron("chevron.left", target: .prev) { advanceManually(-1) }
                 pageDots
@@ -227,6 +251,10 @@ struct FeaturedHero: View {
             } else {
                 pageDots
             }
+            #else
+            // Phone: no chevrons (swipe the banner instead) — just the dots.
+            pageDots
+            #endif
         }
         .padding(.top, Spacing.xs)
         .onChange(of: focus) { _, newValue in isFocused = (newValue != nil) }
@@ -325,7 +353,9 @@ struct FeaturedHero: View {
         #if os(tvOS)
         720
         #else
-        500
+        // Cap to the phone's screen so the banner never dwarfs the display —
+        // roughly the top half, whatever the device size.
+        min(440, UIScreen.main.bounds.height * 0.52)
         #endif
     }
     private var titleSize: CGFloat {
@@ -353,7 +383,28 @@ struct FeaturedHero: View {
         #if os(tvOS)
         28
         #else
-        17
+        15
+        #endif
+    }
+    private var actionSpacing: CGFloat {
+        #if os(tvOS)
+        Spacing.md
+        #else
+        Spacing.sm
+        #endif
+    }
+    private var actionHPadding: CGFloat {
+        #if os(tvOS)
+        Spacing.xl
+        #else
+        Spacing.lg
+        #endif
+    }
+    private var actionVPadding: CGFloat {
+        #if os(tvOS)
+        Spacing.md
+        #else
+        Spacing.sm + 2
         #endif
     }
     private var heroPadding: EdgeInsets {

@@ -10,6 +10,11 @@ struct UltrafinApp: App {
     @State private var appState = AppState()
     @State private var settings = SettingsStore.shared
 
+    #if os(iOS)
+    // Portrait-only app; the video player unlocks rotation while it's up.
+    @UIApplicationDelegateAdaptor(OrientationLock.self) private var orientationLock
+    #endif
+
     init() {
         // Set the audio category up front so the first playback can open the
         // route instantly instead of negotiating it cold.

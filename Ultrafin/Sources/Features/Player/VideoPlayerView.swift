@@ -76,10 +76,22 @@ struct VideoPlayerView: View {
                         // The first frame fades up from black instead of popping —
                         // a clean, cinematic open.
                         .opacity(videoRevealed ? 1 : 0)
-                        #if os(iOS)
-                        .onTapGesture { if controlsVisible { hideControls() } else { revealControls() } }
-                        #endif
                 }
+
+                #if os(iOS)
+                // A dedicated tap layer ABOVE the video (the engine's UIView can
+                // swallow touches, so the gesture can't live on the surface
+                // itself): tap anywhere to summon the controls, tap again on
+                // empty space to tuck them away — same rhythm as the TV version.
+                // Sits below the controls/panels in the ZStack so buttons and
+                // the scrubber still receive their own touches.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        if controlsVisible { hideControls() } else { revealControls() }
+                    }
+                #endif
 
                 // Paused state: once the controls auto-hide, dim the frozen frame
                 // and keep the title showing so it's clearly paused (the title
@@ -243,10 +255,17 @@ struct VideoPlayerView: View {
             AudioSession.activateForPlayback()
             routeKeeper.start()
             scheduleHide()
+            #if os(iOS)
+            // The app is portrait-only, but movies may rotate landscape.
+            OrientationLock.unlockForPlayback()
+            #endif
         }
         .onDisappear {
             routeKeeper.stop()
             model?.stop()
+            #if os(iOS)
+            OrientationLock.lockPortrait()
+            #endif
         }
         .animation(.smooth(duration: 0.25), value: controlsVisible)
         .animation(.smooth(duration: 0.2), value: panel)

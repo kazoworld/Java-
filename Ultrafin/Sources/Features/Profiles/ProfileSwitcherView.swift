@@ -146,6 +146,10 @@ struct ProfileSwitcherView: View {
             .padding(Spacing.lg)
         }
         .scrollClipDisabled()
+        // Pin the rail's height to exactly its content so the scroll view has
+        // nothing to move vertically — a strictly horizontal rail.
+        .frame(height: railHeight)
+        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
     }
 
     private func profileButton(_ user: ServerUser) -> some View {
@@ -193,9 +197,18 @@ struct ProfileSwitcherView: View {
         errorMessage = nil
         guard user.id != session?.userID else { dismiss(); return }
 
-        // 1) A remembered session switches instantly, no typing.
+        // 1) A remembered session switches instantly, no typing. If its token
+        //    was revoked (Jellyfin drops a device's old token when the same
+        //    device signs in as someone else), fall through to a silent re-auth
+        //    for passwordless accounts before ever bothering with a prompt.
         if let saved = savedSession(user) {
-            switchUsing { await appState.switchTo(saved) } fallback: { promptPassword(user) }
+            switchUsing { await appState.switchTo(saved) } fallback: {
+                if user.hasPassword == false {
+                    switchUsing { await authenticate(user: user, password: "") } fallback: { promptPassword(user) }
+                } else {
+                    promptPassword(user)
+                }
+            }
             return
         }
         // 2) Accounts with no password sign in silently.
@@ -338,6 +351,15 @@ struct ProfileSwitcherView: View {
         Spacing.xxl
         #else
         Spacing.xl
+        #endif
+    }
+    /// Avatar + name + "Watching now" + the rail's own padding — nothing more,
+    /// so the horizontal rail has zero vertical slack.
+    private var railHeight: CGFloat {
+        #if os(tvOS)
+        avatarSize + 130
+        #else
+        avatarSize + 100
         #endif
     }
     private var fieldWidth: CGFloat {

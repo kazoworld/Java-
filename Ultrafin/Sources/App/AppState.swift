@@ -81,11 +81,15 @@ final class AppState {
     }
 
     /// Switches to a remembered profile. Returns false when its saved token has
-    /// been revoked (the caller should fall back to a password prompt).
+    /// been revoked (the caller should fall back to re-auth / a password prompt).
     func switchTo(_ session: UserSession) async -> Bool {
         let candidate = JellyfinClient(server: session.server, accessToken: session.accessToken)
         do {
-            try await candidate.checkConnection()
+            // Must be a USER-scoped check: Jellyfin revokes the device's old
+            // token when the same device signs in as another user, and a bare
+            // reachability probe can pass on a revoked token — which used to
+            // "switch" into a session whose every library call then failed.
+            try await candidate.requireUserAccess(userID: session.userID)
         } catch APIError.unauthorized {
             sessionStore.forget(userID: session.userID, serverID: session.server.id)
             return false
