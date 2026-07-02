@@ -155,8 +155,16 @@ struct HomeView: View {
         .ignoresSafeArea()
         .background(AmbientBackground(tint: heroTint))
         #if os(tvOS)
-        // Profile avatar pinned to the top-right corner — tap to switch users.
-        .overlay(alignment: .topTrailing) { profileButton.padding(.top, 46).padding(.trailing, 60) }
+        // Profile avatar pinned to the top-right corner, level with the tab bar.
+        // It's its own focus SECTION so the focus engine can actually route to
+        // it (press right from the tabs, or up-right from the hero) — a bare
+        // floating overlay is unreachable on tvOS.
+        .overlay(alignment: .topTrailing) {
+            profileButton
+                .padding(.top, 46)
+                .padding(.trailing, 60)
+                .focusSection()
+        }
         #else
         .toolbar { ToolbarItem(placement: .topBarTrailing) { profileButton } }
         #endif

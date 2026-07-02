@@ -109,6 +109,9 @@ struct SeriesDetailView: View {
     @State private var artColor: ArtworkColor?
     /// Drives the one-time arrival animation (art settles in, content rises).
     @State private var appeared = false
+    /// Lets the series logo travel smoothly between the hero and the episodes
+    /// header instead of cutting between two copies.
+    @Namespace private var heroNS
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -137,7 +140,7 @@ struct SeriesDetailView: View {
         #if os(tvOS)
         // Back/Menu closes the inline episodes browser first; otherwise the
         // navigation pops as usual (perform: nil restores the default).
-        .onExitCommand(perform: showEpisodes ? { withAnimation(.easeInOut(duration: 0.25)) { showEpisodes = false } } : nil)
+        .onExitCommand(perform: showEpisodes ? { withAnimation(.smooth(duration: 0.5)) { showEpisodes = false } } : nil)
         #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -212,6 +215,7 @@ struct SeriesDetailView: View {
             TitleLogo(logoURL: logoURL(item), title: item.name,
                       fallbackFont: .system(size: titleSize, weight: .heavy, design: .rounded),
                       fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
+                .matchedGeometryEffect(id: "seriesTitle", in: heroNS, isSource: !showEpisodes)
                 .shadow(color: .black.opacity(0.6), radius: 14, y: 4)
 
             DetailBadges(item: item, seasonCount: model.seasons.count, onDark: true)
@@ -253,7 +257,7 @@ struct SeriesDetailView: View {
                 }
             }
             DetailActionRow(icon: "rectangle.stack.fill", title: "Episodes and more") {
-                withAnimation(.easeInOut(duration: 0.3)) { showEpisodes = true }
+                withAnimation(.smooth(duration: 0.5)) { showEpisodes = true }
             }
             DetailActionRow(icon: model.isFavorite ? "checkmark" : "plus",
                             title: model.isFavorite ? "In My List" : "Add to My List") {
@@ -298,17 +302,37 @@ struct SeriesDetailView: View {
     // MARK: - Inline episode browser (fills the hero card area)
 
     private func episodesPanel(_ model: SeriesDetailViewModel) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            Button { withAnimation(.easeInOut(duration: 0.25)) { showEpisodes = false } } label: {
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "chevron.left").font(.system(size: 20, weight: .bold))
-                    Text("Back").font(.system(size: 18, weight: .semibold, design: .rounded))
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            // The show's identity stays on screen: the hero's logo travels here
+            // (matched geometry), shrinking into a header above the episodes so
+            // the two states read as one continuous surface.
+            HStack(alignment: .center, spacing: Spacing.lg) {
+                #if os(iOS)
+                Button { withAnimation(.smooth(duration: 0.45)) { showEpisodes = false } } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .glassCircle(dim: 0.12)
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, Spacing.md).padding(.vertical, Spacing.sm)
-                .glassCapsule(dim: 0.12)
+                .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: false))
+                #endif
+
+                TitleLogo(logoURL: logoURL(model.displayed), title: model.displayed.name,
+                          fallbackFont: .system(size: titleSize * 0.5, weight: .heavy, design: .rounded),
+                          fallbackColor: .white,
+                          maxWidth: logoMaxWidth * 0.55, maxHeight: logoMaxHeight * 0.55)
+                    .matchedGeometryEffect(id: "seriesTitle", in: heroNS, isSource: showEpisodes)
+                    .shadow(color: .black.opacity(0.5), radius: 10, y: 3)
+
+                if model.seasons.count > 1 {
+                    Text("\(model.seasons.count) Seasons")
+                        .font(.system(size: titleSize * 0.32, weight: .semibold, design: .rounded))
+                        .foregroundStyle(UltrafinColors.secondaryText)
+                        .padding(.top, Spacing.xs)
+                }
+                Spacer()
             }
-            .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: false))
 
             SeasonEpisodeBrowser(
                 seriesName: model.displayed.name,
@@ -316,12 +340,13 @@ struct SeriesDetailView: View {
                 selectedSeasonID: model.selectedSeasonID,
                 episodes: model.episodes,
                 currentEpisodeID: model.playTarget?.id,
+                showsTitle: false, // the morphing logo above is the title
                 episodeImageURL: episodeImageURL,
                 onSelectSeason: { id in Task { await model.selectSeason(id) } },
                 onPlay: { play($0) }
             )
-            // Center the browser in the space below the Back button so the block
-            // is balanced rather than top-heavy.
+            // Center the browser in the space below the header so the block is
+            // balanced rather than top-heavy.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

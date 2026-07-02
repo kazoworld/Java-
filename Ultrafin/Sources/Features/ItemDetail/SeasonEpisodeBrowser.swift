@@ -20,6 +20,9 @@ struct SeasonEpisodeBrowser: View {
     let episodes: [MediaItem]
     /// The episode the user is currently on (gets a "Now Viewing" marker), if any.
     var currentEpisodeID: String? = nil
+    /// Hosts that render their own series title (e.g. the morphing logo on the
+    /// series page) pass false to suppress the browser's internal one.
+    var showsTitle: Bool = true
     let episodeImageURL: (MediaItem) -> URL?
     let onSelectSeason: (String) -> Void
     let onPlay: (MediaItem) -> Void
@@ -29,6 +32,9 @@ struct SeasonEpisodeBrowser: View {
     @Environment(\.horizontalSizeClass) private var hSize
     #endif
     @FocusState private var focusedSeason: String?
+    @FocusState private var focusedEpisode: String?
+    /// The one-time landing of focus on the current episode has happened.
+    @State private var didAutoFocus = false
 
     private var accent: Color { settings.theme.accent.color }
     private var multiSeason: Bool { seasons.count > 1 }
@@ -57,14 +63,14 @@ struct SeasonEpisodeBrowser: View {
                 singleSeason
             }
         }
-        .task {
-            // Land focus on the selected season so the remote starts in the list.
-            // (Single-season shows have no season column — the episode list takes
-            // focus on its own.)
-            guard multiSeason else { return }
-            try? await Task.sleep(for: .milliseconds(60))
-            if focusedSeason == nil { focusedSeason = selectedSeasonID }
+    }
+
+    /// The current episode when it's in this season's list, else the first.
+    private var initialEpisodeID: String? {
+        if let currentEpisodeID, episodes.contains(where: { $0.id == currentEpisodeID }) {
+            return currentEpisodeID
         }
+        return episodes.first?.id
     }
 
     // MARK: - Layouts
@@ -81,18 +87,20 @@ struct SeasonEpisodeBrowser: View {
 
     private var singleSeason: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(seriesName)
-                    .font(.system(size: headerSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(UltrafinColors.primaryText)
-                    .lineLimit(1)
-                if let count = seasons.first?.childCount ?? (episodes.isEmpty ? nil : episodes.count), count > 0 {
-                    Text("\(count) Episode\(count == 1 ? "" : "s")")
-                        .font(.system(size: subHeaderSize, weight: .semibold))
-                        .foregroundStyle(UltrafinColors.secondaryText)
+            if showsTitle {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(seriesName)
+                        .font(.system(size: headerSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(UltrafinColors.primaryText)
+                        .lineLimit(1)
+                    if let count = seasons.first?.childCount ?? (episodes.isEmpty ? nil : episodes.count), count > 0 {
+                        Text("\(count) Episode\(count == 1 ? "" : "s")")
+                            .font(.system(size: subHeaderSize, weight: .semibold))
+                            .foregroundStyle(UltrafinColors.secondaryText)
+                    }
                 }
+                .padding(.leading, Spacing.sm)
             }
-            .padding(.leading, Spacing.sm)
             episodeColumn(maxWidth: singleColumnMaxWidth)
         }
         .frame(maxWidth: singleColumnMaxWidth)
@@ -197,6 +205,7 @@ struct SeasonEpisodeBrowser: View {
                         }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: true))
                         .id(episode.id)
+                        .focused($focusedEpisode, equals: episode.id)
                         // Depth of field at the window edges: rows entering or
                         // leaving the viewport recede into a soft blur and fade
                         // instead of being cut by a hard clip line.
@@ -216,6 +225,17 @@ struct SeasonEpisodeBrowser: View {
             // with the focus engine's own scrolling.
             .onChange(of: selectedSeasonID) { _, _ in
                 if let first = episodes.first?.id { proxy.scrollTo(first, anchor: .top) }
+            }
+            // Open with focus on the episode the user is on (or episode 1) —
+            // scrolled into view first so its lazy row exists, then focused.
+            // Runs once; season switches never yank focus back afterwards.
+            .task(id: episodes.first?.id) {
+                guard !didAutoFocus, let target = initialEpisodeID else { return }
+                didAutoFocus = true
+                try? await Task.sleep(for: .milliseconds(80))
+                proxy.scrollTo(target, anchor: .top)
+                try? await Task.sleep(for: .milliseconds(140))
+                focusedEpisode = target
             }
         }
         // A three-row window (two-column / landscape only); compact iPhone
