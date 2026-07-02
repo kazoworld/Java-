@@ -323,7 +323,9 @@ struct VideoPlayerView: View {
                     .frame(width: upNextThumb, height: upNextThumb * 9 / 16)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Up Next · Playing in \(model.timeRemaining)s")
+                    Text(model.autoplayEnabled
+                         ? "Up Next · Playing in \(model.timeRemaining)s"
+                         : "Up Next · Press to play")
                         .font(.system(size: upNextCaption, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.7))
                     Text(upNextTitle(next))

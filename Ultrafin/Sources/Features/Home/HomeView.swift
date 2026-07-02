@@ -67,6 +67,7 @@ struct HomeView: View {
     @State private var model = HomeViewModel()
     @State private var playingItem: MediaItem?
     @State private var revealed = false
+    @State private var showProfiles = false
     /// The featured title's artwork color — tints the ambient background so the
     /// whole screen breathes with what's in the media bar.
     @State private var heroTint: Color?
@@ -153,6 +154,15 @@ struct HomeView: View {
         // to stay within the tvOS title-safe area.
         .ignoresSafeArea()
         .background(AmbientBackground(tint: heroTint))
+        #if os(tvOS)
+        // Profile avatar pinned to the top-right corner — tap to switch users.
+        .overlay(alignment: .topTrailing) { profileButton.padding(.top, 46).padding(.trailing, 60) }
+        #else
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { profileButton } }
+        #endif
+        .fullScreenCoverCompat(isPresented: $showProfiles) {
+            ProfileSwitcherView()
+        }
         .navigationDestination(for: MediaItem.self) { item in
             if item.type == .collectionFolder || item.type == .folder || item.type == .boxSet {
                 LibraryContentsView(library: item)
@@ -193,6 +203,32 @@ struct HomeView: View {
         }
     }
 
+    /// The circular profile avatar in the top-right — opens the Who's Watching
+    /// switcher. Uses the Jellyfin profile picture when set, else a monogram.
+    private var profileButton: some View {
+        Button { showProfiles = true } label: {
+            ProfileAvatar(name: session?.username ?? "?",
+                          imageURL: avatarURL,
+                          size: avatarSize)
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.15, lift: true))
+        .accessibilityLabel("Switch profile")
+    }
+
+    private var avatarURL: URL? {
+        guard let user = appState.currentUser, user.primaryImageTag != nil else { return nil }
+        return appState.client?.userImageURL(userID: user.id, tag: user.primaryImageTag,
+                                             maxWidth: Int(avatarSize * 3))
+    }
+
+    private var avatarSize: CGFloat {
+        #if os(tvOS)
+        64
+        #else
+        34
+        #endif
+    }
+
     /// "Play Something": pick a smart, immediately-playable item — a next-up or
     /// in-progress episode if available, otherwise a random unwatched gem/recent.
     private func playSomething() {
@@ -202,6 +238,11 @@ struct HomeView: View {
         if let pick = primary.randomElement() ?? fallback.randomElement() {
             playingItem = pick
         }
+    }
+
+    /// Applies the "hide watched" preference to a discovery row.
+    private func visible(_ items: [MediaItem]) -> [MediaItem] {
+        settings.hideWatched ? items.filter { !$0.isWatched } : items
     }
 
     /// Renders the content for a configured Home row, or nothing if there's no
@@ -226,20 +267,24 @@ struct HomeView: View {
             // Folded into Continue Watching — no standalone row.
             EmptyView()
         case .recentlyAdded:
-            if !model.latest.isEmpty {
-                MediaRail(title: "Recently Added", items: model.latest, style: .poster)
+            let items = visible(model.latest)
+            if !items.isEmpty {
+                MediaRail(title: "Recently Added", items: items, style: .poster)
             }
         case .recentShows:
-            if !model.recentShows.isEmpty {
-                MediaRail(title: "Recently Added TV Shows", items: model.recentShows, style: .poster)
+            let items = visible(model.recentShows)
+            if !items.isEmpty {
+                MediaRail(title: "Recently Added TV Shows", items: items, style: .poster)
             }
         case .favorites:
+            // Favorites are intentional — never filtered.
             if !model.favorites.isEmpty {
                 MediaRail(title: "Favorites", items: model.favorites, style: .poster)
             }
         case .hiddenGems:
-            if !model.hiddenGems.isEmpty {
-                MediaRail(title: "Hidden Gems", items: model.hiddenGems, style: .poster)
+            let items = visible(model.hiddenGems)
+            if !items.isEmpty {
+                MediaRail(title: "Hidden Gems", items: items, style: .poster)
             }
         case .libraries:
             if !model.libraries.isEmpty {

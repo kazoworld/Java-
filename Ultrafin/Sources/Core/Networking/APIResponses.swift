@@ -21,6 +21,31 @@ struct AuthUser: Decodable {
     }
 }
 
+/// A user account on the server (`/Users`, `/Users/Public`, `/Users/{id}`).
+struct ServerUser: Decodable, Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    /// Tag of the user's profile image, or nil when none is set.
+    let primaryImageTag: String?
+    let hasPassword: Bool?
+    let policy: Policy?
+
+    struct Policy: Decodable, Hashable, Sendable {
+        let isAdministrator: Bool?
+        enum CodingKeys: String, CodingKey { case isAdministrator = "IsAdministrator" }
+    }
+
+    var isAdministrator: Bool { policy?.isAdministrator ?? false }
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+        case name = "Name"
+        case primaryImageTag = "PrimaryImageTag"
+        case hasPassword = "HasPassword"
+        case policy = "Policy"
+    }
+}
+
 /// `/System/Info/Public` — used for server discovery and token validation.
 struct PublicSystemInfo: Decodable {
     let serverName: String?

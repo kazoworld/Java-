@@ -24,8 +24,11 @@ struct RootView: View {
             case .login(let server):
                 LoginView(server: server)
                     .transition(.opacity)
-            case .authenticated:
+            case .authenticated(let session):
                 MainTabView()
+                    // Rebuild the whole tab tree when the profile changes so every
+                    // screen's cached view model reloads as the new user.
+                    .id(session.userID)
                     .transition(.opacity)
             case .connectionLost(let session):
                 ConnectionLostView(session: session)

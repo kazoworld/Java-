@@ -24,7 +24,15 @@ final class AppState {
     /// The live API client for the authenticated session, or `nil` when signed out.
     private(set) var client: JellyfinClient?
 
-    private let sessionStore: SessionStore
+    /// The signed-in user's server record (avatar tag, admin flag) — fetched
+    /// after auth; nil until it arrives.
+    private(set) var currentUser: ServerUser?
+
+    /// True when the signed-in user is a server administrator (drives the
+    /// profile switcher's ability to see every account).
+    var isAdmin: Bool { currentUser?.isAdministrator ?? false }
+
+    let sessionStore: SessionStore
 
     init(sessionStore: SessionStore = .shared) {
         self.sessionStore = sessionStore
@@ -41,6 +49,7 @@ final class AppState {
             try await client.checkConnection()
             self.client = client
             phase = .authenticated(session: session)
+            refreshCurrentUser(session)
         } catch APIError.unauthorized {
             // Server reachable, but the token expired — re-login.
             sessionStore.clear()
@@ -68,12 +77,46 @@ final class AppState {
         self.client = client
         sessionStore.save(session)
         phase = .authenticated(session: session)
+        refreshCurrentUser(session)
+    }
+
+    /// Switches to a remembered profile. Returns false when its saved token has
+    /// been revoked (the caller should fall back to a password prompt).
+    func switchTo(_ session: UserSession) async -> Bool {
+        let candidate = JellyfinClient(server: session.server, accessToken: session.accessToken)
+        do {
+            try await candidate.checkConnection()
+        } catch APIError.unauthorized {
+            sessionStore.forget(userID: session.userID, serverID: session.server.id)
+            return false
+        } catch {
+            return false // unreachable — keep the current session
+        }
+        currentUser = nil
+        client = candidate
+        sessionStore.save(session)
+        phase = .authenticated(session: session)
+        refreshCurrentUser(session)
+        return true
+    }
+
+    /// Fetches the signed-in user's record (avatar tag + admin flag).
+    private func refreshCurrentUser(_ session: UserSession) {
+        Task { [weak self] in
+            guard let self, let client = self.client else { return }
+            let detail = await client.userDetail(userID: session.userID)
+            // Only apply if we're still on the same user (a fast switch could race).
+            if case .authenticated(let current) = self.phase, current.userID == session.userID {
+                self.currentUser = detail
+            }
+        }
     }
 
     func signOut() {
         Task { await client?.reportSessionEnded() }
         sessionStore.clear()
         client = nil
+        currentUser = nil
         phase = .serverConnect
     }
 }

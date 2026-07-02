@@ -32,6 +32,7 @@ struct VideoPlaybackSettingsView: View {
 
             Section {
                 Toggle("Auto-resume", isOn: $settings.playback.autoResume)
+                Toggle("Autoplay next episode", isOn: $settings.autoplayNextEpisode)
                 Picker("Skip interval", selection: $settings.playback.seekInterval) {
                     ForEach([5, 10, 15, 30, 45, 60], id: \.self) { Text("\($0)s").tag($0) }
                 }
@@ -40,6 +41,16 @@ struct VideoPlaybackSettingsView: View {
                 }
             } header: {
                 Text("Playback")
+            } footer: {
+                Text("With autoplay off, the Up Next card still appears over the credits but waits for you to press it.")
+            }
+
+            Section {
+                Toggle("Hide watched from Home", isOn: $settings.hideWatched)
+            } header: {
+                Text("Library")
+            } footer: {
+                Text("Keeps fully-watched titles out of the Recently Added and Hidden Gems rows. Favorites and Continue Watching are never filtered.")
             }
         }
         .glassRows()

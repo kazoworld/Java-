@@ -113,14 +113,24 @@ final class VideoPlayerViewModel {
     /// Seconds left before the current item ends (for the Up Next countdown).
     var timeRemaining: Int { max(0, Int((state.duration - state.currentTime).rounded())) }
 
-    /// Show the "Up Next" card during the last ~25s of an episode that has a
-    /// following one queued (unless the user cancelled autoplay).
+    /// Show the "Up Next" card over the credits of an episode that has a
+    /// following one queued (unless the user dismissed it). When the server has
+    /// detected the outro/credits segment, the card appears exactly as the
+    /// credits start; otherwise it falls back to the last ~25 seconds.
     var showUpNext: Bool {
         guard !autoplayCancelled, currentItem?.type == .episode, nextItem != nil,
               state.duration > 0 else { return false }
         let remaining = state.duration - state.currentTime
-        return remaining > 0 && remaining <= 25
+        guard remaining > 0 else { return false }
+        if let outro = segments.first(where: { $0.kind == .outro }) {
+            return state.currentTime >= outro.start
+        }
+        return remaining <= 25
     }
+
+    /// Whether the episode auto-advances when it ends (Settings → Playback).
+    /// With autoplay off the Up Next card still appears but waits for a click.
+    var autoplayEnabled: Bool { SettingsStore.shared.autoplayNextEpisode }
 
     func cancelAutoplay() { autoplayCancelled = true }
     var seekInterval: Double { Double(settings.seekInterval) }
@@ -362,9 +372,10 @@ final class VideoPlayerViewModel {
     }
 
     /// Called when the current item ends — advance, or report end-of-queue.
-    /// Returns true if it advanced.
+    /// Returns true if it advanced. Respects the autoplay setting: with it off,
+    /// ending an episode never silently rolls into the next one.
     func handlePlaybackEnded() async -> Bool {
-        if autoplayCancelled { return false }
+        if autoplayCancelled || !autoplayEnabled { return false }
         if hasNext {
             await playNext()
             return true

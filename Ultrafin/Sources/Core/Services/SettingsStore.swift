@@ -50,6 +50,18 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(preferEnglishAudio, forKey: Keys.preferEnglishAudio) }
     }
 
+    /// Hide fully-watched titles from the Home discovery rows (Recently Added,
+    /// TV Shows, Hidden Gems) so shelves only show things left to watch.
+    var hideWatched: Bool {
+        didSet { UserDefaults.standard.set(hideWatched, forKey: Keys.hideWatched) }
+    }
+
+    /// When true (default), an episode auto-advances to the next one as its
+    /// credits end; off means the Up Next card still appears but waits for a click.
+    var autoplayNextEpisode: Bool {
+        didSet { UserDefaults.standard.set(autoplayNextEpisode, forKey: Keys.autoplayNextEpisode) }
+    }
+
     private enum Keys {
         static let theme = "settings.theme"
         static let appearance = "settings.appearance"
@@ -62,6 +74,8 @@ final class SettingsStore {
         static let downloads = "settings.downloads"
         static let nextUpFirst = "settings.nextUpFirst"
         static let preferEnglishAudio = "settings.preferEnglishAudio"
+        static let hideWatched = "settings.hideWatched"
+        static let autoplayNextEpisode = "settings.autoplayNextEpisode"
     }
 
     private init() {
@@ -75,6 +89,8 @@ final class SettingsStore {
         downloads = Self.load(Keys.downloads) ?? DownloadPreferences()
         nextUpFirst = UserDefaults.standard.object(forKey: Keys.nextUpFirst) as? Bool ?? true
         preferEnglishAudio = UserDefaults.standard.object(forKey: Keys.preferEnglishAudio) as? Bool ?? true
+        hideWatched = UserDefaults.standard.object(forKey: Keys.hideWatched) as? Bool ?? false
+        autoplayNextEpisode = UserDefaults.standard.object(forKey: Keys.autoplayNextEpisode) as? Bool ?? true
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout

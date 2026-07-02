@@ -135,6 +135,37 @@ actor JellyfinClient {
         _ = try? await perform(request)
     }
 
+    // MARK: - Users & profiles
+
+    /// Every account on the server. `/Users` needs admin rights; everyone else
+    /// falls back to the server's public login list (accounts the server shows
+    /// on its own login screen).
+    func serverUsers() async throws -> [ServerUser] {
+        if let all = try? await get([ServerUser].self, path: "/Users"), !all.isEmpty {
+            return all
+        }
+        return try await get([ServerUser].self, path: "/Users/Public")
+    }
+
+    /// The full record for one user — used for the admin check and avatar tag.
+    func userDetail(userID: String) async -> ServerUser? {
+        try? await get(ServerUser.self, path: "/Users/\(userID)")
+    }
+
+    /// A user's profile image. Served without auth (the server login screen
+    /// shows these pre-auth), so it's safe for the shared image loader.
+    nonisolated func userImageURL(userID: String, tag: String? = nil, maxWidth: Int = 300) -> URL? {
+        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        components.path += "/Users/\(userID)/Images/Primary"
+        var query: [URLQueryItem] = [
+            .init(name: "maxWidth", value: String(maxWidth)),
+            .init(name: "quality", value: "90")
+        ]
+        if let tag { query.append(.init(name: "tag", value: tag)) }
+        components.queryItems = query
+        return components.url
+    }
+
     // MARK: - Libraries & items
 
     /// Top-level libraries ("Views") for the signed-in user.
