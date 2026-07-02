@@ -52,14 +52,24 @@ struct ServerConnectView: View {
             AuthCard {
                 AuthBrand(systemImage: "play.circle.fill",
                           title: "Ultrafin",
-                          subtitle: "Connect to your Jellyfin server to get started.")
+                          subtitle: "Enter your Jellyfin server's address or IP to get started — like 192.168.1.20:8096 or media.example.com.")
 
                 discoverySection
 
-                GlassField(icon: "server.rack", placeholder: "media.example.com",
+                GlassField(icon: "server.rack", placeholder: "192.168.1.20:8096",
                            text: $model.address, keyboard: .url, submitLabel: .go, autofocus: true) {
                     Task { await attemptConnect() }
                 }
+
+                #if os(tvOS)
+                // Typing an IP with the Siri Remote is slow — nudge toward the
+                // iPhone keyboard that pops up automatically.
+                Label("Tip: typing is much faster with your iPhone — a keyboard notification appears when a text field is selected.",
+                      systemImage: "iphone.gen3")
+                    .font(Typography.caption)
+                    .foregroundStyle(UltrafinColors.tertiaryText)
+                    .multilineTextAlignment(.leading)
+                #endif
 
                 if let error = model.errorMessage {
                     Text(error)

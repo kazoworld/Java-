@@ -24,6 +24,12 @@ struct SettingsView: View {
                     SettingsRowLabel(title: "Playback", subtitle: "Engine, video, audio, subtitles",
                                      systemImage: "play.rectangle.fill", tint: .orange)
                 }
+            } header: {
+                // The app's settings motto.
+                Text("Your library, your way.")
+                    .font(.system(size: sloganSize, weight: .semibold, design: .rounded))
+                    .foregroundStyle(settings.theme.accent.color)
+                    .textCase(nil)
             }
 
             Section {
@@ -50,6 +56,14 @@ struct SettingsView: View {
         .background(AmbientBackground())
         .navigationTitle("Settings")
         .tint(settings.theme.accent.color)
+    }
+
+    private var sloganSize: CGFloat {
+        #if os(tvOS)
+        24
+        #else
+        15
+        #endif
     }
 }
 

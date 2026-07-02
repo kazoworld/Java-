@@ -9,6 +9,9 @@ struct RootView: View {
     /// Cold-launch intro overlay; shown once, fades out after its animation
     /// (which also covers the first frames of content loading underneath).
     @State private var showIntro = true
+    /// One-time welcome tour: shown over the app after the very first sign-in
+    /// (the intro overlay fades out above it, revealing page one).
+    @State private var tourComplete = UserDefaults.standard.bool(forKey: "onboarding.tourComplete")
 
     var body: some View {
         ZStack {
@@ -33,6 +36,15 @@ struct RootView: View {
             case .connectionLost(let session):
                 ConnectionLostView(session: session)
                     .transition(.opacity)
+            }
+
+            if case .authenticated = appState.phase, !tourComplete {
+                OnboardingTourView {
+                    UserDefaults.standard.set(true, forKey: "onboarding.tourComplete")
+                    withAnimation(.smooth(duration: 0.45)) { tourComplete = true }
+                }
+                .transition(.opacity)
+                .zIndex(5)
             }
 
             if showIntro {

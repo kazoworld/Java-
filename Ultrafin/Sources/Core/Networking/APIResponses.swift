@@ -21,6 +21,19 @@ struct AuthUser: Decodable {
     }
 }
 
+/// Quick Connect state (`/QuickConnect/Initiate` and `/QuickConnect/Connect`).
+struct QuickConnectResult: Decodable {
+    let secret: String
+    let code: String
+    let authenticated: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case secret = "Secret"
+        case code = "Code"
+        case authenticated = "Authenticated"
+    }
+}
+
 /// A user account on the server (`/Users`, `/Users/Public`, `/Users/{id}`).
 struct ServerUser: Decodable, Identifiable, Hashable, Sendable {
     let id: String

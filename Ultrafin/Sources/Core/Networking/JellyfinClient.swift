@@ -110,6 +110,43 @@ actor JellyfinClient {
         )
     }
 
+    // MARK: - Quick Connect
+
+    /// Starts a Quick Connect attempt: the server hands back a short code the
+    /// user enters in any signed-in Jellyfin app to approve this device.
+    /// (10.9+ expects POST; 10.8 used GET — try both so any server works.)
+    func quickConnectInitiate() async throws -> QuickConnectResult {
+        if let request = try? makeRequest(path: "/QuickConnect/Initiate", method: "POST"),
+           let data = try? await perform(request),
+           let result = try? decoder.decode(QuickConnectResult.self, from: data) {
+            return result
+        }
+        return try await get(QuickConnectResult.self, path: "/QuickConnect/Initiate")
+    }
+
+    /// Polls whether the code has been approved yet.
+    func quickConnectState(secret: String) async throws -> QuickConnectResult {
+        try await get(QuickConnectResult.self, path: "/QuickConnect/Connect",
+                      query: [.init(name: "secret", value: secret)])
+    }
+
+    /// Exchanges an approved Quick Connect secret for a signed-in session.
+    func authenticateWithQuickConnect(secret: String) async throws -> UserSession {
+        let body = try JSONSerialization.data(withJSONObject: ["Secret": secret])
+        let request = try makeRequest(path: "/Users/AuthenticateWithQuickConnect", method: "POST", body: body)
+        let data = try await perform(request)
+        guard let result = try? decoder.decode(AuthenticationResult.self, from: data) else {
+            throw APIError.decoding
+        }
+        accessToken = result.accessToken
+        return UserSession(
+            server: server,
+            userID: result.user.id,
+            username: result.user.name,
+            accessToken: result.accessToken
+        )
+    }
+
     /// Cheap call used on launch to confirm a restored token is still valid.
     func validateSession() async -> Bool {
         do {
