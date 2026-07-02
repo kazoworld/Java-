@@ -78,6 +78,15 @@ final class SettingsStore {
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout
+
+        // One-time migration: dark became the default look. Installs that saved
+        // an appearance blob under the old light default get flipped once; an
+        // explicit choice made after this migration sticks forever.
+        let darkDefaultFlag = "settings.migratedDarkDefault"
+        if !UserDefaults.standard.bool(forKey: darkDefaultFlag) {
+            UserDefaults.standard.set(true, forKey: darkDefaultFlag)
+            if appearance.mode == .light { appearance.mode = .dark }
+        }
     }
 
     // MARK: - Home layout mutations
@@ -129,8 +138,9 @@ struct AppearancePreferences: Codable {
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
     }
-    /// Light by default — the app's airy frosted-glass look is designed for it.
-    var mode: Mode = .light
+    /// Dark by default — the cinematic look the app is designed around (light
+    /// remains a first-class option in Settings → Appearance).
+    var mode: Mode = .dark
 
     /// When false, large hero/parallax animations are disabled for users who
     /// prefer reduced motion or want maximum battery/perf headroom.

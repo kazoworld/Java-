@@ -7,6 +7,7 @@ import SwiftUI
 /// last drill-down), so Home/Library/Settings always open at the top.
 struct MainTabView: View {
     @Environment(AppState.self) private var appState
+    @Environment(SettingsStore.self) private var settings
 
     @State private var selection = 0
     @State private var homePath = NavigationPath()
@@ -40,7 +41,10 @@ struct MainTabView: View {
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             .tag(3)
         }
-        .tint(SettingsStore.shared.theme.accent.color)
+        // Read the accent through the observed environment store so an accent
+        // change in Settings recolors the tab bar live (the static
+        // SettingsStore.shared read didn't re-render).
+        .tint(settings.theme.accent.color)
         .onChange(of: selection) { _, newValue in
             // Reset the selected tab to its root screen.
             switch newValue {

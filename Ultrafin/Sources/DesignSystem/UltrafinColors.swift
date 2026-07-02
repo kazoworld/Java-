@@ -80,16 +80,18 @@ enum UltrafinColors {
 
 /// User-selectable accent colors exposed in Settings.
 enum AccentColor: String, CaseIterable, Identifiable, Codable {
-    case aurora, ember, mint, rose, gold
+    case aurora, ocean, mint, orchid, rose, ember, gold
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .aurora: "Aurora"
-        case .ember: "Ember"
+        case .ocean: "Ocean"
         case .mint: "Mint"
+        case .orchid: "Orchid"
         case .rose: "Rose"
+        case .ember: "Ember"
         case .gold: "Gold"
         }
     }
@@ -97,9 +99,11 @@ enum AccentColor: String, CaseIterable, Identifiable, Codable {
     var color: Color {
         switch self {
         case .aurora: Color(hex: 0x6D8BFF)
-        case .ember: Color(hex: 0xFF6D5A)
+        case .ocean: Color(hex: 0x38BDF8)
         case .mint: Color(hex: 0x3DD9A0)
+        case .orchid: Color(hex: 0xB56DFF) // matches the brand accent gradient
         case .rose: Color(hex: 0xFF6DAE)
+        case .ember: Color(hex: 0xFF6D5A)
         case .gold: Color(hex: 0xFFC857)
         }
     }

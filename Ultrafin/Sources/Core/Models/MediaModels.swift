@@ -111,6 +111,20 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         else { return nil }
         return min(1, Double(played) / Double(total))
     }
+
+    /// Time remaining for an in-progress item, e.g. "24m left" — answers "how
+    /// much of this is left?" at a glance on Continue Watching.
+    var remainingText: String? {
+        guard let played = userData?.playbackPositionTicks, let total = runTimeTicks,
+              total > 0, played > 0, played < total else { return nil }
+        let minutes = Int((total - played) / 600_000_000)
+        guard minutes > 0 else { return nil }
+        let h = minutes / 60, m = minutes % 60
+        return h > 0 ? "\(h)h \(m)m left" : "\(m)m left"
+    }
+
+    /// True when the server has this item marked fully watched.
+    var isWatched: Bool { userData?.played == true }
 }
 
 /// A cast or crew member attached to an item.

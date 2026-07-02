@@ -453,6 +453,7 @@ struct EpisodeRow: View {
     let imageURL: URL?
 
     @Environment(\.isFocused) private var isFocused
+    @Environment(SettingsStore.self) private var settings
 
     static var thumbW: CGFloat {
         #if os(tvOS)
@@ -479,7 +480,7 @@ struct EpisodeRow: View {
                         let barWidth = thumbWidth - Spacing.md * 2
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.black.opacity(0.5))
-                            Capsule().fill(UltrafinColors.accent)
+                            Capsule().fill(settings.theme.accent.color)
                                 .frame(width: max(0, barWidth * progress))
                         }
                         .frame(width: barWidth, height: 4)
@@ -488,7 +489,7 @@ struct EpisodeRow: View {
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                        .strokeBorder(isFocused ? UltrafinColors.accent : UltrafinColors.separator,
+                        .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
                                       lineWidth: isFocused ? 3 : 1)
                 )
 
@@ -497,10 +498,18 @@ struct EpisodeRow: View {
                     .font(.system(size: headlineSize, weight: .bold, design: .rounded))
                     .foregroundStyle(UltrafinColors.primaryText)
                     .lineLimit(1)
-                if let runtime = episode.runtimeText {
-                    Text(runtime)
-                        .font(.system(size: metaSize, weight: .medium))
-                        .foregroundStyle(UltrafinColors.tertiaryText)
+                HStack(spacing: Spacing.sm) {
+                    if let runtime = episode.runtimeText {
+                        Text(runtime)
+                            .font(.system(size: metaSize, weight: .medium))
+                            .foregroundStyle(UltrafinColors.tertiaryText)
+                    }
+                    if episode.isWatched {
+                        Label("Watched", systemImage: "checkmark.circle.fill")
+                            .font(.system(size: metaSize * 0.85, weight: .semibold))
+                            .foregroundStyle(UltrafinColors.secondaryText)
+                            .labelStyle(.titleAndIcon)
+                    }
                 }
                 if let overview = episode.overview, !overview.isEmpty {
                     Text(overview)

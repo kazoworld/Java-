@@ -84,6 +84,14 @@ struct MediaCard: View {
     /// uses a fixed width (for horizontal rails).
     var fillWidth: Bool = false
 
+    // Local overrides so the long-press quick actions reflect instantly on the
+    // card (the server round-trip and the next rail refresh catch up later).
+    @State private var playedOverride: Bool?
+    @State private var favoriteOverride: Bool?
+
+    private var isWatched: Bool { playedOverride ?? item.isWatched }
+    private var isFavorite: Bool { favoriteOverride ?? (item.userData?.isFavorite ?? false) }
+
     // TVs are viewed from across the room, so cards are far larger there than
     // on a phone. Density then scales these bases up/down.
     private var basePosterWidth: CGFloat {
@@ -109,18 +117,42 @@ struct MediaCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous))
 
                 if let progress = item.playbackProgress {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.black.opacity(0.4))
-                            Capsule()
-                                .fill(UltrafinColors.accent)
-                                .frame(width: geo.size.width * progress)
+                    VStack(alignment: .leading, spacing: 3) {
+                        // "24m left" right on the art — answers the question a
+                        // progress bar only hints at.
+                        if let remaining = item.remainingText {
+                            Text(remaining)
+                                .font(.system(size: remainingFontSize, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.8), radius: 3, y: 1)
+                        }
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color.black.opacity(0.4))
+                                Capsule()
+                                    .fill(settings.theme.accent.color)
+                                    .frame(width: geo.size.width * progress)
+                            }
+                            .frame(height: 4)
                         }
                         .frame(height: 4)
                     }
-                    .frame(height: 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Spacing.sm)
                     .padding(.bottom, Spacing.sm)
+                }
+            }
+            // A quiet checkmark chip for anything you've finished, so a shelf
+            // scans at a glance.
+            .overlay(alignment: .topTrailing) {
+                if isWatched && item.playbackProgress == nil {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: watchedIconSize, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(watchedIconSize * 0.45)
+                        .background(settings.theme.accent.color.opacity(0.92), in: Circle())
+                        .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+                        .padding(Spacing.sm)
                 }
             }
             // A glassy specular sheen sweeps across the art when focused, so a
@@ -132,7 +164,7 @@ struct MediaCard: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                    .strokeBorder(isFocused ? UltrafinColors.accent : UltrafinColors.separator,
+                    .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
                                   lineWidth: isFocused ? 3 : 1)
             )
             // A soft accent glow when focused for a premium, lit feel.
@@ -154,6 +186,38 @@ struct MediaCard: View {
         .frame(width: fillWidth ? nil : width)
         .contentShape(Rectangle())
         .animation(.smooth(duration: 0.2), value: isFocused)
+        // Long-press quick actions (touchpad long-press on tvOS) — the fastest
+        // way to tidy a shelf without opening the detail page.
+        .contextMenu {
+            if item.type == .movie || item.type == .episode || item.type == .series {
+                Button { toggleWatched() } label: {
+                    Label(isWatched ? "Mark as Unwatched" : "Mark as Watched",
+                          systemImage: isWatched ? "eye.slash" : "eye")
+                }
+                Button { toggleFavorite() } label: {
+                    Label(isFavorite ? "Remove from My List" : "Add to My List",
+                          systemImage: isFavorite ? "minus.circle" : "plus.circle")
+                }
+            }
+        }
+    }
+
+    private func toggleWatched() {
+        let newValue = !isWatched
+        playedOverride = newValue
+        Haptics.play(.success)
+        guard case .authenticated(let session) = appState.phase,
+              let client = appState.client else { return }
+        Task { await client.setPlayed(itemID: item.id, userID: session.userID, isPlayed: newValue) }
+    }
+
+    private func toggleFavorite() {
+        let newValue = !isFavorite
+        favoriteOverride = newValue
+        Haptics.play(.success)
+        guard case .authenticated(let session) = appState.phase,
+              let client = appState.client else { return }
+        Task { await client.setFavorite(itemID: item.id, userID: session.userID, isFavorite: newValue) }
     }
 
     /// A uniformly-sized, center-cropped artwork box: a fixed-aspect container
@@ -188,6 +252,20 @@ struct MediaCard: View {
         .system(size: 17, weight: .medium)
         #else
         Typography.caption
+        #endif
+    }
+    private var remainingFontSize: CGFloat {
+        #if os(tvOS)
+        16
+        #else
+        11
+        #endif
+    }
+    private var watchedIconSize: CGFloat {
+        #if os(tvOS)
+        14
+        #else
+        10
         #endif
     }
 

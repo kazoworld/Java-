@@ -171,6 +171,13 @@ struct HomeView: View {
         #if os(iOS)
         .navigationTitle("Ultrafin")
         .navigationBarTitleDisplayMode(.large)
+        // Pull to refresh — the natural way to pick up newly-added media without
+        // relaunching (Home otherwise only loads once per session).
+        .refreshable {
+            if let session, let client = appState.client {
+                await model.load(client: client, userID: session.userID, featured: settings.featured)
+            }
+        }
         #endif
         .task {
             guard let session, let client = appState.client else {
