@@ -464,12 +464,12 @@ struct EpisodeRow: View {
     }
     /// The fixed total height of one row (thumbnail + vertical padding), exposed
     /// so the episode list can size its viewport to show a whole number of rows.
-    static var rowHeight: CGFloat { thumbW * 9 / 16 + Spacing.sm * 2 }
+    static var rowHeight: CGFloat { thumbW * 9 / 16 + Spacing.md * 2 }
 
     private var thumbWidth: CGFloat { Self.thumbW }
 
     var body: some View {
-        HStack(alignment: .center, spacing: Spacing.md) {
+        HStack(alignment: .center, spacing: Spacing.lg) {
             RemoteImage(url: imageURL)
                 .frame(width: thumbWidth, height: thumbWidth * 9 / 16)
                 .clipShape(RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous))
@@ -493,21 +493,31 @@ struct EpisodeRow: View {
                                       lineWidth: isFocused ? 3 : 1)
                 )
 
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(episodeHeadline)
+            // A large ghost numeral gives each episode a quiet editorial marker
+            // without cluttering the title line.
+            if let n = episode.indexNumber {
+                Text("\(n)")
+                    .font(.system(size: numeralSize, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white.opacity(isFocused ? 0.42 : 0.22))
+                    .monospacedDigit()
+                    .frame(minWidth: numeralSize * 0.7, alignment: .center)
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.xs + 2) {
+                Text(episode.name)
                     .font(.system(size: headlineSize, weight: .bold, design: .rounded))
                     .foregroundStyle(UltrafinColors.primaryText)
                     .lineLimit(1)
                 HStack(spacing: Spacing.sm) {
                     if let runtime = episode.runtimeText {
                         Text(runtime)
-                            .font(.system(size: metaSize, weight: .medium))
-                            .foregroundStyle(UltrafinColors.tertiaryText)
+                            .font(.system(size: metaSize, weight: .semibold, design: .rounded))
+                            .foregroundStyle(settings.theme.accent.color.opacity(0.9))
                     }
                     if episode.isWatched {
                         Label("Watched", systemImage: "checkmark.circle.fill")
                             .font(.system(size: metaSize * 0.85, weight: .semibold))
-                            .foregroundStyle(UltrafinColors.secondaryText)
+                            .foregroundStyle(UltrafinColors.tertiaryText)
                             .labelStyle(.titleAndIcon)
                     }
                 }
@@ -516,8 +526,8 @@ struct EpisodeRow: View {
                         // Brighter than secondaryText + a little leading: the
                         // synopsis is the hardest thing to read from the couch.
                         .font(.system(size: overviewSize))
-                        .foregroundStyle(.white.opacity(0.82))
-                        .lineSpacing(3)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineSpacing(4)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -530,12 +540,11 @@ struct EpisodeRow: View {
         // a single .frame can't mix the flexible `maxWidth` with a fixed `height`.)
         .frame(maxWidth: .infinity, minHeight: thumbWidth * 9 / 16,
                maxHeight: thumbWidth * 9 / 16, alignment: .leading)
-        .padding(Spacing.sm)
-        // A cheap opaque card (no per-row blur/shadow) so a long list scrolls and
-        // swaps seasons smoothly. The single focus cue is the thumbnail's accent
-        // ring (above) + the row fill brightening; the row border stays a static
-        // hairline (no duplicate accent border), and the button style owns the
-        // one focus animation — no per-row animator competing with it.
+        .padding(Spacing.md)
+        // A cheap opaque card (no per-row material/shadow) so a long list scrolls
+        // and swaps seasons smoothly. The single focus cue is the thumbnail's
+        // accent ring (above) + the row fill brightening; the row border stays a
+        // static hairline, and the button style owns the one focus animation.
         .background(
             RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous)
                 .fill(.white.opacity(isFocused ? 0.12 : 0.05))
@@ -546,16 +555,18 @@ struct EpisodeRow: View {
         )
     }
 
-    private var episodeHeadline: String {
-        if let n = episode.indexNumber { return "\(n). \(episode.name)" }
-        return episode.name
-    }
-
     private var headlineSize: CGFloat {
         #if os(tvOS)
-        30
+        29
         #else
         19
+        #endif
+    }
+    private var numeralSize: CGFloat {
+        #if os(tvOS)
+        44
+        #else
+        26
         #endif
     }
     private var metaSize: CGFloat {

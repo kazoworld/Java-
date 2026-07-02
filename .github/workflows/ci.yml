@@ -24,7 +24,9 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.platform }}
-    runs-on: macos-15
+    # Needs the iOS/tvOS 26 SDKs (the app's deployment target) — macos-15's
+    # Xcode 16 tops out at the 18 SDKs.
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:

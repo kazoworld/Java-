@@ -27,10 +27,14 @@ struct DetailArtBackdrop: View {
                     .mask(horizontalFeather)
                     .mask(verticalFeather)
 
-                // Blend the art into the page at the bottom so the column reads.
+                // Blend the art into the page at the bottom — a tall, eased ramp
+                // (several stops approximating an ease-in) so the picture melts
+                // into the background rather than meeting it on a line.
                 LinearGradient(stops: [
-                    .init(color: .clear, location: landscape ? 0.5 : 0.5),
-                    .init(color: base.opacity(0.85), location: 0.9),
+                    .init(color: .clear, location: 0.42),
+                    .init(color: base.opacity(0.18), location: 0.60),
+                    .init(color: base.opacity(0.48), location: 0.76),
+                    .init(color: base.opacity(0.80), location: 0.89),
                     .init(color: base, location: 1.0)
                 ], startPoint: .top, endPoint: .bottom)
 
@@ -62,39 +66,48 @@ struct DetailArtBackdrop: View {
     }
 
     /// Left↔right feather. Landscape fades the art's left edge into the dark
-    /// column over a wide, gradual band so there's no visible seam; portrait
-    /// just softens the side edges.
+    /// column over a wide, gradual band. The art occupies the right 64% of the
+    /// width (its left edge sits at x≈0.36), so the mask stays FULLY transparent
+    /// until past that edge — otherwise the art pops in at partial opacity and
+    /// reads as a hard vertical cut.
     private var horizontalFeather: LinearGradient {
         if landscape {
             return LinearGradient(stops: [
-                .init(color: .clear, location: 0.20),
-                .init(color: .black.opacity(0.22), location: 0.42),
-                .init(color: .black.opacity(0.7), location: 0.62),
-                .init(color: .black, location: 0.82)
+                .init(color: .clear, location: 0.36),
+                .init(color: .black.opacity(0.08), location: 0.46),
+                .init(color: .black.opacity(0.30), location: 0.58),
+                .init(color: .black.opacity(0.65), location: 0.72),
+                .init(color: .black, location: 0.86)
             ], startPoint: .leading, endPoint: .trailing)
         } else {
             return LinearGradient(stops: [
                 .init(color: .clear, location: 0.0),
-                .init(color: .black, location: 0.07),
-                .init(color: .black, location: 0.93),
+                .init(color: .black, location: 0.10),
+                .init(color: .black, location: 0.90),
                 .init(color: .clear, location: 1.0)
             ], startPoint: .leading, endPoint: .trailing)
         }
     }
 
-    /// Top↕bottom feather, softening both horizontal edges of the art.
+    /// Top↕bottom feather, softening both horizontal edges of the art with a
+    /// long, eased tail at the bottom so the picture dissolves into the page
+    /// instead of ending on a line.
     private var verticalFeather: LinearGradient {
         if landscape {
             return LinearGradient(stops: [
                 .init(color: .clear, location: 0.0),
-                .init(color: .black, location: 0.13),
-                .init(color: .black, location: 0.80),
+                .init(color: .black, location: 0.16),
+                .init(color: .black, location: 0.64),
+                .init(color: .black.opacity(0.55), location: 0.82),
+                .init(color: .black.opacity(0.18), location: 0.93),
                 .init(color: .clear, location: 1.0)
             ], startPoint: .top, endPoint: .bottom)
         } else {
             return LinearGradient(stops: [
                 .init(color: .black, location: 0.0),
-                .init(color: .black, location: 0.45),
+                .init(color: .black, location: 0.38),
+                .init(color: .black.opacity(0.55), location: 0.68),
+                .init(color: .black.opacity(0.2), location: 0.86),
                 .init(color: .clear, location: 1.0)
             ], startPoint: .top, endPoint: .bottom)
         }

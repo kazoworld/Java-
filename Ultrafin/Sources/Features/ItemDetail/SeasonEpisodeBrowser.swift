@@ -178,16 +178,16 @@ struct SeasonEpisodeBrowser: View {
 
     // MARK: - Episode column (right)
 
-    /// Show exactly three episodes at a time; the rest scroll into view one at a
-    /// time as focus moves. (Rows are a fixed height, so this is a clean window.)
+    /// Show three episodes comfortably; the rest scroll into view as focus
+    /// moves. (Rows are a fixed height, so this is a clean window.)
     private var episodeViewportHeight: CGFloat {
-        EpisodeRow.rowHeight * 3 + Spacing.md * 2 + Spacing.sm * 2
+        EpisodeRow.rowHeight * 3 + Spacing.lg * 2 + Spacing.md * 2
     }
 
     private func episodeColumn(maxWidth: CGFloat) -> some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: Spacing.md) {
+                LazyVStack(spacing: Spacing.lg) {
                     ForEach(episodes) { episode in
                         Button { onPlay(episode) } label: {
                             EpisodeRow(episode: episode, imageURL: episodeImageURL(episode))
@@ -197,11 +197,20 @@ struct SeasonEpisodeBrowser: View {
                         }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: true))
                         .id(episode.id)
+                        // Depth of field at the window edges: rows entering or
+                        // leaving the viewport recede into a soft blur and fade
+                        // instead of being cut by a hard clip line.
+                        .scrollTransition(.interactive, axis: .vertical) { content, phase in
+                            content
+                                .opacity(phase.isIdentity ? 1 : 0.25)
+                                .blur(radius: phase.isIdentity ? 0 : 9)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.94)
+                        }
                     }
                 }
                 // Inset so a focused row's lift never clips against the edge.
                 .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, Spacing.sm)
+                .padding(.vertical, Spacing.md)
             }
             // Snap (not animate) to the top on season change so it never competes
             // with the focus engine's own scrolling.
@@ -209,7 +218,7 @@ struct SeasonEpisodeBrowser: View {
                 if let first = episodes.first?.id { proxy.scrollTo(first, anchor: .top) }
             }
         }
-        // A fixed three-row window (two-column / landscape only); compact iPhone
+        // A three-row window (two-column / landscape only); compact iPhone
         // fills naturally.
         .frame(maxWidth: maxWidth)
         .frame(height: useColumns ? episodeViewportHeight : nil)
