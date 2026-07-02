@@ -183,13 +183,18 @@ struct ProfileSwitcherView: View {
 
     // MARK: - Selection
 
+    /// The remembered session for a profile on the current server, if any.
+    private func savedSession(_ user: ServerUser) -> UserSession? {
+        guard let server = session?.server else { return nil }
+        return appState.sessionStore.savedSession(userID: user.id, serverID: server.id)
+    }
+
     private func select(_ user: ServerUser) {
         errorMessage = nil
         guard user.id != session?.userID else { dismiss(); return }
-        guard let server = session?.server else { return }
 
         // 1) A remembered session switches instantly, no typing.
-        if let saved = appState.sessionStore.savedSession(userID: user.id, serverID: server.id) {
+        if let saved = savedSession(user) {
             switchUsing { await appState.switchTo(saved) } fallback: { promptPassword(user) }
             return
         }
