@@ -32,6 +32,10 @@ struct RootView: View {
                     // Rebuild the whole tab tree when the profile changes so every
                     // screen's cached view model reloads as the new user.
                     .id(session.userID)
+                    // While the welcome tour is up, take the app out of the tvOS
+                    // focus engine entirely — otherwise the remote keeps driving
+                    // the hidden UI underneath the overlay.
+                    .disabled(!tourComplete)
                     .transition(.opacity)
             case .connectionLost(let session):
                 ConnectionLostView(session: session)

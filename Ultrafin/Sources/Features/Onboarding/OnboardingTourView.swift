@@ -15,8 +15,10 @@ struct OnboardingTourView: View {
     @State private var revealed = false
     /// Drives the slow, continuous drift of the backdrop blobs.
     @State private var drift = false
-    /// Fills up while the select button is held (the 3-second skip).
-    @State private var holdProgress: CGFloat = 0
+    /// Keeps the remote anchored on the tour's own controls.
+    @FocusState private var focusedControl: Control?
+
+    private enum Control: Hashable { case next, skip }
 
     private struct TourPage {
         let icon: String
@@ -67,6 +69,7 @@ struct OnboardingTourView: View {
                 progressDots
                 controls
             }
+            .frame(maxWidth: .infinity) // keep every page dead-center
             .padding(edgePadding)
         }
         .animation(.smooth(duration: 0.55), value: page)
@@ -76,12 +79,17 @@ struct OnboardingTourView: View {
             try? await Task.sleep(for: .milliseconds(60))
             withAnimation { revealed = true }
         }
-        .onAppear {
+        .task {
             withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) {
                 drift = true
             }
+            // Land the remote on Continue once the overlay is up (the app behind
+            // is disabled while the tour shows, so focus stays in the tour).
+            try? await Task.sleep(for: .milliseconds(120))
+            if focusedControl == nil { focusedControl = .next }
         }
         #if os(tvOS)
+        .focusSection()
         .onExitCommand { finish() } // Menu also skips
         #endif
     }
@@ -185,32 +193,24 @@ struct OnboardingTourView: View {
                     .background {
                         Capsule().fill(current.tint.gradient)
                         Capsule().fill(LiquidGlass.sheen)
-                        // The hold-to-skip fill sweeping across the button.
-                        if holdProgress > 0 {
-                            GeometryReader { geo in
-                                Capsule().fill(.white.opacity(0.35))
-                                    .frame(width: geo.size.width * holdProgress)
-                            }
-                        }
                     }
                     .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.6), lineWidth: 1))
                     .shadow(color: current.tint.opacity(0.45), radius: 16, y: 8)
             }
             .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: true))
+            .focused($focusedControl, equals: .next)
             // Hold select for 3 seconds (while this button is focused) to skip
-            // the whole tour, with a visible progress sweep filling the button.
-            .onLongPressGesture(minimumDuration: 3) {
-                finish()
-            } onPressingChanged: { pressing in
-                withAnimation(pressing ? .linear(duration: 3) : .smooth(duration: 0.25)) {
-                    holdProgress = pressing ? 1 : 0
-                }
-            }
+            // the whole tour. A *simultaneous* gesture so it never swallows the
+            // button's normal press.
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 3).onEnded { _ in finish() }
+            )
 
             Button("Skip") { finish() }
                 .font(.system(size: buttonFont * 0.75, weight: .semibold, design: .rounded))
                 .foregroundStyle(UltrafinColors.secondaryText)
                 .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
+                .focused($focusedControl, equals: .skip)
 
             #if os(tvOS)
             Text("Hold the select button for 3 seconds to skip")
