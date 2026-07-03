@@ -197,7 +197,9 @@ struct VideoPlayerView: View {
                         onSeekProgress: { model.seek(toProgress: $0); resetHide() },
                         onNext: { Task { await model.playNext() }; resetHide() },
                         onPrevious: { Task { await model.playPrevious() }; resetHide() },
-                        onToggleCaptions: { model.toggleCaptions(); resetHide() }
+                        onToggleCaptions: { model.toggleCaptions(); resetHide() },
+                        onClose: { close() },
+                        onInteract: { resetHide() }
                     )
                     .transition(.opacity)
                 }

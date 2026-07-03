@@ -16,6 +16,11 @@ struct PlayerControlsView: View {
     let onNext: () -> Void
     let onPrevious: () -> Void
     let onToggleCaptions: () -> Void
+    /// Dismiss the player (the X button on iOS; tvOS uses the Menu button).
+    let onClose: () -> Void
+    /// Any live interaction (e.g. mid-drag scrubbing) — the host restarts its
+    /// auto-hide timer so the controls never vanish under the user's finger.
+    let onInteract: () -> Void
 
     @Environment(SettingsStore.self) private var settings
     @FocusState private var panelFocus: Int?
@@ -77,6 +82,19 @@ struct PlayerControlsView: View {
 
     private var topBar: some View {
         HStack(alignment: .top) {
+            #if os(iOS)
+            // The way home: tvOS has the Menu button, the phone needs an X.
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .glassCircle(dim: 0.25)
+            }
+            .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
+            .padding(.trailing, Spacing.sm)
+            #endif
+
             VStack(alignment: .leading, spacing: 4) {
                 TitleLogo(logoURL: model.titleLogoURL, title: titlePrimary,
                           fallbackFont: .system(size: titleSize, weight: .bold, design: .rounded),
@@ -236,7 +254,10 @@ struct PlayerControlsView: View {
                  buffered: bufferedFraction,
                  trickplay: model.trickplaySource,
                  duration: model.state.duration,
-                 onScrubChanged: { isScrubbing = true; scrubProgress = $0 },
+                 // onInteract keeps the auto-hide timer at bay for every drag
+                 // movement — otherwise the controls (and the gesture with
+                 // them) vanish mid-scrub.
+                 onScrubChanged: { isScrubbing = true; scrubProgress = $0; onInteract() },
                  onScrubEnded: { onSeekProgress($0); isScrubbing = false })
         #endif
     }
@@ -669,7 +690,9 @@ private struct Scrubber: View {
                     }
             )
         }
-        .frame(height: 34)
+        // A finger-sized touch strip — a 34pt target was easy to miss, and a
+        // miss fell through to the tap layer and hid the controls entirely.
+        .frame(height: 48)
     }
 }
 #endif
