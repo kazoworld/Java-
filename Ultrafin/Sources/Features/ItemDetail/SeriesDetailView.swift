@@ -144,6 +144,9 @@ struct SeriesDetailView: View {
         #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        // While the episode browser is open, its own glass chevron is the back
+        // control — hide the system one so there aren't two stacked chevrons.
+        .navigationBarBackButtonHidden(showEpisodes)
         #endif
         .task { await loadIfNeeded() }
         .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
@@ -189,6 +192,11 @@ struct SeriesDetailView: View {
                     episodesPanel(model)
                         .padding(.horizontal, edgePadding)
                         .padding(.vertical, edgePadding * 0.6)
+                        #if os(iOS)
+                        // The page ignores safe areas for the art — the episodes
+                        // header must still clear the status bar / Dynamic Island.
+                        .padding(.top, 48)
+                        #endif
                         .transition(.opacity)
                 } else {
                     contentColumn(model)
@@ -205,7 +213,9 @@ struct SeriesDetailView: View {
                 }
             }
         }
-        .frame(height: landscape ? screen.height : screen.height * 0.74)
+        // Portrait gives the hero ~3/4 of the screen; the episode browser gets
+        // the full height so the list isn't squeezed into the hero's box.
+        .frame(height: landscape || showEpisodes ? screen.height : screen.height * 0.74)
     }
 
     @ViewBuilder
@@ -484,7 +494,7 @@ struct EpisodeRow: View {
         #if os(tvOS)
         300
         #else
-        160
+        136
         #endif
     }
     /// The fixed total height of one row (thumbnail + vertical padding), exposed
@@ -494,6 +504,83 @@ struct EpisodeRow: View {
     private var thumbWidth: CGFloat { Self.thumbW }
 
     var body: some View {
+        #if os(tvOS)
+        tvRow
+        #else
+        mobileRow
+        #endif
+    }
+
+    // MARK: - Phone layout
+
+    /// The Netflix-style mobile row: thumbnail with the title and meta beside
+    /// it, and the synopsis breathing across the full width underneath — no
+    /// boxed card, no fixed height, nothing fighting for the narrow screen.
+    #if !os(tvOS)
+    private var mobileRow: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.md) {
+                RemoteImage(url: imageURL)
+                    .frame(width: thumbWidth, height: thumbWidth * 9 / 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(alignment: .bottom) {
+                        if let progress = episode.playbackProgress {
+                            let barWidth = thumbWidth - Spacing.md * 2
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color.black.opacity(0.5))
+                                Capsule().fill(settings.theme.accent.color)
+                                    .frame(width: max(0, barWidth * progress))
+                            }
+                            .frame(width: barWidth, height: 3)
+                            .padding(.bottom, 6)
+                        }
+                    }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mobileHeadline)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(UltrafinColors.primaryText)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    HStack(spacing: Spacing.sm) {
+                        if let runtime = episode.runtimeText {
+                            Text(runtime)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(settings.theme.accent.color.opacity(0.9))
+                        }
+                        if episode.isWatched {
+                            Label("Watched", systemImage: "checkmark.circle.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(UltrafinColors.tertiaryText)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            if let overview = episode.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineSpacing(2)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, Spacing.sm)
+        .contentShape(Rectangle())
+    }
+
+    private var mobileHeadline: String {
+        if let n = episode.indexNumber { return "\(n). \(episode.name)" }
+        return episode.name
+    }
+    #endif
+
+    // MARK: - TV layout
+
+    private var tvRow: some View {
         HStack(alignment: .center, spacing: Spacing.lg) {
             RemoteImage(url: imageURL)
                 .frame(width: thumbWidth, height: thumbWidth * 9 / 16)

@@ -199,22 +199,16 @@ struct SeasonEpisodeBrowser: View {
                     ForEach(episodes) { episode in
                         Button { onPlay(episode) } label: {
                             EpisodeRow(episode: episode, imageURL: episodeImageURL(episode))
-                                .overlay(alignment: .topTrailing) {
+                                // The badge sits on the thumbnail's corner where
+                                // it can't cover the episode title.
+                                .overlay(alignment: .topLeading) {
                                     if episode.id == currentEpisodeID { nowViewingBadge }
                                 }
                         }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: true))
                         .id(episode.id)
                         .focused($focusedEpisode, equals: episode.id)
-                        // Depth of field at the window edges: rows entering or
-                        // leaving the viewport recede into a soft blur and fade
-                        // instead of being cut by a hard clip line.
-                        .scrollTransition(.interactive, axis: .vertical) { content, phase in
-                            content
-                                .opacity(phase.isIdentity ? 1 : 0.25)
-                                .blur(radius: phase.isIdentity ? 0 : 9)
-                                .scaleEffect(phase.isIdentity ? 1 : 0.94)
-                        }
+                        .episodeEdgeBlur()
                     }
                 }
                 // Inset so a focused row's lift never clips against the edge.
@@ -250,7 +244,7 @@ struct SeasonEpisodeBrowser: View {
             .foregroundStyle(.white)
             .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
             .background(accent, in: Capsule())
-            .padding(Spacing.sm)
+            .padding(Spacing.md)
     }
 
     // MARK: - Metrics
@@ -373,4 +367,24 @@ private struct SeasonRowLabel: View {
         return .white.opacity(0.72)
     }
     private var subColor: Color { isFocused ? .white.opacity(0.85) : .white.opacity(0.55) }
+}
+
+private extension View {
+    /// Depth of field at the episode window's edges — rows entering or leaving
+    /// the viewport recede into a soft blur instead of hitting a hard clip line.
+    /// tvOS only: it's tuned to the fixed three-row focus window; on a phone's
+    /// free-scrolling full-height list the mid-screen blur just reads as broken.
+    @ViewBuilder
+    func episodeEdgeBlur() -> some View {
+        #if os(tvOS)
+        self.scrollTransition(.interactive, axis: .vertical) { content, phase in
+            content
+                .opacity(phase.isIdentity ? 1 : 0.25)
+                .blur(radius: phase.isIdentity ? 0 : 9)
+                .scaleEffect(phase.isIdentity ? 1 : 0.94)
+        }
+        #else
+        self
+        #endif
+    }
 }
