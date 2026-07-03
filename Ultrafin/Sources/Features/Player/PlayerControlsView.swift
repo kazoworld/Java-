@@ -83,7 +83,12 @@ struct PlayerControlsView: View {
                           fallbackColor: .white, maxWidth: logoMaxWidth, maxHeight: logoMaxHeight)
                     .shadow(color: .black.opacity(0.5), radius: 10, y: 3)
                 if let sub = titleSecondary {
-                    Text(sub).font(Typography.caption).foregroundStyle(.white.opacity(0.75))
+                    // Big enough to read from the couch — this is the episode
+                    // identifier, not a footnote.
+                    Text(sub)
+                        .font(.system(size: subtitleSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
                 }
             }
             Spacer()
@@ -543,6 +548,13 @@ struct PlayerControlsView: View {
         34
         #else
         18
+        #endif
+    }
+    private var subtitleSize: CGFloat {
+        #if os(tvOS)
+        24
+        #else
+        14
         #endif
     }
     private var buttonSize: CGFloat {

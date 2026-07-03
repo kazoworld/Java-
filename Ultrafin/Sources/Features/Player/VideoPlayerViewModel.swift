@@ -158,6 +158,14 @@ final class VideoPlayerViewModel {
         return prefix.isEmpty ? item.name : "\(prefix) - \(item.name)"
     }
 
+    /// A brief synopsis of what's playing (episode or movie), for the paused
+    /// overlay. Prefers the full detail record when it has arrived.
+    var displayOverview: String? {
+        let text = currentDetail?.overview ?? currentItem?.overview
+        guard let text, !text.isEmpty else { return nil }
+        return text
+    }
+
     /// Logo art for the title bar — the item's own logo (movies) or the parent
     /// series logo (episodes), matching the magical look of the Home hero.
     var titleLogoURL: URL? {

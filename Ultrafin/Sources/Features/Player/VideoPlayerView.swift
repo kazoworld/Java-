@@ -281,19 +281,36 @@ struct VideoPlayerView: View {
         ZStack {
             Color.black.opacity(0.55).ignoresSafeArea()
             // Same title block, same place as the top bar shown when playing, so
-            // it doesn't jump when you pause.
-            VStack(alignment: .leading, spacing: 4) {
+            // it doesn't jump when you pause — followed by the episode name and
+            // a brief synopsis, sized to read from the couch.
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 TitleLogo(logoURL: model.titleLogoURL, title: model.displayTitle,
                           fallbackFont: .system(size: pausedTitleSize, weight: .bold, design: .rounded),
                           fallbackColor: .white, maxWidth: pausedLogoWidth, maxHeight: pausedLogoHeight)
                     .shadow(color: .black.opacity(0.55), radius: 12, y: 3)
+
                 if let sub = model.displaySubtitle {
-                    Text(sub).font(Typography.caption).foregroundStyle(.white.opacity(0.75))
+                    Text(sub)
+                        .font(.system(size: pausedSubtitleSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
                 }
+
+                if let overview = model.displayOverview {
+                    Text(overview)
+                        .font(.system(size: pausedOverviewSize))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineSpacing(4)
+                        .lineLimit(3)
+                        .frame(maxWidth: pausedTextWidth, alignment: .leading)
+                        .shadow(color: .black.opacity(0.5), radius: 5, y: 2)
+                        .padding(.top, 2)
+                }
+
                 Label("Paused", systemImage: "pause.fill")
-                    .font(Typography.caption)
+                    .font(.system(size: pausedSubtitleSize * 0.85, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.55))
-                    .padding(.top, Spacing.xs)
+                    .padding(.top, Spacing.sm)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(pausedPadding)
@@ -306,6 +323,27 @@ struct VideoPlayerView: View {
         34
         #else
         18
+        #endif
+    }
+    private var pausedSubtitleSize: CGFloat {
+        #if os(tvOS)
+        26
+        #else
+        15
+        #endif
+    }
+    private var pausedOverviewSize: CGFloat {
+        #if os(tvOS)
+        23
+        #else
+        14
+        #endif
+    }
+    private var pausedTextWidth: CGFloat {
+        #if os(tvOS)
+        980
+        #else
+        360
         #endif
     }
     private var pausedLogoWidth: CGFloat {
