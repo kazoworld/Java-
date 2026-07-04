@@ -56,6 +56,11 @@ struct ItemDetailView: View {
                 VideoPlayerView(item: displayed, userID: session.userID, resume: resumePlayback)
             }
         }
+        // Coming back from playback: re-pull the detail so Resume/Restart and
+        // the progress bar reflect where you actually left off.
+        .onChange(of: presentPlayer) { _, showing in
+            if !showing { Task { await load() } }
+        }
         .fullScreenCoverCompat(isPresented: $showEpisodes) {
             SeasonEpisodesView(episode: displayed)
         }

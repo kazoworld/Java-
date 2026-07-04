@@ -50,6 +50,19 @@ struct SeasonEpisodesView: View {
                 VideoPlayerView(queue: request.queue, startIndex: request.index, userID: session.userID)
             }
         }
+        // Coming back from playback: refresh the season so progress bars and
+        // watched checks reflect the session that just ended.
+        .onChange(of: playback?.id) { _, current in
+            guard current == nil, let sid = selectedSeasonID else { return }
+            Task {
+                guard let session, let client = appState.client,
+                      let seriesID = episode.seriesId else { return }
+                if let eps = try? await client.episodes(seriesID: seriesID, seasonID: sid, userID: session.userID) {
+                    episodesBySeason = [sid: eps]
+                    episodes = eps
+                }
+            }
+        }
         #if os(tvOS)
         .onExitCommand { dismiss() }
         #endif

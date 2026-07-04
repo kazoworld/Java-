@@ -495,4 +495,34 @@ actor JellyfinClient {
         else { return }
         _ = try? await perform(request)
     }
+
+    /// Registers the play session with the server when playback begins, so the
+    /// progress/stop reports that follow are treated as authoritative.
+    func reportPlaybackStarted(itemID: String, positionTicks: Int64, playSessionID: String?) async {
+        let payload: [String: Any] = [
+            "ItemId": itemID,
+            "PositionTicks": positionTicks,
+            "PlaySessionId": playSessionID ?? "",
+            "CanSeek": true
+        ]
+        guard let body = try? JSONSerialization.data(withJSONObject: payload),
+              let request = try? makeRequest(path: "/Sessions/Playing", method: "POST", body: body)
+        else { return }
+        _ = try? await perform(request)
+    }
+
+    /// The definitive "user left playback here" report — Jellyfin persists the
+    /// resume position from this immediately (a paused progress post doesn't
+    /// carry the same weight).
+    func reportPlaybackStopped(itemID: String, positionTicks: Int64, playSessionID: String?) async {
+        let payload: [String: Any] = [
+            "ItemId": itemID,
+            "PositionTicks": positionTicks,
+            "PlaySessionId": playSessionID ?? ""
+        ]
+        guard let body = try? JSONSerialization.data(withJSONObject: payload),
+              let request = try? makeRequest(path: "/Sessions/Playing/Stopped", method: "POST", body: body)
+        else { return }
+        _ = try? await perform(request)
+    }
 }

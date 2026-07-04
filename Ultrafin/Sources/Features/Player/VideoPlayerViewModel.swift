@@ -214,7 +214,7 @@ final class VideoPlayerViewModel {
         await reportStopped()
         queue = browseEpisodes
         index = idx
-        await loadCurrent(startAt: resumeSeconds())
+        await loadCurrent(startAt: await freshResumeSeconds())
     }
 
     // MARK: - Lifecycle
@@ -227,7 +227,20 @@ final class VideoPlayerViewModel {
             onToggle: { [weak self] in self?.togglePlayPause() },
             onSeek: { [weak self] in self?.engine?.seek(to: $0) }
         )
-        await loadCurrent(startAt: resumeSeconds())
+        await loadCurrent(startAt: await freshResumeSeconds())
+    }
+
+    /// The authoritative resume position, fetched from the server at playback
+    /// start. The item handed in by the launching screen carries userData as old
+    /// as that screen — resuming from it lands wherever the page was when it
+    /// loaded, not where you actually left off.
+    private func freshResumeSeconds() async -> Double {
+        guard resumeEnabled, let item = currentItem else { return 0 }
+        if let detail = await client.playbackDetail(itemID: item.id, userID: userID)?.item,
+           let ticks = detail.userData?.playbackPositionTicks {
+            return ticks > 0 ? Double(ticks) / 10_000_000.0 : 0
+        }
+        return resumeSeconds() // offline/stale fallback
     }
 
     /// Pushes the current title + play/pause state to the system Now Playing
@@ -273,6 +286,12 @@ final class VideoPlayerViewModel {
             revision += 1
             engine.load(url: resolution.streamURL, startAt: seconds)
             engine.play()
+            // Register the play session so progress/stop reports stick.
+            Task {
+                await client.reportPlaybackStarted(itemID: item.id,
+                                                   positionTicks: Int64(seconds * 10_000_000),
+                                                   playSessionID: resolution.playSessionID)
+            }
             // Intro/outro segments for the Skip Intro button (best-effort).
             segments = await client.mediaSegments(itemID: item.id)
         } catch {
@@ -517,8 +536,10 @@ final class VideoPlayerViewModel {
     private func reportStopped() async {
         guard let item = currentItem else { return }
         let ticks = Int64(state.currentTime * 10_000_000)
-        await client.reportPlaybackProgress(
-            itemID: item.id, positionTicks: ticks, isPaused: true, playSessionID: resolution?.playSessionID
+        // A real Stopped report — the server persists the resume position from
+        // this immediately (a paused progress post doesn't carry that weight).
+        await client.reportPlaybackStopped(
+            itemID: item.id, positionTicks: ticks, playSessionID: resolution?.playSessionID
         )
     }
 }

@@ -61,6 +61,24 @@ final class SeriesDetailViewModel {
         isLoading = false
     }
 
+    /// Re-pulls watch state after the player closes: the smart Play target (its
+    /// label/resume position), the displayed detail, and the selected season's
+    /// episodes so their progress bars are current. Cached seasons are dropped —
+    /// their progress is stale now too.
+    func refresh() async {
+        async let detailTask = try? client.itemDetail(series.id, userID: userID)
+        async let nextTask = try? client.nextUp(seriesID: series.id, userID: userID)
+        if let fresh = await detailTask { detail = fresh }
+        if let next = await nextTask { playTarget = next }
+        episodesBySeason = [:]
+        if let sid = selectedSeasonID,
+           let eps = try? await client.episodes(seriesID: series.id, seasonID: sid, userID: userID) {
+            episodesBySeason[sid] = eps
+            episodes = eps
+        }
+        if playTarget == nil { playTarget = episodes.first }
+    }
+
     func selectSeason(_ id: String) async {
         guard id != selectedSeasonID else { return }
         selectedSeasonID = id
@@ -156,6 +174,11 @@ struct SeriesDetailView: View {
                 VideoPlayerView(queue: request.queue, startIndex: request.index,
                                 userID: session.userID, resume: request.resume)
             }
+        }
+        // Coming back from playback: re-pull watch state so the Play button's
+        // label/resume and every episode progress bar reflect where you left off.
+        .onChange(of: playback?.id) { _, current in
+            if current == nil { Task { await model?.refresh() } }
         }
         .toast($toast)
     }

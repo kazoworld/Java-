@@ -58,6 +58,15 @@ final class HomeViewModel {
             errorMessage = "Couldn't load your library."
         }
     }
+
+    /// Light refresh after playback ends: just the rows whose watch state moved
+    /// (Continue Watching / Next Up), with no loading skeletons.
+    func refreshContinueWatching(client: JellyfinClient, userID: String) async {
+        async let resumeTask = try? client.resumeItems(userID: userID)
+        async let comingTask = try? client.nextUp(userID: userID)
+        if let fresh = await resumeTask { resume = fresh }
+        if let fresh = await comingTask { comingUp = fresh }
+    }
 }
 
 /// Home dashboard: continue watching, recently added, and library shortcuts.
@@ -185,6 +194,12 @@ struct HomeView: View {
                 VideoPlayerView(item: item, userID: session.userID,
                                 resume: settings.playback.autoResume)
             }
+        }
+        // Coming back from playback: quietly refresh Continue Watching / Next Up
+        // so the row shows the position the session just reported.
+        .onChange(of: playingItem?.id) { _, current in
+            guard current == nil, let session, let client = appState.client else { return }
+            Task { await model.refreshContinueWatching(client: client, userID: session.userID) }
         }
         #if os(iOS)
         .navigationTitle("Ultrafin")
