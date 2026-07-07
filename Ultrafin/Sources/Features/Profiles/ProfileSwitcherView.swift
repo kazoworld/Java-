@@ -155,10 +155,12 @@ struct ProfileSwitcherView: View {
         }
         .scrollClipDisabled()
         // A strictly horizontal rail: tall enough that the content never
-        // overflows the frame, and vertical bounce is off entirely — dragging a
-        // finger over the avatars must not rubber-band them up and down.
+        // overflows the frame, so .basedOnSize resolves to no vertical bounce —
+        // dragging a finger over the avatars must not rubber-band them up/down.
+        // (ScrollBounceBehavior has no .never; content-fits + basedOnSize is
+        // the supported way to kill an axis's bounce.)
         .frame(height: railHeight)
-        .scrollBounceBehavior(.never, axes: .vertical)
+        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
     }
 
     private func profileButton(_ user: ServerUser) -> some View {
