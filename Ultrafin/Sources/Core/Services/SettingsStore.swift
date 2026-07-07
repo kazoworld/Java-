@@ -248,25 +248,109 @@ struct SubtitlePreferences: Codable {
     var captionMode: CaptionMode = .off
 
     enum Size: String, Codable, CaseIterable, Identifiable {
-        case small, medium, large
+        case small, medium, large, huge
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
-        /// VLC text-scale percentage.
-        var scalePercent: Int { switch self { case .small: 75; case .medium: 100; case .large: 150 } }
+        /// VLC text-scale / AVPlayer relative-size percentage.
+        var scalePercent: Int {
+            switch self { case .small: 75; case .medium: 100; case .large: 150; case .huge: 200 }
+        }
     }
     var size: Size = .medium
 
     enum TextColor: String, Codable, CaseIterable, Identifiable {
-        case white, yellow
+        case white, yellow, cyan, green, orange
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
         /// VLC RGB integer.
-        var vlcColor: Int { switch self { case .white: 16_777_215; case .yellow: 16_776_960 } }
+        var vlcColor: Int {
+            switch self {
+            case .white: 0xFFFFFF
+            case .yellow: 0xFFFF00
+            case .cyan: 0x00FFFF
+            case .green: 0x00FF00
+            case .orange: 0xFFA500
+            }
+        }
+        /// AVPlayer text-markup ARGB components (0–1).
+        var argb: [NSNumber] {
+            let rgb = vlcColor
+            return [1,
+                    NSNumber(value: Double((rgb >> 16) & 0xFF) / 255),
+                    NSNumber(value: Double((rgb >> 8) & 0xFF) / 255),
+                    NSNumber(value: Double(rgb & 0xFF) / 255)]
+        }
+        /// Swatch/preview color.
+        var color: Color {
+            switch self {
+            case .white: .white
+            case .yellow: Color(hex: 0xFFFF00)
+            case .cyan: Color(hex: 0x00FFFF)
+            case .green: Color(hex: 0x00FF00)
+            case .orange: Color(hex: 0xFFA500)
+            }
+        }
     }
     var textColor: TextColor = .white
 
+    /// The caption typeface — three distinct voices.
+    enum CaptionFont: String, Codable, CaseIterable, Identifiable {
+        case standard, serif, typewriter
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .standard: "Standard"
+            case .serif: "Serif"
+            case .typewriter: "Typewriter"
+            }
+        }
+        /// Family name for both VLC freetype and AVPlayer text-markup rules.
+        var fontName: String {
+            switch self {
+            case .standard: "Helvetica Neue"
+            case .serif: "Georgia"
+            case .typewriter: "Courier New"
+            }
+        }
+        /// Preview font for the settings screen.
+        func previewFont(size: CGFloat, bold: Bool) -> Font {
+            .custom(fontName, size: size).weight(bold ? .bold : .regular)
+        }
+    }
+    var font: CaptionFont = .standard
+
+    /// Optional black box behind the text for busy scenes.
+    enum Background: String, Codable, CaseIterable, Identifiable {
+        case off, box
+        var id: String { rawValue }
+        var label: String { self == .off ? "None" : "Black box" }
+    }
+    var background: Background = .off
+
+    var boldText: Bool = false
+
     /// Preferred subtitle language (ISO code), or empty for none/auto.
     var preferredLanguage: String = ""
+
+    init() {}
+
+    // Tolerant decoding: fields added in newer versions fall back to their
+    // defaults instead of failing the whole blob (which would silently reset
+    // every subtitle preference on update).
+    enum CodingKeys: String, CodingKey {
+        case captionMode, size, textColor, font, background, boldText, preferredLanguage
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        captionMode = (try? c.decodeIfPresent(CaptionMode.self, forKey: .captionMode)) ?? .off
+        size = (try? c.decodeIfPresent(Size.self, forKey: .size)) ?? .medium
+        textColor = (try? c.decodeIfPresent(TextColor.self, forKey: .textColor)) ?? .white
+        font = (try? c.decodeIfPresent(CaptionFont.self, forKey: .font)) ?? .standard
+        background = (try? c.decodeIfPresent(Background.self, forKey: .background)) ?? .off
+        boldText = (try? c.decodeIfPresent(Bool.self, forKey: .boldText)) ?? false
+        preferredLanguage = (try? c.decodeIfPresent(String.self, forKey: .preferredLanguage)) ?? ""
+    }
 }
 
 /// Offline download preferences. (The download engine itself is a separate,

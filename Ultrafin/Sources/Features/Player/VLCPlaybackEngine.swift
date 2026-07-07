@@ -70,6 +70,12 @@ final class VLCPlaybackEngine: NSObject, PlaybackEngine, VLCMediaPlayerDelegate 
         let subs = SettingsStore.shared.subtitles
         media.addOption(":sub-text-scale=\(subs.size.scalePercent)")
         media.addOption(":freetype-color=\(subs.textColor.vlcColor)")
+        media.addOption(":freetype-font=\(subs.font.fontName)")
+        if subs.boldText { media.addOption(":freetype-bold") }
+        if subs.background == .box {
+            media.addOption(":freetype-background-color=0")
+            media.addOption(":freetype-background-opacity=180")
+        }
         if !subs.preferredLanguage.isEmpty {
             media.addOption(":sub-language=\(subs.preferredLanguage)")
         } else if subs.captionMode != .always {

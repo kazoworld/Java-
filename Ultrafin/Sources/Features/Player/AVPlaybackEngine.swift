@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import CoreMedia
 import UIKit
 
 /// AVFoundation-backed engine. This is the default, smoothest path: hardware
@@ -41,12 +42,34 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
 
     func load(url: URL, startAt seconds: Double) {
         let item = AVPlayerItem(url: url)
+        // Apply the app's caption style (font, size, color, background, bold) —
+        // previously the native player ignored it entirely.
+        item.textStyleRules = Self.captionStyleRules()
         observe(item: item)
         player.replaceCurrentItem(with: item)
         if seconds > 1 {
             player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
         }
         subject.value.status = .buffering
+    }
+
+    /// The user's caption appearance as AVPlayer text-markup rules.
+    private static func captionStyleRules() -> [AVTextStyleRule] {
+        let subs = SettingsStore.shared.subtitles
+        var attrs: [String: Any] = [
+            kCMTextMarkupAttribute_RelativeFontSize as String: subs.size.scalePercent,
+            kCMTextMarkupAttribute_ForegroundColorARGB as String: subs.textColor.argb,
+            kCMTextMarkupAttribute_FontFamilyName as String: subs.font.fontName
+        ]
+        if subs.boldText {
+            attrs[kCMTextMarkupAttribute_BoldStyle as String] = true
+        }
+        if subs.background == .box {
+            attrs[kCMTextMarkupAttribute_CharacterBackgroundColorARGB as String] =
+                [0.72, 0, 0, 0] as [NSNumber]
+        }
+        guard let rule = AVTextStyleRule(textMarkupAttributes: attrs) else { return [] }
+        return [rule]
     }
 
     func play() {
