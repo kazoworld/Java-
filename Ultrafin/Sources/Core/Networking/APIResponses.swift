@@ -83,6 +83,84 @@ struct PlaybackInfoResponse: Decodable {
     }
 }
 
+/// `/System/Info` — full server details (admin).
+struct ServerSystemInfo: Decodable {
+    let serverName: String?
+    let version: String?
+    let operatingSystem: String?
+    let hasPendingRestart: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case serverName = "ServerName"
+        case version = "Version"
+        case operatingSystem = "OperatingSystem"
+        case hasPendingRestart = "HasPendingRestart"
+    }
+}
+
+/// One connected session from `/Sessions` (admin) — who's watching what.
+struct ActiveSession: Decodable, Identifiable, Hashable {
+    let id: String
+    let userName: String?
+    let client: String?
+    let deviceName: String?
+    let nowPlayingItem: NowPlayingItem?
+    let playState: PlayState?
+
+    struct NowPlayingItem: Decodable, Hashable {
+        let name: String?
+        let seriesName: String?
+        let runTimeTicks: Int64?
+        enum CodingKeys: String, CodingKey {
+            case name = "Name"
+            case seriesName = "SeriesName"
+            case runTimeTicks = "RunTimeTicks"
+        }
+    }
+
+    struct PlayState: Decodable, Hashable {
+        let positionTicks: Int64?
+        let isPaused: Bool?
+        enum CodingKeys: String, CodingKey {
+            case positionTicks = "PositionTicks"
+            case isPaused = "IsPaused"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+        case userName = "UserName"
+        case client = "Client"
+        case deviceName = "DeviceName"
+        case nowPlayingItem = "NowPlayingItem"
+        case playState = "PlayState"
+    }
+}
+
+/// `/System/ActivityLog/Entries` — the dashboard's recent-activity feed.
+struct ActivityLogResponse: Decodable {
+    let items: [ActivityEntry]
+    enum CodingKeys: String, CodingKey { case items = "Items" }
+}
+
+struct ActivityEntry: Decodable, Identifiable, Hashable {
+    let id: Int64
+    let name: String
+    let shortOverview: String?
+    let type: String?
+    let date: String
+    let severity: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+        case name = "Name"
+        case shortOverview = "ShortOverview"
+        case type = "Type"
+        case date = "Date"
+        case severity = "Severity"
+    }
+}
+
 /// A server-side plugin from `/Plugins` (admin only).
 struct InstalledPlugin: Decodable, Identifiable, Hashable, Sendable {
     let id: String

@@ -4,6 +4,7 @@ import SwiftUI
 /// reads as a premium, scannable list, and drills into a focused sub-page.
 struct SettingsView: View {
     @Environment(SettingsStore.self) private var settings
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         Form {
@@ -33,6 +34,13 @@ struct SettingsView: View {
             }
 
             Section {
+                if appState.isAdmin {
+                    // Admin-only: the everyday slice of the web dashboard.
+                    NavigationLink { ServerDashboardView() } label: {
+                        SettingsRowLabel(title: "Server", subtitle: "Dashboard, sessions, library scan",
+                                         systemImage: "server.rack", tint: .cyan)
+                    }
+                }
                 NavigationLink { ServerPluginsView() } label: {
                     SettingsRowLabel(title: "Server Plugins", subtitle: "What's installed and what Ultrafin uses",
                                      systemImage: "puzzlepiece.extension.fill", tint: .indigo)

@@ -452,6 +452,34 @@ actor JellyfinClient {
         (try? await get([InstalledPlugin].self, path: "/Plugins")) ?? []
     }
 
+    // MARK: - Admin dashboard tools
+
+    /// Full server details (admin-scoped `/System/Info`).
+    func systemInfo() async -> ServerSystemInfo? {
+        try? await get(ServerSystemInfo.self, path: "/System/Info")
+    }
+
+    /// Kicks off a scan of every library — the dashboard's "Scan All Libraries".
+    /// Returns whether the server accepted the request.
+    func refreshAllLibraries() async -> Bool {
+        guard let request = try? makeRequest(path: "/Library/Refresh", method: "POST") else { return false }
+        return (try? await perform(request)) != nil
+    }
+
+    /// Sessions connected to the server within the last few minutes (admin) —
+    /// who's streaming what, right now.
+    func activeSessions() async -> [ActiveSession] {
+        (try? await get([ActiveSession].self, path: "/Sessions",
+                        query: [.init(name: "activeWithinSeconds", value: "960")])) ?? []
+    }
+
+    /// The dashboard's recent-activity feed (logins, playback, scans…).
+    func recentActivity(limit: Int = 12) async -> [ActivityEntry] {
+        let response = try? await get(ActivityLogResponse.self, path: "/System/ActivityLog/Entries",
+                                      query: [.init(name: "limit", value: String(limit))])
+        return response?.items ?? []
+    }
+
     // MARK: - Images & streaming URLs
 
     /// Builds a primary/backdrop image URL with an optional pixel width so the
