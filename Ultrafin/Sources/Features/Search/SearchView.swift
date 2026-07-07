@@ -159,10 +159,10 @@ struct SearchView: View {
                             .background {
                                 if active {
                                     Capsule().fill(settings.theme.accent.color.gradient)
+                                    Capsule().fill(LiquidGlass.sheen)
                                 } else {
-                                    Capsule().fill(.ultraThinMaterial)
+                                    Color.clear.glassEffect(.regular, in: .capsule)
                                 }
-                                Capsule().fill(LiquidGlass.sheen)
                             }
                             .overlay(Capsule().strokeBorder(LiquidGlass.rim(active ? 0.6 : 0.4), lineWidth: 1))
                     }
@@ -209,11 +209,7 @@ struct SearchView: View {
                             }
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.sm)
-                            .background {
-                                Capsule().fill(.ultraThinMaterial)
-                                Capsule().fill(LiquidGlass.sheen)
-                            }
-                            .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.4), lineWidth: 1))
+                            .glassCapsule(dim: 0)
                         }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
                     }

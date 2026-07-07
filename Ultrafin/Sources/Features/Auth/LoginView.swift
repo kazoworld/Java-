@@ -185,10 +185,7 @@ struct LoginView: View {
                         .font(.system(size: codeDigitSize, weight: .bold, design: .rounded))
                         .foregroundStyle(UltrafinColors.primaryText)
                         .frame(width: codeDigitSize * 1.3, height: codeDigitSize * 1.7)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(.white.opacity(0.08))
-                        )
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .strokeBorder(LiquidGlass.rim(0.5), lineWidth: 1)

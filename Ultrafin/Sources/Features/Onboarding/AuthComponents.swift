@@ -9,14 +9,12 @@ struct AuthCard<Content: View>: View {
         VStack(spacing: Spacing.lg) { content }
             .padding(Spacing.xl)
             .frame(maxWidth: 520)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            // Real Liquid Glass + the brand rim — the first surface a new user
+            // ever sees should be the most premium one.
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.3), .white.opacity(0.05)],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 1
-                    )
+                    .strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.3), radius: 34, y: 18)
     }

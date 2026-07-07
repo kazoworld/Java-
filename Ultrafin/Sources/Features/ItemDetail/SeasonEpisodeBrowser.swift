@@ -173,11 +173,7 @@ struct SeasonEpisodeBrowser: View {
             .foregroundStyle(UltrafinColors.primaryText)
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
-            .background {
-                Capsule().fill(.ultraThinMaterial)
-                Capsule().fill(LiquidGlass.sheen)
-                Capsule().strokeBorder(LiquidGlass.rim(0.5), lineWidth: 1)
-            }
+            .glassCapsule(dim: 0)
         }
         #endif
     }
@@ -346,14 +342,12 @@ private struct SeasonRowLabel: View {
     private var rowBackground: some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         if isFocused {
-            // On-brand frosted-accent focus pill (cheap: one small material pane).
-            ZStack {
-                shape.fill(.ultraThinMaterial)
-                shape.fill(accent.opacity(0.30))
-                shape.fill(LiquidGlass.sheen)
-                shape.strokeBorder(accent.opacity(0.9), lineWidth: 1.5)
-            }
-            .shadow(color: accent.opacity(0.35), radius: 10, y: 4)
+            // Accent poured into real Liquid Glass — the focus pill refracts
+            // the artwork behind it instead of faking frost.
+            Color.clear
+                .glassEffect(Glass.regular.tint(accent.opacity(0.45)), in: shape)
+                .overlay(shape.strokeBorder(accent.opacity(0.9), lineWidth: 1.5))
+                .shadow(color: accent.opacity(0.35), radius: 10, y: 4)
         } else if active {
             shape.fill(accent.opacity(0.16))
         } else {

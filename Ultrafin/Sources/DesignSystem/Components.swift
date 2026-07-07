@@ -19,16 +19,15 @@ extension View {
         modifier(GlassCard(cornerRadius: cornerRadius))
     }
 
-    /// Frosted-glass row backgrounds for Forms/Lists shown over the ambient.
-    /// Carries the liquid-glass sheen + rim, but no lift shadow (rows shouldn't
+    /// Liquid Glass row backgrounds for Forms/Lists shown over the ambient —
+    /// real system glass with the brand rim, no lift shadow (rows shouldn't
     /// float). Propagates to every row in the list.
     func glassRows() -> some View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         return listRowBackground(
-            shape
-                .fill(.ultraThinMaterial)
-                .overlay(shape.fill(LiquidGlass.sheen))
-                .overlay(shape.strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1))
+            Color.clear
+                .glassEffect(.regular, in: shape)
+                .overlay(shape.strokeBorder(LiquidGlass.rim(0.7), lineWidth: 1))
                 .padding(.vertical, 2)
         )
     }

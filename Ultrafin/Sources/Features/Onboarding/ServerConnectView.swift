@@ -134,8 +134,7 @@ struct ServerConnectView: View {
                         }
                         .padding(.horizontal, Spacing.lg)
                         .padding(.vertical, Spacing.md)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                        .glassCapsule(dim: 0)
                     }
                     .buttonStyle(UltrafinButtonStyle(focusScale: 1.03, lift: false))
                 }

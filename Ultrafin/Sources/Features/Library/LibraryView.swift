@@ -200,8 +200,7 @@ struct LibraryContentsView: View {
                     Capsule().fill(settings.theme.accent.color.gradient)
                     Capsule().fill(LiquidGlass.sheen)
                 } else {
-                    Capsule().fill(.ultraThinMaterial)
-                    Capsule().fill(LiquidGlass.sheen)
+                    Color.clear.glassEffect(.regular, in: .capsule)
                 }
             }
             .overlay(Capsule().strokeBorder(active ? LiquidGlass.rim(0.6) : LiquidGlass.rim(0.4), lineWidth: 1))

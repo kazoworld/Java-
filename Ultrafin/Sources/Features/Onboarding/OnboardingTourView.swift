@@ -124,23 +124,17 @@ struct OnboardingTourView: View {
 
     private var pageContent: some View {
         VStack(spacing: Spacing.xl) {
-            // The floating glass tile with the page's icon.
-            ZStack {
-                RoundedRectangle(cornerRadius: tileSize * 0.24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: tileSize * 0.24, style: .continuous)
-                    .fill(current.tint.opacity(0.22))
-                RoundedRectangle(cornerRadius: tileSize * 0.24, style: .continuous)
-                    .fill(LiquidGlass.sheen)
-                Image(systemName: current.icon)
-                    .font(.system(size: tileSize * 0.42, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .shadow(color: current.tint.opacity(0.8), radius: 18)
-            }
-            .frame(width: tileSize, height: tileSize)
-            .overlay(RoundedRectangle(cornerRadius: tileSize * 0.24, style: .continuous)
-                .strokeBorder(LiquidGlass.rim(), lineWidth: 1))
-            .shadow(color: current.tint.opacity(0.35), radius: 34, y: 14)
+            // The floating tile: the page's color poured into real Liquid Glass.
+            Image(systemName: current.icon)
+                .font(.system(size: tileSize * 0.42, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: current.tint.opacity(0.8), radius: 18)
+                .frame(width: tileSize, height: tileSize)
+                .glassEffect(Glass.regular.tint(current.tint.opacity(0.4)),
+                             in: RoundedRectangle(cornerRadius: tileSize * 0.24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: tileSize * 0.24, style: .continuous)
+                    .strokeBorder(LiquidGlass.rim(), lineWidth: 1))
+                .shadow(color: current.tint.opacity(0.35), radius: 34, y: 14)
             // Gentle bob so the tile feels alive, and a settle-in on reveal.
             .offset(y: drift ? -7 : 7)
             .scaleEffect(revealed ? 1 : 0.86)
@@ -190,11 +184,7 @@ struct OnboardingTourView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, Spacing.xxl)
                     .padding(.vertical, Spacing.md)
-                    .background {
-                        Capsule().fill(current.tint.gradient)
-                        Capsule().fill(LiquidGlass.sheen)
-                    }
-                    .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.6), lineWidth: 1))
+                    .tintedGlassCapsule(current.tint, strength: 0.7)
                     .shadow(color: current.tint.opacity(0.45), radius: 16, y: 8)
             }
             .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: true))

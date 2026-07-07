@@ -328,7 +328,8 @@ struct PlayerControlsView: View {
                     } else if prominent {
                         Circle().fill(accent.gradient)
                     } else {
-                        Circle().fill(.ultraThinMaterial)
+                        // Resting buttons are real Liquid Glass over the video.
+                        Color.clear.glassEffect(.regular, in: .circle)
                     }
                 }
                 .overlay(Circle().strokeBorder(

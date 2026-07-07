@@ -192,15 +192,18 @@ struct FeaturedHero: View {
     }
 
     private func actions(for current: MediaItem) -> some View {
+        // A GlassEffectContainer lets neighboring glass pills visually melt
+        // toward each other — the signature Liquid Glass feel.
+        GlassEffectContainer(spacing: actionSpacing) {
         HStack(spacing: actionSpacing) {
             Button { onPlay(current) } label: {
                 Label("Play", systemImage: "play.fill")
                     .font(.system(size: actionFont, weight: .bold, design: .rounded))
                     .padding(.horizontal, actionHPadding)
                     .padding(.vertical, actionVPadding)
-                    .background(tint, in: Capsule())
-                    .overlay(Capsule().fill(LiquidGlass.sheen))
-                    .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.6), lineWidth: 1))
+                    // Colored glass: the artwork's own color poured into the
+                    // system material, not a flat fill.
+                    .tintedGlassCapsule(tint, strength: 0.7)
                     .foregroundStyle(playTextColor)
                     .shadow(color: tint.opacity(0.45), radius: 14, y: 6)
             }
@@ -255,6 +258,7 @@ struct FeaturedHero: View {
             // Phone: no chevrons (swipe the banner instead) — just the dots.
             pageDots
             #endif
+        }
         }
         .padding(.top, Spacing.xs)
         .onChange(of: focus) { _, newValue in isFocused = (newValue != nil) }

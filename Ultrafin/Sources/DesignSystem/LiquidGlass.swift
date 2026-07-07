@@ -1,16 +1,12 @@
 import SwiftUI
 
-/// The app's signature **Liquid Glass** material layer.
+/// The app's signature **Liquid Glass** material layer — now backed by the
+/// system's real Liquid Glass (`glassEffect`, OS 26): genuinely refractive,
+/// live-sampling material identical to the rest of the platform.
 ///
-/// Real glass isn't a flat translucent panel: it catches a bright specular
-/// highlight along its top-leading edge, carries a faint sheen across its
-/// surface, and drops a soft ambient shadow that floats it off the background.
-/// These helpers compose those three cues on top of `.ultraThinMaterial` so
-/// every surface — cards, sheets, buttons, list rows, overlay pills — reads as a
-/// single pane of lit glass in both light and dark.
-///
-/// It's all gradients and strokes (no extra `blur` passes beyond the system
-/// material), so it stays GPU-cheap and never costs frame rate, even on Apple TV.
+/// What keeps it *ours* is the lighting layered on top: a specular rim along
+/// the top-leading edge, a soft top sheen, and accent-colored lift glows. The
+/// system provides the physics; these tokens provide the brand.
 enum LiquidGlass {
     /// The rim light: bright at the top-leading edge, fading to nothing around
     /// the middle, with a whisper returning at the bottom-trailing — the single
@@ -25,7 +21,8 @@ enum LiquidGlass {
     }
 
     /// The surface sheen: a soft highlight concentrated along the top that gives
-    /// the pane its glossy, faintly convex reflection. Used as a `fill`.
+    /// a pane its glossy, faintly convex reflection. Used as a `fill` on solid
+    /// surfaces (accent buttons, artwork) that don't carry system glass.
     static var sheen: LinearGradient {
         LinearGradient(stops: [
             .init(color: .white.opacity(0.24), location: 0.0),
@@ -35,9 +32,8 @@ enum LiquidGlass {
     }
 }
 
-/// Frosted material + top sheen + rim light + soft lift shadow, clipped to a
-/// continuous rounded rectangle. The shadow is cast by the pane itself (not the
-/// wrapped content) so cards float cleanly.
+/// System Liquid Glass clipped to a continuous rounded rectangle, finished with
+/// the brand rim light and a soft lift shadow.
 struct LiquidGlassSurface: ViewModifier {
     var cornerRadius: CGFloat = Spacing.cornerRadius
     /// An optional content color the glass leans toward (e.g. artwork color).
@@ -47,22 +43,16 @@ struct LiquidGlassSurface: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
-            .background {
-                shape
-                    .fill(.ultraThinMaterial)
-                    .overlay { if let tint { shape.fill(tint.opacity(0.16)) } }
-                    .overlay(shape.fill(LiquidGlass.sheen))
-                    .overlay(shape.strokeBorder(LiquidGlass.rim(), lineWidth: 1))
-                    .compositingGroup()
-                    .shadow(color: shadow ? .black.opacity(0.28) : .clear,
-                            radius: shadow ? 18 : 0, y: shadow ? 12 : 0)
-            }
+            .glassEffect(tint.map { Glass.regular.tint($0.opacity(0.35)) } ?? .regular, in: shape)
+            .overlay(shape.strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1))
+            .shadow(color: shadow ? .black.opacity(0.28) : .clear,
+                    radius: shadow ? 18 : 0, y: shadow ? 12 : 0)
     }
 }
 
 extension View {
-    /// The signature liquid-glass panel: frosted material + top sheen + rim light
-    /// + soft lift shadow. Use for cards, sheets, popovers and prominent controls.
+    /// The signature liquid-glass panel: real system glass + brand rim light +
+    /// soft lift shadow. Use for cards, sheets, popovers and prominent controls.
     func liquidGlass(cornerRadius: CGFloat = Spacing.cornerRadius,
                      tint: Color? = nil, shadow: Bool = true) -> some View {
         modifier(LiquidGlassSurface(cornerRadius: cornerRadius, tint: tint, shadow: shadow))
@@ -77,26 +67,26 @@ extension View {
         )
     }
 
-    /// A frosted glass **pill** for overlay controls that sit on artwork (hero
-    /// buttons, badges). A faint dark wash under the material keeps white text
+    /// A Liquid Glass **pill** for overlay controls that sit on artwork (hero
+    /// buttons, badges). `dim` darkens the glass slightly so white text stays
     /// legible over bright backdrops.
     func glassCapsule(dim: Double = 0.22) -> some View {
-        background {
-            Capsule().fill(.ultraThinMaterial)
-            Capsule().fill(.black.opacity(dim))
-            Capsule().fill(LiquidGlass.sheen)
-        }
-        .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.85), lineWidth: 1))
+        glassEffect(dim > 0 ? Glass.regular.tint(.black.opacity(dim)) : .regular, in: .capsule)
+            .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.85), lineWidth: 1))
     }
 
-    /// A frosted glass **circle** — the round sibling of ``glassCapsule`` for
+    /// A Liquid Glass **circle** — the round sibling of ``glassCapsule`` for
     /// icon-only overlay controls (e.g. the hero's prev/next chevrons).
     func glassCircle(dim: Double = 0.22) -> some View {
-        background {
-            Circle().fill(.ultraThinMaterial)
-            Circle().fill(.black.opacity(dim))
-            Circle().fill(LiquidGlass.sheen)
-        }
-        .overlay(Circle().strokeBorder(LiquidGlass.rim(0.85), lineWidth: 1))
+        glassEffect(dim > 0 ? Glass.regular.tint(.black.opacity(dim)) : .regular, in: .circle)
+            .overlay(Circle().strokeBorder(LiquidGlass.rim(0.85), lineWidth: 1))
+    }
+
+    /// Accent-tinted interactive glass — the "colored glass" treatment for
+    /// primary pills (hero Play, tour Continue): the system material drinks the
+    /// color and reacts to presses.
+    func tintedGlassCapsule(_ color: Color, strength: Double = 0.55) -> some View {
+        glassEffect(Glass.regular.tint(color.opacity(strength)).interactive(), in: .capsule)
+            .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.6), lineWidth: 1))
     }
 }
