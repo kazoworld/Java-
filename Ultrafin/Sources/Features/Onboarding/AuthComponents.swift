@@ -5,6 +5,10 @@ import SwiftUI
 struct AuthCard<Content: View>: View {
     @ViewBuilder var content: Content
 
+    @Environment(SettingsStore.self) private var settings
+    /// Drives the slow "breathing" of the card's colored glow.
+    @State private var breathing = false
+
     var body: some View {
         VStack(spacing: Spacing.lg) { content }
             .padding(Spacing.xl)
@@ -17,6 +21,15 @@ struct AuthCard<Content: View>: View {
                     .strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.3), radius: 34, y: 18)
+            // A slow accent glow that swells and relaxes — the pane feels alive
+            // against the drifting aurora behind it.
+            .shadow(color: settings.theme.accent.color.opacity(breathing ? 0.38 : 0.16),
+                    radius: breathing ? 52 : 30, y: 10)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
+                    breathing = true
+                }
+            }
     }
 }
 
@@ -27,17 +40,21 @@ struct AuthBrand: View {
     let subtitle: String
 
     @Environment(SettingsStore.self) private var settings
+    /// Gentle life in the glyph: a slow scale/glow pulse.
+    @State private var pulsing = false
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
             ZStack {
                 Circle()
-                    .fill(settings.theme.accent.color.opacity(0.35))
+                    .fill(settings.theme.accent.color.opacity(pulsing ? 0.5 : 0.3))
                     .frame(width: 130, height: 130)
                     .blur(radius: 34)
                 Image(systemName: systemImage)
                     .font(.system(size: 66, weight: .thin))
                     .foregroundStyle(UltrafinColors.accentGradient)
+                    .scaleEffect(pulsing ? 1.05 : 0.97)
+                    .shadow(color: settings.theme.accent.color.opacity(0.45), radius: 14)
             }
             Text(title)
                 .font(Typography.displayTitle)
@@ -46,6 +63,11 @@ struct AuthBrand: View {
                 .font(Typography.body)
                 .foregroundStyle(UltrafinColors.secondaryText)
                 .multilineTextAlignment(.center)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
+                pulsing = true
+            }
         }
     }
 }

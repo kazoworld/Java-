@@ -106,6 +106,7 @@ struct LoginView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(Spacing.xl)
+        .background(AuthBackdrop())
         .animation(.smooth, value: model.errorMessage)
         .animation(.smooth(duration: 0.35), value: model.quickActive)
         .animation(.smooth(duration: 0.35), value: model.quickCode)

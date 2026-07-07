@@ -92,6 +92,7 @@ struct ServerConnectView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(Spacing.xl)
+        .background(AuthBackdrop())
         .animation(.smooth, value: model.errorMessage)
         .animation(.smooth, value: model.discovered)
         .task {
