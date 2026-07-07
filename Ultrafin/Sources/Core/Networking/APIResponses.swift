@@ -83,6 +83,47 @@ struct PlaybackInfoResponse: Decodable {
     }
 }
 
+/// A server-side plugin from `/Plugins` (admin only).
+struct InstalledPlugin: Decodable, Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    let version: String?
+    let description: String?
+    let status: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+        case name = "Name"
+        case version = "Version"
+        case description = "Description"
+        case status = "Status"
+    }
+}
+
+/// One detected segment from the Intro Skipper plugin.
+struct IntroSkipperSegment: Decodable {
+    let valid: Bool?
+    let introStart: Double?
+    let introEnd: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case valid = "Valid"
+        case introStart = "IntroStart"
+        case introEnd = "IntroEnd"
+    }
+}
+
+/// `/Episode/{id}/IntroSkipperSegments` — the plugin's combined intro + credits.
+struct IntroSkipperSegments: Decodable {
+    let introduction: IntroSkipperSegment?
+    let credits: IntroSkipperSegment?
+
+    enum CodingKeys: String, CodingKey {
+        case introduction = "Introduction"
+        case credits = "Credits"
+    }
+}
+
 /// `/MediaSegments/{itemId}` response (intro/outro detection).
 struct MediaSegmentsResponse: Decodable {
     let items: [Segment]

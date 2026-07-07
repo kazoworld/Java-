@@ -33,6 +33,10 @@ struct SettingsView: View {
             }
 
             Section {
+                NavigationLink { ServerPluginsView() } label: {
+                    SettingsRowLabel(title: "Server Plugins", subtitle: "What's installed and what Ultrafin uses",
+                                     systemImage: "puzzlepiece.extension.fill", tint: .indigo)
+                }
                 NavigationLink { AccountSettingsView() } label: {
                     SettingsRowLabel(title: "Account", subtitle: "Server and sign out",
                                      systemImage: "person.crop.circle.fill", tint: .teal)
