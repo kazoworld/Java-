@@ -21,7 +21,11 @@ final class HomeViewModel {
     private(set) var didLoad = false
 
     func load(client: JellyfinClient, userID: String, featured: FeaturedPreferences) async {
-        isLoading = true
+        // Skeletons only on the FIRST load — a pull-to-refresh must never blank
+        // the rows it's refreshing (swapping the content mid-drag also cancels
+        // the refresh task's own requests).
+        if !didLoad { isLoading = true }
+        errorMessage = nil
         defer { isLoading = false; didLoad = true }
         // Fetch the rails concurrently so the screen paints fast.
         async let resumeTask = try? client.resumeItems(userID: userID)
@@ -32,14 +36,15 @@ final class HomeViewModel {
         async let favTask = try? client.favorites(userID: userID)
         async let gemsTask = try? client.hiddenGems(userID: userID)
         async let shuffledTask = try? client.randomItems(userID: userID)
-        resume = await resumeTask ?? []
-        latest = await latestTask ?? []
-        libraries = await viewsTask ?? []
-        comingUp = await comingTask ?? []
-        recentShows = await showsTask ?? []
-        favorites = await favTask ?? []
-        hiddenGems = await gemsTask ?? []
-        shuffled = await shuffledTask ?? []
+        // Replace, never clobber: a failed/cancelled fetch keeps what's on screen.
+        if let v = await resumeTask { resume = v }
+        if let v = await latestTask { latest = v }
+        if let v = await viewsTask { libraries = v }
+        if let v = await comingTask { comingUp = v }
+        if let v = await showsTask { recentShows = v }
+        if let v = await favTask { favorites = v }
+        if let v = await gemsTask { hiddenGems = v }
+        if let v = await shuffledTask { shuffled = v }
 
         // When the media bar is scoped to specific libraries, pull their latest.
         if !featured.sourceLibraryIDs.isEmpty {
@@ -163,23 +168,15 @@ struct HomeView: View {
         // to stay within the tvOS title-safe area.
         .ignoresSafeArea()
         .background(AmbientBackground(tint: heroTint))
-        #if os(tvOS)
-        // Profile avatar pinned to the top-right corner, level with the tab bar.
-        // It's its own focus SECTION so the focus engine can actually route to
-        // it (press right from the tabs, or up-right from the hero) — a bare
-        // floating overlay is unreachable on tvOS.
-        .overlay(alignment: .topTrailing) {
-            profileButton
-                .padding(.top, 46)
-                .padding(.trailing, 60)
-                .focusSection()
-        }
-        #else
+        #if os(iOS)
+        // On iPhone the avatar lives in the nav bar; on tvOS the profile is a
+        // real tab in the top row instead (a floating overlay was unreachable
+        // for the focus engine).
         .toolbar { ToolbarItem(placement: .topBarTrailing) { profileButton } }
-        #endif
         .fullScreenCoverCompat(isPresented: $showProfiles) {
             ProfileSwitcherView()
         }
+        #endif
         .navigationDestination(for: MediaItem.self) { item in
             if item.type == .collectionFolder || item.type == .folder || item.type == .boxSet {
                 LibraryContentsView(library: item)

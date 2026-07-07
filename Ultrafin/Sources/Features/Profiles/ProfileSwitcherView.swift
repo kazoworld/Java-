@@ -69,6 +69,12 @@ struct ProfileAvatar: View {
 /// password) switch instantly; locked profiles ask for their password once and
 /// are remembered after that.
 struct ProfileSwitcherView: View {
+    /// True when hosted as a tvOS tab (vs. presented as a cover on iOS):
+    /// switching applies immediately — there's no presentation to unwind — and
+    /// "done" hands control back via `onDone` instead of dismissing.
+    var isTab: Bool = false
+    var onDone: (() -> Void)? = nil
+
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
     @Environment(\.dismiss) private var dismiss
@@ -130,9 +136,11 @@ struct ProfileSwitcherView: View {
         .environment(\.colorScheme, .dark)
         .task { await load() }
         #if os(tvOS)
-        .onExitCommand {
-            if passwordTarget != nil { passwordTarget = nil } else { dismiss() }
-        }
+        // Menu closes an open password prompt; beyond that, a presented cover
+        // dismisses while a tab lets the system handle Menu normally.
+        .onExitCommand(perform: passwordTarget != nil
+            ? { passwordTarget = nil }
+            : (isTab ? nil : { dismiss() }))
         #endif
     }
 
@@ -146,10 +154,11 @@ struct ProfileSwitcherView: View {
             .padding(Spacing.lg)
         }
         .scrollClipDisabled()
-        // Pin the rail's height to exactly its content so the scroll view has
-        // nothing to move vertically — a strictly horizontal rail.
+        // A strictly horizontal rail: tall enough that the content never
+        // overflows the frame, and vertical bounce is off entirely — dragging a
+        // finger over the avatars must not rubber-band them up and down.
         .frame(height: railHeight)
-        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        .scrollBounceBehavior(.never, axes: .vertical)
     }
 
     private func profileButton(_ user: ServerUser) -> some View {
@@ -193,16 +202,21 @@ struct ProfileSwitcherView: View {
         return appState.sessionStore.savedSession(userID: user.id, serverID: server.id)
     }
 
+    /// Leave the switcher without changing anything.
+    private func finishWithoutSwitching() {
+        if isTab { onDone?() } else { dismiss() }
+    }
+
     private func select(_ user: ServerUser) {
         errorMessage = nil
-        guard user.id != session?.userID else { dismiss(); return }
+        guard user.id != session?.userID else { finishWithoutSwitching(); return }
 
         // 1) A remembered session switches instantly, no typing. If its token
         //    was revoked (Jellyfin drops a device's old token when the same
         //    device signs in as someone else), fall through to a silent re-auth
         //    for passwordless accounts before ever bothering with a prompt.
         if let saved = savedSession(user) {
-            switchUsing { await appState.switchTo(saved) } fallback: {
+            switchUsing { await appState.validateSaved(saved) ? saved : nil } fallback: {
                 if user.hasPassword == false {
                     switchUsing { await authenticate(user: user, password: "") } fallback: { promptPassword(user) }
                 } else {
@@ -225,29 +239,41 @@ struct ProfileSwitcherView: View {
         withAnimation(.smooth(duration: 0.25)) { passwordTarget = user }
     }
 
-    /// Runs a switch attempt with the busy overlay; on failure runs `fallback`.
-    private func switchUsing(_ attempt: @escaping () async -> Bool, fallback: @escaping () -> Void) {
+    /// Obtains a validated session with the busy overlay, then applies it. As a
+    /// cover (iOS), the cover is dismissed FIRST and the app switches after it
+    /// unwinds — applying the switch while presented rebuilds the presenting
+    /// hierarchy underneath a live presentation, which blanked the whole window
+    /// until an app restart. As a tab (tvOS) there's nothing to unwind, so the
+    /// switch applies immediately.
+    private func switchUsing(_ makeSession: @escaping () async -> UserSession?, fallback: @escaping () -> Void) {
         isSwitching = true
         Task {
-            let ok = await attempt()
-            isSwitching = false
-            if ok {
-                Haptics.play(.success)
-                dismiss()
-            } else {
+            guard let newSession = await makeSession() else {
+                isSwitching = false
                 fallback()
+                return
+            }
+            isSwitching = false
+            Haptics.play(.success)
+            if isTab {
+                appState.didAuthenticate(newSession)
+                onDone?()
+            } else {
+                dismiss()
+                Task {
+                    try? await Task.sleep(for: .milliseconds(450))
+                    appState.didAuthenticate(newSession)
+                }
             }
         }
     }
 
-    /// Signs into `user` fresh (used for passwordless and password switches).
-    private func authenticate(user: ServerUser, password: String) async -> Bool {
-        guard let server = session?.server else { return false }
+    /// Signs into `user` fresh and returns the session (the caller applies it
+    /// at a presentation-safe moment).
+    private func authenticate(user: ServerUser, password: String) async -> UserSession? {
+        guard let server = session?.server else { return nil }
         let client = JellyfinClient(server: server)
-        guard let newSession = try? await client.authenticate(username: user.name, password: password)
-        else { return false }
-        appState.didAuthenticate(newSession)
-        return true
+        return try? await client.authenticate(username: user.name, password: password)
     }
 
     private func submitPassword(for user: ServerUser) {
@@ -353,13 +379,13 @@ struct ProfileSwitcherView: View {
         Spacing.xl
         #endif
     }
-    /// Avatar + name + "Watching now" + the rail's own padding — nothing more,
-    /// so the horizontal rail has zero vertical slack.
+    /// Avatar + name + "Watching now" + the rail's own padding, with headroom —
+    /// content overflowing this frame is what made the rail drag vertically.
     private var railHeight: CGFloat {
         #if os(tvOS)
-        avatarSize + 130
+        avatarSize + 150
         #else
-        avatarSize + 100
+        avatarSize + 120
         #endif
     }
     private var fieldWidth: CGFloat {

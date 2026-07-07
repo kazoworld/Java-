@@ -40,6 +40,16 @@ struct MainTabView: View {
             }
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             .tag(3)
+
+            #if os(tvOS)
+            // The profile switcher lives in the tab row itself — a floating
+            // overlay button was unreachable for the tvOS focus engine, and a
+            // tab is also presentation-safe: switching rebuilds the tab tree
+            // with no cover to tear down.
+            ProfileSwitcherView(isTab: true, onDone: { selection = 0 })
+                .tabItem { Label(profileTabTitle, systemImage: "person.crop.circle.fill") }
+                .tag(4)
+            #endif
         }
         // Read the accent through the observed environment store so an accent
         // change in Settings recolors the tab bar live (the static
@@ -56,4 +66,12 @@ struct MainTabView: View {
             }
         }
     }
+
+    #if os(tvOS)
+    /// The signed-in name labels the profile tab, like a Netflix profile chip.
+    private var profileTabTitle: String {
+        if case .authenticated(let session) = appState.phase { return session.username }
+        return "Profile"
+    }
+    #endif
 }

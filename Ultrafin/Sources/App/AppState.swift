@@ -80,28 +80,24 @@ final class AppState {
         refreshCurrentUser(session)
     }
 
-    /// Switches to a remembered profile. Returns false when its saved token has
-    /// been revoked (the caller should fall back to re-auth / a password prompt).
-    func switchTo(_ session: UserSession) async -> Bool {
+    /// Confirms a remembered profile's token still works for its user, without
+    /// applying it (the switcher applies via `didAuthenticate` at a
+    /// presentation-safe moment). Must be a USER-scoped check: Jellyfin revokes
+    /// the device's old token when the same device signs in as another user,
+    /// and a bare reachability probe can pass on a revoked token — which used
+    /// to "switch" into a session whose every library call then failed. A
+    /// revoked session is forgotten so the next attempt re-authenticates.
+    func validateSaved(_ session: UserSession) async -> Bool {
         let candidate = JellyfinClient(server: session.server, accessToken: session.accessToken)
         do {
-            // Must be a USER-scoped check: Jellyfin revokes the device's old
-            // token when the same device signs in as another user, and a bare
-            // reachability probe can pass on a revoked token — which used to
-            // "switch" into a session whose every library call then failed.
             try await candidate.requireUserAccess(userID: session.userID)
+            return true
         } catch APIError.unauthorized {
             sessionStore.forget(userID: session.userID, serverID: session.server.id)
             return false
         } catch {
             return false // unreachable — keep the current session
         }
-        currentUser = nil
-        client = candidate
-        sessionStore.save(session)
-        phase = .authenticated(session: session)
-        refreshCurrentUser(session)
-        return true
     }
 
     /// Fetches the signed-in user's record (avatar tag + admin flag).
