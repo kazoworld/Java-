@@ -60,6 +60,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Ultrafin is a Jellyfin client. Jellyfin and the Swiftfin media core are open source.")
             }
+
+            // Always the last row — legal & open-source attribution.
+            Section {
+                NavigationLink { LegalView() } label: {
+                    SettingsRowLabel(title: "Legal", subtitle: "Open source, attribution, disclaimer",
+                                     systemImage: "doc.text.fill", tint: .gray)
+                }
+            }
         }
         .glassRows()
         #if !os(tvOS)
