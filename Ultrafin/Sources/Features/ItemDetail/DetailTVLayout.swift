@@ -10,6 +10,11 @@ struct DetailArtBackdrop: View {
     let backdropURL: URL?
     let artColor: ArtworkColor?
     let landscape: Bool
+    /// Theater mode: the live highlight layer, crossfaded over the still art
+    /// when `previewActive` — it inherits the exact same feathered masks, so
+    /// the moving picture dissolves into the page identically.
+    var previewView: PlatformView? = nil
+    var previewActive: Bool = false
 
     private var tint: Color { artColor?.color ?? UltrafinColors.accent }
     private var base: Color { UltrafinColors.background }
@@ -52,17 +57,29 @@ struct DetailArtBackdrop: View {
     @ViewBuilder
     private func art(geo: GeometryProxy) -> some View {
         if landscape {
-            RemoteImage(url: backdropURL)
-                .aspectRatio(contentMode: .fill)
+            visual
                 .frame(width: geo.size.width * 0.64, height: geo.size.height)
                 .clipped()
                 .frame(width: geo.size.width, alignment: .trailing)
         } else {
-            RemoteImage(url: backdropURL)
-                .aspectRatio(contentMode: .fill)
+            visual
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
         }
+    }
+
+    /// The still art, with the theater highlight crossfading over it once its
+    /// first frames are ready.
+    private var visual: some View {
+        ZStack {
+            RemoteImage(url: backdropURL)
+                .aspectRatio(contentMode: .fill)
+            if let previewView {
+                PlayerSurface(view: previewView)
+                    .opacity(previewActive ? 1 : 0)
+            }
+        }
+        .animation(.easeInOut(duration: 0.9), value: previewActive)
     }
 
     /// Left↔right feather. Landscape fades the art's left edge into the dark

@@ -46,6 +46,15 @@ struct VideoPlaybackSettingsView: View {
             }
 
             Section {
+                Toggle("Theater mode", isOn: $settings.theaterMode)
+                Toggle("Theme music", isOn: $settings.themeMusic)
+            } header: {
+                Text("Detail Pages")
+            } footer: {
+                Text("Theater mode plays a muted highlight of the title behind the cover art, like a trailer; theme music plays the show's theme when your server has one. Both stay silent until you tap the volume button.")
+            }
+
+            Section {
                 Toggle("Hide watched from Home", isOn: $settings.hideWatched)
             } header: {
                 Text("Library")

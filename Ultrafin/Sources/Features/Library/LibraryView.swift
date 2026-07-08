@@ -18,10 +18,18 @@ struct LibraryRootView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
     @State private var model = LibraryViewModel()
+    /// Edit mode (iPhone): hide/unhide library groups — a client-side
+    /// preference only, nothing changes on the Jellyfin server.
+    @State private var isEditing = false
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
         return nil
+    }
+
+    /// Everything while editing (hidden ones dimmed); only visible ones otherwise.
+    private var displayedLibraries: [MediaItem] {
+        isEditing ? model.libraries : model.libraries.filter { !settings.isLibraryHidden($0.id) }
     }
 
     // Library cards are wide banners; columns are sized per platform and scale
@@ -39,17 +47,57 @@ struct LibraryRootView: View {
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: Spacing.lg) {
-                ForEach(model.libraries) { library in
-                    NavigationLink(value: library) {
-                        MediaCard(item: library, style: .landscape, fillWidth: true)
+                ForEach(displayedLibraries) { library in
+                    ZStack(alignment: .topTrailing) {
+                        NavigationLink(value: library) {
+                            MediaCard(item: library, style: .landscape, fillWidth: true)
+                        }
+                        .mediaCardButtonStyle()
+                        .disabled(isEditing) // editing: the eye is the action
+
+                        if isEditing {
+                            Button {
+                                Haptics.play(.selection)
+                                withAnimation(.smooth(duration: 0.3)) {
+                                    settings.toggleLibraryHidden(library.id)
+                                }
+                            } label: {
+                                Image(systemName: settings.isLibraryHidden(library.id)
+                                      ? "eye.slash.fill" : "eye.fill")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 36, height: 36)
+                                    .glassCircle(dim: 0.2)
+                            }
+                            .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
+                            .padding(Spacing.sm)
+                            .transition(.scale.combined(with: .opacity))
+                        }
                     }
-                    .mediaCardButtonStyle()
+                    .opacity(isEditing && settings.isLibraryHidden(library.id) ? 0.35 : 1)
                 }
             }
             .padding(Spacing.lg)
+            .animation(.smooth(duration: 0.3), value: displayedLibraries)
+            .animation(.smooth(duration: 0.25), value: isEditing)
         }
         .background(AmbientBackground())
         .navigationTitle("Library")
+        #if os(iOS)
+        // Pencil enters edit mode; the eye on each group hides/unhides it.
+        // Client-side only — the Jellyfin server is untouched.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Haptics.play(.selection)
+                    withAnimation(.smooth(duration: 0.25)) { isEditing.toggle() }
+                } label: {
+                    Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil")
+                }
+                .accessibilityLabel(isEditing ? "Done editing" : "Edit library groups")
+            }
+        }
+        #endif
         .navigationDestination(for: MediaItem.self) { item in
             if item.type == .collectionFolder || item.type == .folder || item.type == .boxSet {
                 LibraryContentsView(library: item)

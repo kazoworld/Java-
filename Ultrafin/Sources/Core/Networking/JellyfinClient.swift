@@ -452,6 +452,47 @@ actor JellyfinClient {
         (try? await get([InstalledPlugin].self, path: "/Plugins")) ?? []
     }
 
+    // MARK: - Theater mode & theme music
+
+    /// Direct stream URL for the muted theater preview — no PlaybackInfo round
+    /// trip and never a transcode (browsing must not spin up server encodes).
+    /// Containers AVPlayer can't direct-play simply fail to render and the
+    /// static art remains, which is the right fallback.
+    func previewStreamURL(itemID: String) async -> URL? {
+        guard let token = accessToken,
+              var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        components.path += "/Videos/\(itemID)/stream"
+        components.queryItems = [
+            .init(name: "static", value: "true"),
+            .init(name: "api_key", value: token)
+        ]
+        return components.url
+    }
+
+    /// The item's theme song (Jellyfin's theme.mp3 support), if the server has
+    /// one — inherited from the series for episodes.
+    func themeSongURL(itemID: String) async -> URL? {
+        struct ThemeMedia: Decodable {
+            struct Entry: Decodable {
+                let id: String
+                enum CodingKeys: String, CodingKey { case id = "Id" }
+            }
+            let items: [Entry]?
+            enum CodingKeys: String, CodingKey { case items = "Items" }
+        }
+        guard let result = try? await get(ThemeMedia.self, path: "/Items/\(itemID)/ThemeSongs",
+                                          query: [.init(name: "inheritFromParent", value: "true")]),
+              let theme = result.items?.first,
+              let token = accessToken,
+              var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        components.path += "/Audio/\(theme.id)/stream"
+        components.queryItems = [
+            .init(name: "static", value: "true"),
+            .init(name: "api_key", value: token)
+        ]
+        return components.url
+    }
+
     // MARK: - Admin dashboard tools
 
     /// Full server details (admin-scoped `/System/Info`).

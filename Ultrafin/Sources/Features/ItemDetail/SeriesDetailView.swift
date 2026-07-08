@@ -130,6 +130,8 @@ struct SeriesDetailView: View {
     /// Lets the series logo travel smoothly between the hero and the episodes
     /// header instead of cutting between two copies.
     @Namespace private var heroNS
+    /// Theater mode + theme music for this page.
+    @State private var theater = TheaterController()
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -166,9 +168,17 @@ struct SeriesDetailView: View {
         // control — hide the system one so there aren't two stacked chevrons.
         .navigationBarBackButtonHidden(showEpisodes)
         #endif
-        .task { await loadIfNeeded() }
+        .task { await loadIfNeeded(); await startAmbiance() }
         .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
         .onAppear { appeared = true }
+        .onDisappear { theater.stop() }
+        // The episodes browser covers the hero — halt the ambiance under it.
+        .onChange(of: showEpisodes) { _, showing in
+            if showing { theater.pause() } else { theater.resume() }
+        }
+        .onChange(of: playback?.id) { _, current in
+            if current != nil { theater.stop() }
+        }
         .fullScreenCover(item: $playback) { request in
             if let session {
                 VideoPlayerView(queue: request.queue, startIndex: request.index,
@@ -181,6 +191,29 @@ struct SeriesDetailView: View {
             if current == nil { Task { await model?.refresh() } }
         }
         .toast($toast)
+    }
+
+    /// Theater mode: quietly roll a highlight of the series' first episode
+    /// behind the art (muted); theme music hums underneath when the server has
+    /// one. Both obey the corner volume button.
+    private func startAmbiance() async {
+        guard theater.isIdle, playback == nil, !showEpisodes,
+              let client = appState.client, let model else { return }
+        if settings.themeMusic, let themeURL = await client.themeSongURL(itemID: series.id) {
+            theater.startTheme(url: themeURL)
+        }
+        guard settings.theaterMode else { return }
+        let episodes = await model.firstSeasonEpisodes()
+        guard let first = episodes.first,
+              let url = await client.previewStreamURL(itemID: first.id) else { return }
+        theater.startVideo(url: url, startAt: highlightOffset(for: first))
+    }
+
+    /// Where the highlight starts: past the cold open, well before spoilers.
+    private func highlightOffset(for item: MediaItem) -> Double {
+        guard let ticks = item.runTimeTicks, ticks > 0 else { return 120 }
+        let runtime = Double(ticks) / 10_000_000
+        return min(max(runtime * 0.15, 60), 480)
     }
 
     private func loadIfNeeded() async {
@@ -202,7 +235,8 @@ struct SeriesDetailView: View {
             if showEpisodes {
                 episodesBackground.transition(.opacity)
             } else {
-                DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape)
+                DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape,
+                                  previewView: theater.layerView, previewActive: theater.videoActive)
                     // Art settles in from a slight zoom — a gentle Ken-Burns arrival.
                     .scaleEffect(appeared ? 1 : 1.06)
                     .opacity(appeared ? 1 : 0)
@@ -239,6 +273,14 @@ struct SeriesDetailView: View {
         // Portrait gives the hero ~3/4 of the screen; the episode browser gets
         // the full height so the list isn't squeezed into the hero's box.
         .frame(height: landscape || showEpisodes ? screen.height : screen.height * 0.74)
+        // Theater/theme volume toggle — muted by default, tucked in the corner.
+        .overlay(alignment: .bottomTrailing) {
+            if !showEpisodes && (theater.videoActive || theater.hasAudio) {
+                TheaterVolumeButton(controller: theater)
+                    .padding(edgePadding)
+                    .transition(.opacity)
+            }
+        }
     }
 
     @ViewBuilder

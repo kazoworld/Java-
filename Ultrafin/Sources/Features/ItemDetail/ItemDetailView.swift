@@ -20,6 +20,8 @@ struct ItemDetailView: View {
     @State private var artColor: ArtworkColor?
     /// Drives the one-time arrival animation (art settles in, content rises).
     @State private var appeared = false
+    /// Theater mode + theme music for this page.
+    @State private var theater = TheaterController()
 
     private var session: UserSession? {
         if case .authenticated(let s) = appState.phase { return s }
@@ -48,9 +50,13 @@ struct ItemDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task { await load() }
+        .task { await load(); await startAmbiance() }
         .task(id: colorURL) { artColor = await ImageColor.vibrant(from: colorURL) }
         .onAppear { appeared = true }
+        .onDisappear { theater.stop() }
+        .onChange(of: presentPlayer) { _, showing in
+            if showing { theater.stop() }
+        }
         .fullScreenCoverCompat(isPresented: $presentPlayer) {
             if let session {
                 VideoPlayerView(item: displayed, userID: session.userID, resume: resumePlayback)
@@ -67,6 +73,27 @@ struct ItemDetailView: View {
         .toast($toast)
     }
 
+    /// Theater mode: quietly roll a highlight of the movie behind the art
+    /// (muted); theme music hums underneath when the server has one. Both obey
+    /// the corner volume button.
+    private func startAmbiance() async {
+        guard theater.isIdle, !presentPlayer, let client = appState.client else { return }
+        if settings.themeMusic, let themeURL = await client.themeSongURL(itemID: displayed.id) {
+            theater.startTheme(url: themeURL)
+        }
+        guard settings.theaterMode,
+              displayed.type == .movie || displayed.type == .episode,
+              let url = await client.previewStreamURL(itemID: displayed.id) else { return }
+        theater.startVideo(url: url, startAt: highlightOffset(for: displayed))
+    }
+
+    /// Where the highlight starts: past the studio logos, well before spoilers.
+    private func highlightOffset(for item: MediaItem) -> Double {
+        guard let ticks = item.runTimeTicks, ticks > 0 else { return 120 }
+        let runtime = Double(ticks) / 10_000_000
+        return min(max(runtime * 0.15, 60), 480)
+    }
+
     private func load() async {
         guard let session, let client = appState.client else { return }
         async let detailTask = try? client.itemDetail(item.id, userID: session.userID)
@@ -81,7 +108,8 @@ struct ItemDetailView: View {
 
     private func heroSection(landscape: Bool, screen: CGSize) -> some View {
         ZStack(alignment: landscape ? .leading : .bottomLeading) {
-            DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape)
+            DetailArtBackdrop(backdropURL: backdropURL, artColor: artColor, landscape: landscape,
+                              previewView: theater.layerView, previewActive: theater.videoActive)
                 // Art settles in from a slight zoom — a gentle Ken-Burns arrival.
                 .scaleEffect(appeared ? 1 : 1.06)
                 .opacity(appeared ? 1 : 0)
@@ -99,6 +127,14 @@ struct ItemDetailView: View {
                 .animation(.smooth(duration: 0.55).delay(0.12), value: appeared)
         }
         .frame(height: landscape ? screen.height : screen.height * 0.74)
+        // Theater/theme volume toggle — muted by default, tucked in the corner.
+        .overlay(alignment: .bottomTrailing) {
+            if theater.videoActive || theater.hasAudio {
+                TheaterVolumeButton(controller: theater)
+                    .padding(edgePadding)
+                    .transition(.opacity)
+            }
+        }
     }
 
     private var contentColumn: some View {

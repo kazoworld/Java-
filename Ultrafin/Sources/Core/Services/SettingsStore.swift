@@ -62,6 +62,34 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(autoplayNextEpisode, forKey: Keys.autoplayNextEpisode) }
     }
 
+    /// Theater mode: detail pages play a muted highlight of the title behind
+    /// the cover art, like a trailer.
+    var theaterMode: Bool {
+        didSet { UserDefaults.standard.set(theaterMode, forKey: Keys.theaterMode) }
+    }
+
+    /// Theme music: detail pages play the title's theme song (when the server
+    /// has one), through the same volume button as theater mode.
+    var themeMusic: Bool {
+        didSet { UserDefaults.standard.set(themeMusic, forKey: Keys.themeMusic) }
+    }
+
+    /// Libraries the user hid from the Library tab — a client-side preference
+    /// only; nothing changes on the Jellyfin server.
+    var hiddenLibraryIDs: [String] {
+        didSet { UserDefaults.standard.set(hiddenLibraryIDs, forKey: Keys.hiddenLibraryIDs) }
+    }
+
+    func isLibraryHidden(_ id: String) -> Bool { hiddenLibraryIDs.contains(id) }
+
+    func toggleLibraryHidden(_ id: String) {
+        if let index = hiddenLibraryIDs.firstIndex(of: id) {
+            hiddenLibraryIDs.remove(at: index)
+        } else {
+            hiddenLibraryIDs.append(id)
+        }
+    }
+
     private enum Keys {
         static let theme = "settings.theme"
         static let appearance = "settings.appearance"
@@ -76,6 +104,9 @@ final class SettingsStore {
         static let preferEnglishAudio = "settings.preferEnglishAudio"
         static let hideWatched = "settings.hideWatched"
         static let autoplayNextEpisode = "settings.autoplayNextEpisode"
+        static let theaterMode = "settings.theaterMode"
+        static let themeMusic = "settings.themeMusic"
+        static let hiddenLibraryIDs = "settings.hiddenLibraryIDs"
     }
 
     private init() {
@@ -91,6 +122,9 @@ final class SettingsStore {
         preferEnglishAudio = UserDefaults.standard.object(forKey: Keys.preferEnglishAudio) as? Bool ?? true
         hideWatched = UserDefaults.standard.object(forKey: Keys.hideWatched) as? Bool ?? false
         autoplayNextEpisode = UserDefaults.standard.object(forKey: Keys.autoplayNextEpisode) as? Bool ?? true
+        theaterMode = UserDefaults.standard.object(forKey: Keys.theaterMode) as? Bool ?? true
+        themeMusic = UserDefaults.standard.object(forKey: Keys.themeMusic) as? Bool ?? true
+        hiddenLibraryIDs = UserDefaults.standard.stringArray(forKey: Keys.hiddenLibraryIDs) ?? []
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout
