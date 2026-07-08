@@ -45,11 +45,12 @@ struct ServerPluginsView: View {
                           systemImage: "puzzlepiece.extension")
                         .font(Typography.body)
                         .foregroundStyle(UltrafinColors.secondaryText)
+                        .tvFocusable()
                 }
             } else {
                 Section {
                     ForEach(plugins) { plugin in
-                        pluginRow(plugin)
+                        pluginRow(plugin).tvFocusable()
                     }
                 } header: {
                     Text("\(plugins.count) installed · \(enhancingCount) enhancing Ultrafin")
@@ -61,12 +62,15 @@ struct ServerPluginsView: View {
                 integrationRow(icon: "forward.frame.fill",
                                title: "Skip Intro & Credits",
                                detail: "Core media segments, with automatic fallback to the Intro Skipper plugin's endpoints.")
+                    .tvFocusable()
                 integrationRow(icon: "film.stack",
                                title: "Scrubber previews",
                                detail: "Trickplay thumbnails while seeking.")
+                    .tvFocusable()
                 integrationRow(icon: "iphone.gen3",
                                title: "Quick Connect",
                                detail: "Code-based sign-in from another device.")
+                    .tvFocusable()
             } header: {
                 Text("Built-in integrations")
             } footer: {

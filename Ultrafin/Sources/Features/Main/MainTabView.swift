@@ -15,8 +15,32 @@ struct MainTabView: View {
     @State private var searchPath = NavigationPath()
     @State private var settingsPath = NavigationPath()
 
+    /// Selecting a tab — INCLUDING re-selecting the one you're already on —
+    /// always returns that tab to its root screen. A custom binding is the only
+    /// way to see the re-selection: `onChange` never fires for an equal value,
+    /// which left "press Settings to get back to the top of Settings" dead.
+    private var tabSelection: Binding<Int> {
+        Binding(
+            get: { selection },
+            set: { newValue in
+                resetPath(for: newValue)
+                selection = newValue
+            }
+        )
+    }
+
+    private func resetPath(for tab: Int) {
+        switch tab {
+        case 0: homePath = NavigationPath()
+        case 1: libraryPath = NavigationPath()
+        case 2: searchPath = NavigationPath()
+        case 3: settingsPath = NavigationPath()
+        default: break
+        }
+    }
+
     var body: some View {
-        TabView(selection: $selection) {
+        TabView(selection: tabSelection) {
             NavigationStack(path: $homePath) {
                 HomeView()
             }
@@ -55,16 +79,6 @@ struct MainTabView: View {
         // change in Settings recolors the tab bar live (the static
         // SettingsStore.shared read didn't re-render).
         .tint(settings.theme.accent.color)
-        .onChange(of: selection) { _, newValue in
-            // Reset the selected tab to its root screen.
-            switch newValue {
-            case 0: homePath = NavigationPath()
-            case 1: libraryPath = NavigationPath()
-            case 2: searchPath = NavigationPath()
-            case 3: settingsPath = NavigationPath()
-            default: break
-            }
-        }
     }
 
     #if os(tvOS)

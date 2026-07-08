@@ -466,6 +466,13 @@ actor JellyfinClient {
         return (try? await perform(request)) != nil
     }
 
+    /// Restarts the Jellyfin server process (admin). Every stream drops while
+    /// it comes back — callers must confirm with the user first.
+    func restartServer() async -> Bool {
+        guard let request = try? makeRequest(path: "/System/Restart", method: "POST") else { return false }
+        return (try? await perform(request)) != nil
+    }
+
     /// Sessions connected to the server within the last few minutes (admin) —
     /// who's streaming what, right now.
     func activeSessions() async -> [ActiveSession] {

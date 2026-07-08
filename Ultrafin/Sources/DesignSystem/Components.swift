@@ -33,6 +33,23 @@ extension View {
     }
 }
 
+// MARK: - tvOS focus plumbing
+
+extension View {
+    /// Makes a non-interactive row reachable by the tvOS focus engine. Without
+    /// at least a path of focusable rows, an information-only Form can't scroll
+    /// and a Menu press falls through to the system (exiting the app). No-op on
+    /// iOS, where touch scrolling needs no focus.
+    @ViewBuilder
+    func tvFocusable() -> some View {
+        #if os(tvOS)
+        self.focusable()
+        #else
+        self
+        #endif
+    }
+}
+
 // MARK: - Primary button
 
 struct PrimaryButton: View {

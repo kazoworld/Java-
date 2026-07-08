@@ -155,12 +155,19 @@ struct ProfileSwitcherView: View {
         }
         .scrollClipDisabled()
         // A strictly horizontal rail: tall enough that the content never
-        // overflows the frame, so .basedOnSize resolves to no vertical bounce —
-        // dragging a finger over the avatars must not rubber-band them up/down.
-        // (ScrollBounceBehavior has no .never; content-fits + basedOnSize is
-        // the supported way to kill an axis's bounce.)
+        // overflows the frame (so .basedOnSize resolves to no vertical bounce),
+        // and never wider than THREE profiles — a wall of ten avatars is
+        // overwhelming; the rest scroll in from the side.
         .frame(height: railHeight)
+        .frame(maxWidth: visibleRailWidth)
         .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+    }
+
+    /// Width that fits exactly three profile cards (plus gaps and the rail's
+    /// own padding) — the on-screen limit no matter how many users exist.
+    private var visibleRailWidth: CGFloat {
+        let card = avatarSize + 40
+        return card * 3 + profileSpacing * 2 + Spacing.lg * 2
     }
 
     private func profileButton(_ user: ServerUser) -> some View {

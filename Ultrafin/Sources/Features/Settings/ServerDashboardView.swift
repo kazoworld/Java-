@@ -12,6 +12,7 @@ struct ServerDashboardView: View {
     @State private var activity: [ActivityEntry] = []
     @State private var isLoading = true
     @State private var isScanning = false
+    @State private var confirmRestart = false
     @State private var toast: String?
 
     var body: some View {
@@ -59,15 +60,19 @@ struct ServerDashboardView: View {
             if isLoading && info == nil {
                 ProgressView().frame(maxWidth: .infinity)
             } else {
-                LabeledContent("Name", value: info?.serverName ?? appState.client.map { _ in "—" } ?? "—")
-                LabeledContent("Jellyfin", value: info?.version ?? "—")
+                // Info rows are focusable so the tvOS focus engine can walk (and
+                // scroll) the page — without a focus path, Menu falls through to
+                // the system and exits the app.
+                LabeledContent("Name", value: info?.serverName ?? "—").tvFocusable()
+                LabeledContent("Jellyfin", value: info?.version ?? "—").tvFocusable()
                 if let os = info?.operatingSystem, !os.isEmpty {
-                    LabeledContent("System", value: os)
+                    LabeledContent("System", value: os).tvFocusable()
                 }
                 if info?.hasPendingRestart == true {
                     Label("The server has a pending restart", systemImage: "exclamationmark.triangle.fill")
                         .font(Typography.caption)
                         .foregroundStyle(.orange)
+                        .tvFocusable()
                 }
             }
         } header: {
@@ -75,7 +80,7 @@ struct ServerDashboardView: View {
         }
     }
 
-    // MARK: - Library
+    // MARK: - Maintenance
 
     private var librarySection: some View {
         Section {
@@ -103,10 +108,29 @@ struct ServerDashboardView: View {
                 }
             }
             .disabled(isScanning)
+
+            Button(role: .destructive) {
+                confirmRestart = true
+            } label: {
+                Label("Restart Server", systemImage: "power")
+                    .foregroundStyle(.red)
+            }
+            .alert("Restart the server?", isPresented: $confirmRestart) {
+                Button("Restart", role: .destructive) {
+                    Task {
+                        let ok = await appState.client?.restartServer() ?? false
+                        toast = ok ? "Server is restarting…" : "Couldn't restart the server"
+                        Haptics.play(ok ? .success : .warning)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Every active stream will drop while Jellyfin comes back up — usually under a minute.")
+            }
         } header: {
-            Text("Library")
+            Text("Maintenance")
         } footer: {
-            Text("Scans every library for new and changed media — same as the dashboard's Scan All Libraries.")
+            Text("Scan finds new and changed media. Restart reboots the Jellyfin service itself — use it when the server is misbehaving.")
         }
     }
 
@@ -120,9 +144,10 @@ struct ServerDashboardView: View {
                 Text("Nothing streaming right now.")
                     .font(Typography.body)
                     .foregroundStyle(UltrafinColors.secondaryText)
+                    .tvFocusable()
             } else {
                 ForEach(streaming) { session in
-                    sessionRow(session)
+                    sessionRow(session).tvFocusable()
                 }
             }
         } header: {
@@ -185,6 +210,7 @@ struct ServerDashboardView: View {
                 Text(isLoading ? "Loading…" : "No recent activity.")
                     .font(Typography.body)
                     .foregroundStyle(UltrafinColors.secondaryText)
+                    .tvFocusable()
             } else {
                 ForEach(activity) { entry in
                     VStack(alignment: .leading, spacing: 2) {
@@ -197,6 +223,7 @@ struct ServerDashboardView: View {
                             .foregroundStyle(UltrafinColors.tertiaryText)
                     }
                     .padding(.vertical, 2)
+                    .tvFocusable()
                 }
             }
         } header: {
