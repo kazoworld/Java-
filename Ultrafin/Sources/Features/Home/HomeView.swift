@@ -85,6 +85,13 @@ struct HomeView: View {
     /// The featured title's artwork color — tints the ambient background so the
     /// whole screen breathes with what's in the media bar.
     @State private var heroTint: Color?
+    // Home Screen-style row rearranging (tvOS): the row being moved, and a
+    // snapshot of the order to restore if the user backs out.
+    @State private var editingRow: HomeRowKind?
+    @State private var preEditRows: [HomeRowConfig]?
+    #if os(tvOS)
+    @FocusState private var reorderFocused: Bool
+    #endif
 
     private var session: UserSession? {
         if case .authenticated(let session) = appState.phase { return session }
@@ -136,6 +143,7 @@ struct HomeView: View {
     }
 
     var body: some View {
+      ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.xl) {
                 if model.isLoading {
@@ -148,9 +156,13 @@ struct HomeView: View {
                     ForEach(Array(settings.homeLayout.rows.enumerated()), id: \.element.id) { idx, config in
                         if config.isEnabled {
                             row(for: config.kind)
+                                .id(config.kind)
                                 .opacity(revealed ? 1 : 0)
                                 .offset(y: revealed ? 0 : 18)
                                 .animation(.smooth(duration: 0.5).delay(Double(idx) * 0.07), value: revealed)
+                                // Dim every row except the one being rearranged.
+                                .opacity(editingRow == nil || editingRow == config.kind ? 1 : 0.28)
+                                .animation(.smooth(duration: 0.3), value: editingRow)
                         }
                     }
                     if let error = model.errorMessage {
@@ -221,6 +233,82 @@ struct HomeView: View {
             try? await Task.sleep(for: .milliseconds(40))
             revealed = true
         }
+        // While rearranging, the content is inert (disabled first) and an
+        // invisible capture layer on top owns the remote.
+        .disabled(editingRow != nil)
+        .overlay { reorderCaptureLayer(proxy: proxy) }
+      }
+    }
+
+    // MARK: - Row rearranging (tvOS)
+
+    /// The invisible modal that drives rearranging: it holds focus, moves the
+    /// row on up/down, commits on Select, and cancels on Menu.
+    @ViewBuilder
+    private func reorderCaptureLayer(proxy: ScrollViewProxy) -> some View {
+        #if os(tvOS)
+        if let kind = editingRow {
+            ZStack(alignment: .top) {
+                Button { commitReorder() } label: { Color.clear }
+                    .buttonStyle(.plain)
+                    .focused($reorderFocused)
+                    .onMoveCommand { direction in
+                        switch direction {
+                        case .up:   moveEditing(kind, up: true, proxy: proxy)
+                        case .down: moveEditing(kind, up: false, proxy: proxy)
+                        default: break
+                        }
+                    }
+                    .onExitCommand { cancelReorder() }
+
+                reorderBanner
+                    .padding(.top, 40)
+            }
+            .ignoresSafeArea()
+            .onAppear { reorderFocused = true }
+        }
+        #endif
+    }
+
+    private var reorderBanner: some View {
+        HStack(spacing: Spacing.lg) {
+            Label("Move Row", systemImage: "arrow.up.arrow.down")
+                .foregroundStyle(settings.theme.accent.color)
+            Text("Select to save")
+            Text("Menu to cancel")
+                .foregroundStyle(UltrafinColors.secondaryText)
+        }
+        .font(.system(size: 22, weight: .semibold, design: .rounded))
+        .foregroundStyle(UltrafinColors.primaryText)
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.md)
+        .glassCapsule(dim: 0.12)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    private func beginReorder(_ kind: HomeRowKind) {
+        guard editingRow == nil, kind != .featured else { return }
+        preEditRows = settings.homeLayout.rows
+        withAnimation(.smooth(duration: 0.3)) { editingRow = kind }
+    }
+
+    private func moveEditing(_ kind: HomeRowKind, up: Bool, proxy: ScrollViewProxy) {
+        withAnimation(.smooth(duration: 0.3)) {
+            settings.moveHomeRow(kind, up: up)
+            proxy.scrollTo(kind, anchor: .center)
+        }
+    }
+
+    private func commitReorder() {
+        // The new order is already persisted (moveHomeRow writes through).
+        preEditRows = nil
+        withAnimation(.smooth(duration: 0.3)) { editingRow = nil }
+    }
+
+    private func cancelReorder() {
+        if let snapshot = preEditRows { settings.homeLayout.rows = snapshot }
+        preEditRows = nil
+        withAnimation(.smooth(duration: 0.3)) { editingRow = nil }
     }
 
     /// The circular profile avatar in the top-right — opens the Who's Watching
@@ -265,6 +353,16 @@ struct HomeView: View {
         settings.hideWatched ? items.filter { !$0.isWatched } : items
     }
 
+    /// A Home rail wired for rearranging — holding Select on a card lifts this
+    /// row (tvOS).
+    private func rail(_ title: String, _ items: [MediaItem],
+                      style: MediaRail.Style, kind: HomeRowKind) -> some View {
+        MediaRail(title: title, items: items, style: style,
+                  reorderable: true,
+                  isReordering: editingRow == kind,
+                  onBeginReorder: { beginReorder(kind) })
+    }
+
     /// Renders the content for a configured Home row, or nothing if there's no
     /// data for it yet.
     @ViewBuilder
@@ -281,7 +379,7 @@ struct HomeView: View {
             }
         case .continueWatching:
             if !continueWatching.isEmpty {
-                MediaRail(title: "Continue Watching", items: continueWatching, style: .landscape)
+                rail("Continue Watching", continueWatching, style: .landscape, kind: kind)
             }
         case .comingUp:
             // Folded into Continue Watching — no standalone row.
@@ -289,28 +387,28 @@ struct HomeView: View {
         case .recentlyAdded:
             let items = visible(model.latest)
             if !items.isEmpty {
-                MediaRail(title: "Recently Added", items: items, style: .poster)
+                rail("Recently Added", items, style: .poster, kind: kind)
             }
         case .recentShows:
             let items = visible(model.recentShows)
             if !items.isEmpty {
-                MediaRail(title: "Recently Added TV Shows", items: items, style: .poster)
+                rail("Recently Added TV Shows", items, style: .poster, kind: kind)
             }
         case .favorites:
             // Favorites are intentional — never filtered.
             if !model.favorites.isEmpty {
-                MediaRail(title: "Favorites", items: model.favorites, style: .poster)
+                rail("Favorites", model.favorites, style: .poster, kind: kind)
             }
         case .hiddenGems:
             let items = visible(model.hiddenGems)
             if !items.isEmpty {
-                MediaRail(title: "Hidden Gems", items: items, style: .poster)
+                rail("Hidden Gems", items, style: .poster, kind: kind)
             }
         case .libraries:
             if !model.libraries.isEmpty {
                 // Libraries read as wide banners (their art is landscape and the
                 // names need room), not tall posters.
-                MediaRail(title: "Your Libraries", items: model.libraries, style: .landscape)
+                rail("Your Libraries", model.libraries, style: .landscape, kind: kind)
             }
         }
     }

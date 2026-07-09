@@ -8,21 +8,35 @@ struct MediaRail: View {
     let title: String
     let items: [MediaItem]
     var style: Style = .poster
+    /// tvOS Home only: holding Select on a card enters row-rearrange mode.
+    var reorderable: Bool = false
+    /// This row is the one currently being moved — lift it and mark it.
+    var isReordering: Bool = false
+    /// Fired when a card's long-press requests rearrange mode for this row.
+    var onBeginReorder: (() -> Void)? = nil
+
+    @Environment(SettingsStore.self) private var settings
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            Text(title)
-                .font(sectionTitleFont)
-                .foregroundStyle(UltrafinColors.primaryText)
-                .padding(.horizontal, edgePadding)
+            HStack(spacing: Spacing.sm) {
+                Text(title)
+                    .font(sectionTitleFont)
+                    .foregroundStyle(UltrafinColors.primaryText)
+                if isReordering {
+                    // A grip + up/down chevrons make it read as "I'm holding this".
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(sectionTitleFont)
+                        .foregroundStyle(settings.theme.accent.color)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .padding(.horizontal, edgePadding)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: railSpacing) {
                     ForEach(items) { item in
-                        NavigationLink(value: item) {
-                            MediaCard(item: item, style: style)
-                        }
-                        .mediaCardButtonStyle()
+                        card(item)
                     }
                 }
                 .padding(.horizontal, edgePadding)
@@ -30,7 +44,34 @@ struct MediaRail: View {
                 .padding(.vertical, focusInset)
             }
             .scrollClipDisabled()
+            // While reordering, the row can't be scrolled or navigated — the
+            // capture layer owns the remote.
+            .disabled(isReordering)
         }
+        // Lift the row being moved and glow it in the accent, like a card
+        // peeled off the Home screen.
+        .scaleEffect(isReordering ? 1.04 : 1)
+        .shadow(color: isReordering ? settings.theme.accent.color.opacity(0.5) : .clear,
+                radius: isReordering ? 30 : 0, y: isReordering ? 10 : 0)
+        .zIndex(isReordering ? 2 : 0)
+        .animation(.smooth(duration: 0.3), value: isReordering)
+    }
+
+    @ViewBuilder
+    private func card(_ item: MediaItem) -> some View {
+        let link = NavigationLink(value: item) { MediaCard(item: item, style: style) }
+            .mediaCardButtonStyle()
+        #if os(tvOS)
+        if reorderable {
+            // Quick click still navigates; a ~0.6s Select-hold peels the row up
+            // to rearrange it (native Home-Screen style).
+            link.onLongPressGesture(minimumDuration: 0.6) { onBeginReorder?() }
+        } else {
+            link
+        }
+        #else
+        link
+        #endif
     }
 
     private var sectionTitleFont: Font {
