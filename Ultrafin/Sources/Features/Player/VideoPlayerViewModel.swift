@@ -256,8 +256,10 @@ final class VideoPlayerViewModel {
     /// Tears down any current engine and (re)loads the current queue item.
     private func loadCurrent(startAt seconds: Double) async {
         guard let item = currentItem else { return }
-        engine?.teardown()
+        // Cancel the state sink BEFORE teardown: VLC's stop() posts a .stopped
+        // state that would otherwise map to .ended and trigger auto-advance.
         cancellable?.cancel()
+        engine?.teardown()
         appliedCaptions = false
         autoplayCancelled = false
         trickplaySource = nil
@@ -414,10 +416,10 @@ final class VideoPlayerViewModel {
         guard !stopped else { return } // idempotent: dismiss + close both call this
         stopped = true
         captionDisengageTask?.cancel()
+        cancellable?.cancel()
         engine?.pause()
         engine?.teardown()
         engine = nil
-        cancellable?.cancel()
         nowPlaying.clear()
         Task { await reportStopped() }
     }

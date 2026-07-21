@@ -68,35 +68,121 @@ struct RootView: View {
     }
 }
 
-/// Minimal, premium splash shown while the saved session is validated (a
-/// fallback under the cold-launch intro).
+/// The splash shown while the saved session is validated — WWDC-grade: a live
+/// mesh gradient breathing through deep aurora colors, a Liquid Glass monogram
+/// floating at center with the wordmark beneath, and a quiet pulsing status.
 struct LaunchView: View {
     @Environment(SettingsStore.self) private var settings
-    @State private var pulse = false
+    @State private var appeared = false
 
     var body: some View {
-        VStack(spacing: Spacing.lg) {
-            Text("ULTRAFIN")
-                .font(.system(size: launchSize, weight: .light, design: .default))
-                .tracking(launchSize * 0.34)
-                .foregroundStyle(LinearGradient(colors: [.white, .white.opacity(0.74)],
-                                                startPoint: .top, endPoint: .bottom))
-                .padding(.leading, launchSize * 0.34)
+        ZStack {
+            meshBackdrop
 
-            Capsule()
-                .fill(settings.theme.accent.color)
-                .frame(width: 56, height: 3)
-                .opacity(pulse ? 1 : 0.25)
-                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
+            VStack(spacing: monogramSize * 0.22) {
+                monogram
+                    .scaleEffect(appeared ? 1 : 0.9)
+                    .opacity(appeared ? 1 : 0)
+
+                VStack(spacing: Spacing.md) {
+                    Text("ULTRAFIN")
+                        .font(.system(size: wordSize, weight: .light))
+                        .tracking(wordSize * 0.34)
+                        .padding(.leading, wordSize * 0.34) // re-center for trailing track
+                        .foregroundStyle(LinearGradient(colors: [.white, .white.opacity(0.7)],
+                                                        startPoint: .top, endPoint: .bottom))
+                    Text("Your library, your way.")
+                        .font(.system(size: wordSize * 0.34, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 12)
+
+                loadingDots
+                    .padding(.top, Spacing.sm)
+                    .opacity(appeared ? 1 : 0)
+            }
         }
-        .onAppear { pulse = true }
+        .onAppear {
+            withAnimation(.spring(duration: 0.9, bounce: 0.2)) { appeared = true }
+        }
     }
 
-    private var launchSize: CGFloat {
+    /// A living mesh: nine control points drifting on out-of-phase sine orbits
+    /// through deep blue → violet → black — the WWDC "hello" energy, but ours.
+    private var meshBackdrop: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let drift = { (p: Double, a: Double) in Float(sin(t * p) * a) }
+            MeshGradient(
+                width: 3, height: 3,
+                points: [
+                    [0, 0], [0.5 + drift(0.23, 0.10), 0], [1, 0],
+                    [0, 0.5 + drift(0.17, 0.12)],
+                    [0.5 + drift(0.31, 0.16), 0.5 + drift(0.27, 0.16)],
+                    [1, 0.5 + drift(0.21, 0.12)],
+                    [0, 1], [0.5 + drift(0.19, 0.10), 1], [1, 1]
+                ],
+                colors: [
+                    Color(hex: 0x0A0B0F), Color(hex: 0x141B38), Color(hex: 0x0A0B0F),
+                    Color(hex: 0x1B2340), Color(hex: 0x33418C), Color(hex: 0x2A1B4E),
+                    Color(hex: 0x0A0B0F), Color(hex: 0x121B33), Color(hex: 0x0A0B0F)
+                ]
+            )
+        }
+        .ignoresSafeArea()
+    }
+
+    /// The glass "U" tile — the app icon rendered live in system Liquid Glass.
+    private var monogram: some View {
+        Text("U")
+            .font(.system(size: monogramSize * 0.52, weight: .thin))
+            .foregroundStyle(LinearGradient(colors: [.white, Color(hex: 0xBFD0FF)],
+                                            startPoint: .top, endPoint: .bottom))
+            .shadow(color: Color(hex: 0x6D8BFF).opacity(0.8), radius: 18)
+            .frame(width: monogramSize, height: monogramSize)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: monogramSize * 0.24, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: monogramSize * 0.24, style: .continuous)
+                .strokeBorder(LiquidGlass.rim(), lineWidth: 1))
+            .shadow(color: .black.opacity(0.4), radius: 30, y: 16)
+    }
+
+    /// Three dots breathing in sequence — quieter than a spinner.
+    private var loadingDots: some View {
+        TimelineView(.animation(minimumInterval: 0.1)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(.white)
+                        .frame(width: dotSize, height: dotSize)
+                        .opacity(0.25 + 0.6 * max(0, sin(t * 2.6 - Double(i) * 0.7)))
+                }
+            }
+        }
+    }
+
+    // MARK: - Metrics
+
+    private var monogramSize: CGFloat {
         #if os(tvOS)
-        56
+        190
         #else
-        34
+        110
+        #endif
+    }
+    private var wordSize: CGFloat {
+        #if os(tvOS)
+        50
+        #else
+        30
+        #endif
+    }
+    private var dotSize: CGFloat {
+        #if os(tvOS)
+        9
+        #else
+        6
         #endif
     }
 }

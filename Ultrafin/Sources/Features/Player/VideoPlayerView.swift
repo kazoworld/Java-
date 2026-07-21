@@ -255,10 +255,15 @@ struct VideoPlayerView: View {
             // stream finishes loading — so audio is ready when video starts, and
             // keep it warm so pausing doesn't drop the eARC/soundbar link.
             AudioSession.activateForPlayback()
+            #if os(tvOS)
+            // The eARC/soundbar re-lock gap is a TV problem; on iPhone the
+            // silent keep-alive engine would just burn battery all movie.
             routeKeeper.start()
+            #endif
             scheduleHide()
-            // Video takes the stage — any music yields.
-            MusicPlayer.shared.pause()
+            // Video takes the stage — music yields AND releases the shared
+            // remote command center so transport presses don't fire both.
+            MusicPlayer.shared.yieldToVideo()
             #if os(iOS)
             // The app is portrait-only, but movies may rotate landscape.
             OrientationLock.unlockForPlayback()
@@ -267,6 +272,9 @@ struct VideoPlayerView: View {
         .onDisappear {
             routeKeeper.stop()
             model?.stop()
+            // Video teardown wiped the shared command center — hand the remote
+            // back to any music still queued.
+            MusicPlayer.shared.reclaimRemoteIfNeeded()
             #if os(iOS)
             OrientationLock.lockPortrait()
             #endif

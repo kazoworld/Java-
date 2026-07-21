@@ -38,15 +38,10 @@ final class MusicPlayer {
     var hasQueue: Bool { !queue.isEmpty }
     var progress: Double { duration > 0 ? currentTime / duration : 0 }
 
-    /// The lyric line the song is currently on (synced lyrics only).
-    var currentLyricIndex: Int? {
-        let synced = lyrics.filter { $0.start != nil }
-        guard !synced.isEmpty else { return nil }
-        return lyrics.lastIndex { line in
-            guard let start = line.start else { return false }
-            return start <= currentTime + 0.2
-        }
-    }
+    /// The lyric line the song is currently on (synced lyrics only). Stored and
+    /// refreshed once per playback tick — a computed scan here made the lyrics
+    /// list O(n²) per body evaluation, twice a second.
+    private(set) var currentLyricIndex: Int?
 
     // MARK: - Internals
 
@@ -69,6 +64,7 @@ final class MusicPlayer {
                 if let total = self.player.currentItem?.duration.seconds, total.isFinite {
                     self.duration = total
                 }
+                self.refreshLyricIndex()
                 self.pushNowPlaying()
             }
         }
@@ -112,6 +108,24 @@ final class MusicPlayer {
         guard isPlaying else { return }
         player.pause()
         isPlaying = false
+        pushNowPlaying()
+    }
+
+    /// Video is starting: pause AND release the shared remote command center so
+    /// video's transport handlers don't stack on top of music's (a stacked
+    /// registration made a remote Play fire both — music blaring behind the
+    /// movie).
+    func yieldToVideo() {
+        pause()
+        nowPlaying.clear()
+    }
+
+    /// Video finished (its teardown wipes every target on the SHARED command
+    /// center, music's included). If a queue is still loaded, take the remote
+    /// back so the lock screen / Siri Remote control music again.
+    func reclaimRemoteIfNeeded() {
+        guard hasQueue else { return }
+        configureRemote()
         pushNowPlaying()
     }
 
@@ -212,6 +226,7 @@ final class MusicPlayer {
         currentTime = 0
         duration = Double(track.runTimeTicks ?? 0) / 10_000_000
         lyrics = []
+        currentLyricIndex = nil
         artworkImage = nil
 
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
@@ -263,6 +278,20 @@ final class MusicPlayer {
         }
         return client.imageURL(itemID: track.id, kind: .primary,
                                tag: track.imageTags?["Primary"], maxWidth: maxWidth)
+    }
+
+    private func refreshLyricIndex() {
+        guard !lyrics.isEmpty else {
+            if currentLyricIndex != nil { currentLyricIndex = nil }
+            return
+        }
+        let now = currentTime + 0.2
+        var latest: Int?
+        for line in lyrics {
+            guard let start = line.start else { continue }
+            if start <= now { latest = line.id } else { break }
+        }
+        if latest != currentLyricIndex { currentLyricIndex = latest }
     }
 
     // MARK: - System integration

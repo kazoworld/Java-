@@ -104,6 +104,10 @@ final class AVPlaybackEngine: NSObject, PlaybackEngine {
     // MARK: - Observation
 
     private func observe(item: AVPlayerItem) {
+        // Re-entry insurance: never stack observers if load() runs twice.
+        if let timeObserver { player.removeTimeObserver(timeObserver); self.timeObserver = nil }
+        statusObservation?.invalidate()
+        if let itemEndObserver { NotificationCenter.default.removeObserver(itemEndObserver); self.itemEndObserver = nil }
         // Periodic time updates drive the scrubber at ~4Hz (cheap, smooth enough).
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in

@@ -43,6 +43,9 @@ final class TheaterController {
     /// window so browsing never runs into credits.
     func startVideo(url: URL, startAt offset: Double, window: Double = 60) {
         stopped = false
+        // Re-entry safety: drop any observers from a previous start first.
+        if let timeObserver { videoPlayer.removeTimeObserver(timeObserver); self.timeObserver = nil }
+        statusObservation?.invalidate()
         let item = AVPlayerItem(url: url)
         // Browsing preview — never let it hoard bandwidth like real playback.
         item.preferredForwardBufferDuration = 8
@@ -81,6 +84,7 @@ final class TheaterController {
     func startTheme(url: URL) {
         stopped = false
         hasAudio = true
+        if let themeLooper { NotificationCenter.default.removeObserver(themeLooper); self.themeLooper = nil }
         let item = AVPlayerItem(url: url)
         themeLooper = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main

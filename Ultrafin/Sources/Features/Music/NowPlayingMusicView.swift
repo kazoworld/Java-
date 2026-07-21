@@ -15,6 +15,8 @@ struct NowPlayingMusicView: View {
     @State private var stage: Stage = .art
     @State private var isScrubbing = false
     @State private var scrubValue: Double = 0
+    /// Slow scale breath on the center carousel card while music plays.
+    @State private var breathing = false
 
     var body: some View {
         ZStack {
@@ -25,7 +27,12 @@ struct NowPlayingMusicView: View {
 
                 Group {
                     switch stage {
-                    case .art: artStage
+                    case .art:
+                        #if os(tvOS)
+                        carouselStage
+                        #else
+                        artStage
+                        #endif
                     case .lyrics: lyricsStage
                     case .queue: queueStage
                     }
@@ -101,6 +108,77 @@ struct NowPlayingMusicView: View {
             .animation(.spring(duration: 0.5, bounce: 0.25), value: player.isPlaying)
             .frame(maxWidth: .infinity)
     }
+
+    #if os(tvOS)
+    /// The TV's stage: a living coverflow of the queue. The current record
+    /// stands front and center — breathing gently while it plays, mirrored in a
+    /// fading reflection — with its neighbors receding into the room on either
+    /// side. Changing tracks glides the whole shelf across on a spring.
+    private var carouselStage: some View {
+        ZStack {
+            // Side cards first, center drawn last so it layers on top.
+            ForEach([-2, -1, 2, 1, 0], id: \.self) { offset in
+                if let track = queueTrack(at: offset) {
+                    carouselCard(track: track, offset: offset)
+                        // Identity follows the queue slot so a track change
+                        // animates cards BETWEEN positions (the glide), not a
+                        // crossfade-in-place.
+                        .id(track.id)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.spring(duration: 0.75, bounce: 0.16), value: player.index)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 4.2).repeatForever(autoreverses: true)) {
+                breathing = true
+            }
+        }
+    }
+
+    private func queueTrack(at offset: Int) -> MediaItem? {
+        let i = player.index + offset
+        guard player.queue.indices.contains(i) else { return nil }
+        return player.queue[i]
+    }
+
+    private func carouselCard(track: MediaItem, offset: Int) -> some View {
+        let isCenter = offset == 0
+        let side = artSide * (isCenter ? 1 : 0.58)
+        let corner = side * 0.05
+        return VStack(spacing: 0) {
+            RemoteImage(url: player.artworkURL(for: track, maxWidth: isCenter ? 800 : 400))
+                .frame(width: side, height: side)
+                .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+                .specularRim(cornerRadius: corner, intensity: isCenter ? 0.85 : 0.4)
+                .shadow(color: .black.opacity(isCenter ? 0.55 : 0.35),
+                        radius: isCenter ? 44 : 22, y: isCenter ? 24 : 12)
+
+            // The reflection: the same art flipped, melting into the floor.
+            RemoteImage(url: player.artworkURL(for: track, maxWidth: isCenter ? 800 : 400))
+                .frame(width: side, height: side)
+                .scaleEffect(x: 1, y: -1)
+                .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+                .mask(
+                    LinearGradient(stops: [
+                        .init(color: .black.opacity(isCenter ? 0.35 : 0.2), location: 0),
+                        .init(color: .clear, location: 0.55)
+                    ], startPoint: .top, endPoint: .bottom)
+                )
+                .frame(height: side * 0.45, alignment: .top)
+                .clipped()
+                .padding(.top, 6)
+        }
+        // Neighbors turn away into the room, coverflow-style.
+        .rotation3DEffect(.degrees(Double(-offset) * 26), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
+        .offset(x: CGFloat(offset) * artSide * 0.60)
+        .opacity(isCenter ? 1 : max(0.2, 0.5 - Double(abs(offset) - 1) * 0.18))
+        .zIndex(isCenter ? 10 : Double(5 - abs(offset)))
+        // The center record breathes while the music plays.
+        .scaleEffect(isCenter && player.isPlaying ? (breathing ? 1.015 : 0.995) : (isCenter ? 0.96 : 1))
+        .animation(isCenter ? .spring(duration: 0.5, bounce: 0.25) : nil, value: player.isPlaying)
+    }
+    #endif
 
     private var lyricsStage: some View {
         ScrollViewReader { proxy in

@@ -13,6 +13,10 @@ import UIKit
 @MainActor
 final class NowPlayingController {
     private var didConfigure = false
+    /// Artwork wrapper cached by image identity — update() runs twice a second
+    /// during music playback and must not mint a fresh MPMediaItemArtwork (and
+    /// force a system re-decode) on every tick.
+    private var cachedArtwork: (image: UIImage, wrapped: MPMediaItemArtwork)?
 
     /// Register the system transport commands once, routing them into the player.
     /// Handlers are invoked on the main thread by `MPRemoteCommandCenter`.
@@ -52,7 +56,10 @@ final class NowPlayingController {
         if let album, !album.isEmpty { info[MPMediaItemPropertyAlbumTitle] = album }
         if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         if let artwork {
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: artwork.size) { _ in artwork }
+            if cachedArtwork?.image !== artwork {
+                cachedArtwork = (artwork, MPMediaItemArtwork(boundsSize: artwork.size) { _ in artwork })
+            }
+            info[MPMediaItemPropertyArtwork] = cachedArtwork?.wrapped
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         #if os(tvOS)
