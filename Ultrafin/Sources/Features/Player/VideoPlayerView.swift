@@ -257,6 +257,8 @@ struct VideoPlayerView: View {
             AudioSession.activateForPlayback()
             routeKeeper.start()
             scheduleHide()
+            // Video takes the stage — any music yields.
+            MusicPlayer.shared.pause()
             #if os(iOS)
             // The app is portrait-only, but movies may rotate landscape.
             OrientationLock.unlockForPlayback()

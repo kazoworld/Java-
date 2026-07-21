@@ -12,8 +12,13 @@ struct MainTabView: View {
     @State private var selection = 0
     @State private var homePath = NavigationPath()
     @State private var libraryPath = NavigationPath()
+    @State private var musicPath = NavigationPath()
     @State private var searchPath = NavigationPath()
     @State private var settingsPath = NavigationPath()
+    /// The app-wide music session (mini-player + full player live here so they
+    /// persist across every tab).
+    @State private var music = MusicPlayer.shared
+    @State private var showNowPlaying = false
 
     /// Selecting a tab — INCLUDING re-selecting the one you're already on —
     /// always returns that tab to its root screen. A custom binding is the only
@@ -33,8 +38,9 @@ struct MainTabView: View {
         switch tab {
         case 0: homePath = NavigationPath()
         case 1: libraryPath = NavigationPath()
-        case 2: searchPath = NavigationPath()
-        case 3: settingsPath = NavigationPath()
+        case 2: musicPath = NavigationPath()
+        case 3: searchPath = NavigationPath()
+        case 4: settingsPath = NavigationPath()
         default: break
         }
     }
@@ -53,17 +59,23 @@ struct MainTabView: View {
             .tabItem { Label("Library", systemImage: "square.stack.fill") }
             .tag(1)
 
+            NavigationStack(path: $musicPath) {
+                MusicHomeView()
+            }
+            .tabItem { Label("Music", systemImage: "music.note") }
+            .tag(2)
+
             NavigationStack(path: $searchPath) {
                 SearchView()
             }
             .tabItem { Label("Search", systemImage: "magnifyingglass") }
-            .tag(2)
+            .tag(3)
 
             NavigationStack(path: $settingsPath) {
                 SettingsView()
             }
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-            .tag(3)
+            .tag(4)
 
             #if os(tvOS)
             // The profile switcher lives in the tab row itself — a floating
@@ -72,8 +84,21 @@ struct MainTabView: View {
             // with no cover to tear down.
             ProfileSwitcherView(isTab: true, onDone: { selection = 0 })
                 .tabItem { Label(profileTabTitle, systemImage: "person.crop.circle.fill") }
-                .tag(4)
+                .tag(5)
             #endif
+        }
+        // The now-playing bar rides above the tab bar on every screen; tap it
+        // to expand into the full player.
+        .overlay(alignment: miniPlayerAlignment) {
+            if music.hasQueue && !showNowPlaying {
+                MiniPlayerBar(player: music) { showNowPlaying = true }
+                    .padding(.horizontal, miniPlayerHPadding)
+                    .padding(.bottom, miniPlayerBottomPadding)
+            }
+        }
+        .animation(.smooth(duration: 0.35), value: music.hasQueue)
+        .fullScreenCoverCompat(isPresented: $showNowPlaying) {
+            NowPlayingMusicView(player: music)
         }
         // Read the accent through the observed environment store so an accent
         // change in Settings recolors the tab bar live (the static
@@ -88,4 +113,28 @@ struct MainTabView: View {
         return "Profile"
     }
     #endif
+
+    // MARK: - Mini-player placement
+
+    private var miniPlayerAlignment: Alignment {
+        #if os(tvOS)
+        .bottomTrailing
+        #else
+        .bottom
+        #endif
+    }
+    private var miniPlayerHPadding: CGFloat {
+        #if os(tvOS)
+        60
+        #else
+        Spacing.md
+        #endif
+    }
+    private var miniPlayerBottomPadding: CGFloat {
+        #if os(tvOS)
+        40
+        #else
+        58 // clears the floating tab bar
+        #endif
+    }
 }

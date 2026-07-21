@@ -29,6 +29,12 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     /// Parent (series) logo, used so episodes can show the show's logo art.
     let parentLogoItemId: String?
     let parentLogoImageTag: String?
+    // Music fields (songs and albums).
+    let albumArtist: String?
+    let artists: [String]?
+    let album: String?
+    let albumId: String?
+    let albumPrimaryImageTag: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -54,6 +60,11 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case trickplay = "Trickplay"
         case parentLogoItemId = "ParentLogoItemId"
         case parentLogoImageTag = "ParentLogoImageTag"
+        case albumArtist = "AlbumArtist"
+        case artists = "Artists"
+        case album = "Album"
+        case albumId = "AlbumId"
+        case albumPrimaryImageTag = "AlbumPrimaryImageTag"
     }
 
     /// Rotten Tomatoes Tomatometer percentage (Jellyfin's CriticRating).
@@ -125,6 +136,19 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
 
     /// True when the server has this item marked fully watched.
     var isWatched: Bool { userData?.played == true }
+
+    /// "Artist" or "Artist A, Artist B" for songs/albums.
+    var artistText: String? {
+        if let artists, !artists.isEmpty { return artists.joined(separator: ", ") }
+        return albumArtist
+    }
+
+    /// "3:42" for songs.
+    var trackDurationText: String? {
+        guard let ticks = runTimeTicks, ticks > 0 else { return nil }
+        let total = Int(ticks / 10_000_000)
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
 }
 
 /// A cast or crew member attached to an item.
@@ -154,6 +178,8 @@ enum ItemKind: String, Codable, Sendable {
     case folder = "Folder"
     case audio = "Audio"
     case musicAlbum = "MusicAlbum"
+    case musicArtist = "MusicArtist"
+    case playlist = "Playlist"
     case unknown
 
     init(from decoder: Decoder) throws {
@@ -206,4 +232,12 @@ struct PlaybackResolution: Sendable {
     let isDirectPlay: Bool
     let container: String?
     let playSessionID: String?
+}
+
+/// One line of synced lyrics for a song. `start` is seconds into the track
+/// (nil when the server only has unsynced lyrics).
+struct LyricLine: Identifiable, Hashable, Sendable {
+    let id: Int
+    let text: String
+    let start: Double?
 }

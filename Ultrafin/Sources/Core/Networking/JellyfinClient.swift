@@ -493,6 +493,119 @@ actor JellyfinClient {
         return components.url
     }
 
+
+    // MARK: - Music
+
+    /// Newest albums for the Music home.
+    func recentAlbums(userID: String) async throws -> [MediaItem] {
+        try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: [
+            .init(name: "limit", value: "24"),
+            .init(name: "includeItemTypes", value: "MusicAlbum")
+        ])
+    }
+
+    /// The whole album library, A–Z.
+    func allAlbums(userID: String, limit: Int = 300) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "MusicAlbum"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "SortBy", value: "SortName"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
+    /// Album artists, A–Z.
+    func artists(userID: String, limit: Int = 200) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Artists/AlbumArtists", query: [
+            .init(name: "userId", value: userID),
+            .init(name: "SortBy", value: "SortName"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
+    /// The user's playlists.
+    func playlists(userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "Playlist"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "SortBy", value: "SortName")
+        ]).items
+    }
+
+    /// An album's tracks in disc/track order.
+    func albumTracks(albumID: String, userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "ParentId", value: albumID),
+            .init(name: "IncludeItemTypes", value: "Audio"),
+            .init(name: "SortBy", value: "ParentIndexNumber,IndexNumber,SortName")
+        ]).items
+    }
+
+    /// A playlist's tracks in playlist order.
+    func playlistTracks(playlistID: String, userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Playlists/\(playlistID)/Items", query: [
+            .init(name: "userId", value: userID)
+        ]).items
+    }
+
+    /// An artist's albums, newest first.
+    func artistAlbums(artistID: String, userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "MusicAlbum"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "AlbumArtistIds", value: artistID),
+            .init(name: "SortBy", value: "PremiereDate,ProductionYear,SortName"),
+            .init(name: "SortOrder", value: "Descending")
+        ]).items
+    }
+
+    /// A random pile of songs — "Shuffle Library".
+    func randomSongs(userID: String, limit: Int = 100) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "Audio"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "SortBy", value: "Random"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
+    /// Synced lyrics for a song (Jellyfin 10.9+ / the LrcLib plugin). Empty when
+    /// the server has none.
+    func lyrics(itemID: String) async -> [LyricLine] {
+        struct Response: Decodable {
+            struct Line: Decodable {
+                let text: String
+                let start: Int64?
+                enum CodingKeys: String, CodingKey { case text = "Text", start = "Start" }
+            }
+            let lyrics: [Line]?
+            enum CodingKeys: String, CodingKey { case lyrics = "Lyrics" }
+        }
+        guard let response = try? await get(Response.self, path: "/Audio/\(itemID)/Lyrics") else { return [] }
+        return (response.lyrics ?? []).enumerated().map { index, line in
+            LyricLine(id: index, text: line.text,
+                      start: line.start.map { Double($0) / 10_000_000 })
+        }
+    }
+
+    /// Stream URL for a song via the universal endpoint: direct-plays common
+    /// containers and transparently transcodes anything exotic to AAC.
+    func audioStreamURL(itemID: String, userID: String) async -> URL? {
+        guard let token = accessToken,
+              var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        components.path += "/Audio/\(itemID)/universal"
+        components.queryItems = [
+            .init(name: "UserId", value: userID),
+            .init(name: "DeviceId", value: deviceID),
+            .init(name: "api_key", value: token),
+            .init(name: "Container", value: "mp3,aac,m4a|aac,m4b|aac,flac,alac,m4a|alac,m4b|alac,wav,ogg"),
+            .init(name: "TranscodingContainer", value: "aac"),
+            .init(name: "TranscodingProtocol", value: "hls"),
+            .init(name: "AudioCodec", value: "aac")
+        ]
+        return components.url
+    }
+
     // MARK: - Admin dashboard tools
 
     /// Full server details (admin-scoped `/System/Info`).
