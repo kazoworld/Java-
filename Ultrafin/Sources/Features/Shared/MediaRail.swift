@@ -167,16 +167,7 @@ struct MediaCard: View {
                                 .foregroundStyle(.white)
                                 .shadow(color: .black.opacity(0.8), radius: 3, y: 1)
                         }
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Color.black.opacity(0.4))
-                                Capsule()
-                                    .fill(settings.theme.accent.color)
-                                    .frame(width: geo.size.width * progress)
-                            }
-                            .frame(height: 4)
-                        }
-                        .frame(height: 4)
+                        progressBar(progress)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Spacing.sm)
@@ -250,6 +241,33 @@ struct MediaCard: View {
             }
         }
         #endif
+    }
+
+    /// Rail cards know their width up front, so the fill is plain math; only
+    /// grid cards (`fillWidth`) need a GeometryReader to learn theirs — an
+    /// always-on GeometryReader in every card of every rail adds up.
+    @ViewBuilder
+    private func progressBar(_ progress: Double) -> some View {
+        if fillWidth {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.black.opacity(0.4))
+                    Capsule()
+                        .fill(settings.theme.accent.color)
+                        .frame(width: geo.size.width * progress)
+                }
+                .frame(height: 4)
+            }
+            .frame(height: 4)
+        } else {
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.black.opacity(0.4))
+                Capsule()
+                    .fill(settings.theme.accent.color)
+                    .frame(width: max(0, (width - Spacing.sm * 2) * progress))
+            }
+            .frame(height: 4)
+        }
     }
 
     private func toggleWatched() {

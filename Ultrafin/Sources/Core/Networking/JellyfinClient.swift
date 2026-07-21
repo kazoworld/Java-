@@ -53,7 +53,14 @@ actor JellyfinClient {
             throw APIError.invalidURL
         }
         components.path = (components.path.isEmpty ? "" : components.path) + path
-        if !query.isEmpty { components.queryItems = query }
+        if !query.isEmpty {
+            components.queryItems = query
+            // URLComponents leaves "+" literal in query values, and Jellyfin
+            // decodes a literal "+" as a space — so a search for "Disney+"
+            // arrived as "Disney ". Encode it explicitly.
+            components.percentEncodedQuery = components.percentEncodedQuery?
+                .replacingOccurrences(of: "+", with: "%2B")
+        }
         guard let url = components.url else { throw APIError.invalidURL }
 
         var request = URLRequest(url: url)
@@ -260,7 +267,9 @@ actor JellyfinClient {
         guard let item = try? await get(MediaItem.self, path: "/Users/\(userID)/Items/\(itemID)",
                                         query: [.init(name: "fields", value: "Trickplay")]) else { return nil }
         var source: TrickplaySource?
-        if let bySource = item.trickplay, let byWidth = bySource.values.first,
+        // Sort media-source keys so the same source is picked every time —
+        // Dictionary.values.first is order-undefined across runs.
+        if let bySource = item.trickplay, let byWidth = bySource.min(by: { $0.key < $1.key })?.value,
            let best = byWidth.max(by: { (Int($0.key) ?? 0) < (Int($1.key) ?? 0) }),
            let width = Int(best.key) {
             source = TrickplaySource(itemID: itemID, width: width, info: best.value,

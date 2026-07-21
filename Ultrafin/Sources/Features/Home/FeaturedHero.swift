@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 #if os(iOS)
 import UIKit
 #endif
@@ -29,7 +28,7 @@ struct FeaturedHero: View {
 
     private enum HeroFocus: Hashable { case play, info, shuffle, prev, next }
 
-    private let rotation: Publishers.Autoconnect<Timer.TimerPublisher>
+    private let rotationSeconds: Int
 
     init(items: [MediaItem], rotationSeconds: Int = 8, autoAdvance: Bool = true,
          onPlay: @escaping (MediaItem) -> Void, onShuffle: (() -> Void)? = nil,
@@ -39,8 +38,7 @@ struct FeaturedHero: View {
         self.onPlay = onPlay
         self.onShuffle = onShuffle
         self.onColorChange = onColorChange
-        self.rotation = Timer.publish(every: TimeInterval(max(3, rotationSeconds)), on: .main, in: .common)
-            .autoconnect()
+        self.rotationSeconds = max(3, rotationSeconds)
     }
 
     private var current: MediaItem? {
@@ -78,7 +76,16 @@ struct FeaturedHero: View {
             }
         )
         #endif
-        .onReceive(rotation) { _ in advance() }
+        // A view-lifetime task instead of a Combine timer: the old publisher was
+        // rebuilt (and its cadence reset) on every re-render, and kept firing —
+        // mutating Home's ambient tint — while the hero was off-screen behind a
+        // detail page or another tab. The task cancels on disappear for free.
+        .task(id: rotationSeconds) {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(rotationSeconds))
+                advance()
+            }
+        }
         .task {
             await loadColor()
             prefetchBackdrops() // warm the cache so rotations don't hitch on decode

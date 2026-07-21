@@ -31,12 +31,12 @@ struct AuthBackdrop: View {
                 .offset(x: driftA ? 260 : 340, y: driftB ? 280 : 180)
 
             // Floating glass droplets, each bobbing on its own rhythm — they
-            // bend the aurora behind them as both layers move.
+            // bend the aurora behind them as both layers move. Three, not five:
+            // every orb is a live refraction pass over animated content, and
+            // the two smallest read as noise for what they cost the GPU.
             orb(size: orbScale * 130, x: -0.32, y: -0.22, phase: driftA)
             orb(size: orbScale * 70,  x: 0.36,  y: -0.30, phase: driftB)
             orb(size: orbScale * 95,  x: 0.30,  y: 0.26,  phase: driftC)
-            orb(size: orbScale * 52,  x: -0.36, y: 0.30,  phase: driftB)
-            orb(size: orbScale * 40,  x: 0.05,  y: -0.38, phase: driftC)
         }
         .ignoresSafeArea()
         .onAppear {

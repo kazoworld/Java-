@@ -135,7 +135,12 @@ final class SettingsStore {
         let darkDefaultFlag = "settings.migratedDarkDefault"
         if !UserDefaults.standard.bool(forKey: darkDefaultFlag) {
             UserDefaults.standard.set(true, forKey: darkDefaultFlag)
-            if appearance.mode == .light { appearance.mode = .dark }
+            if appearance.mode == .light {
+                appearance.mode = .dark
+                // didSet observers don't fire during init, so write through
+                // explicitly — otherwise the migration reverts every launch.
+                persist(appearance, key: Keys.appearance)
+            }
         }
     }
 
@@ -144,11 +149,20 @@ final class SettingsStore {
     /// Moves a row up or down in the Home order (used by the reorder controls,
     /// which work on tvOS where drag-to-reorder isn't available). The featured
     /// media bar is pinned to the top and can't be reordered.
-    func moveHomeRow(_ kind: HomeRowKind, up: Bool) {
+    /// `isVisible` lets the caller mark rows that aren't currently on screen
+    /// (disabled, or empty of content) so a move always hops past a row the
+    /// user can actually see — otherwise a press "does nothing" while silently
+    /// swapping with an invisible neighbor. The default treats every row as
+    /// visible (the Home Layout editor lists them all, so adjacent moves are
+    /// exactly right there).
+    func moveHomeRow(_ kind: HomeRowKind, up: Bool, isVisible: (HomeRowKind) -> Bool = { _ in true }) {
         guard kind != .featured else { return }
         guard let i = homeLayout.rows.firstIndex(where: { $0.kind == kind }) else { return }
         let lower = homeLayout.rows.first?.kind == .featured ? 1 : 0
-        let j = up ? i - 1 : i + 1
+        var j = up ? i - 1 : i + 1
+        while j >= lower, j < homeLayout.rows.count, !isVisible(homeLayout.rows[j].kind) {
+            j += up ? -1 : 1
+        }
         guard j >= lower, j < homeLayout.rows.count else { return }
         homeLayout.rows.swapAt(i, j)
     }
@@ -180,6 +194,20 @@ final class SettingsStore {
 
 struct ThemePreferences: Codable {
     var accent: AccentColor = .aurora
+
+    init() {}
+
+    // Tolerant decoding (here and in every preference group below): fields
+    // added in newer versions fall back to their defaults instead of failing
+    // the whole blob — synthesized Decodable throws on a missing key even when
+    // the property has a default, which silently reset entire settings groups
+    // on app update.
+    enum CodingKeys: String, CodingKey { case accent }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        accent = (try? c.decodeIfPresent(AccentColor.self, forKey: .accent)) ?? .aurora
+    }
 }
 
 struct AppearancePreferences: Codable {
@@ -215,6 +243,21 @@ struct AppearancePreferences: Codable {
         case .dark: return .dark
         case .light: return .light
         }
+    }
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case mode, richMotion, cardDensity, oledMode, ambientBackground
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mode = (try? c.decodeIfPresent(Mode.self, forKey: .mode)) ?? .dark
+        richMotion = (try? c.decodeIfPresent(Bool.self, forKey: .richMotion)) ?? true
+        cardDensity = (try? c.decodeIfPresent(CardDensity.self, forKey: .cardDensity)) ?? .regular
+        oledMode = (try? c.decodeIfPresent(Bool.self, forKey: .oledMode)) ?? false
+        ambientBackground = (try? c.decodeIfPresent(Bool.self, forKey: .ambientBackground)) ?? true
     }
 }
 
@@ -253,6 +296,20 @@ struct AudioPreferences: Codable {
 
     /// Preferred audio language (ISO code), or empty for the server default.
     var preferredLanguage: String = ""
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case loudnessNormalization, dialogueEnhancement, passthrough, preferredLanguage
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        loudnessNormalization = (try? c.decodeIfPresent(Bool.self, forKey: .loudnessNormalization)) ?? false
+        dialogueEnhancement = (try? c.decodeIfPresent(DialogueEnhancement.self, forKey: .dialogueEnhancement)) ?? .off
+        passthrough = (try? c.decodeIfPresent(Bool.self, forKey: .passthrough)) ?? false
+        preferredLanguage = (try? c.decodeIfPresent(String.self, forKey: .preferredLanguage)) ?? ""
+    }
 }
 
 struct VideoPreferences: Codable {
@@ -263,6 +320,17 @@ struct VideoPreferences: Codable {
     /// Starting quality for new playback (the in-player Quality menu can still
     /// override per-session).
     var defaultQuality: QualityOption = .auto
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey { case allowHDR, matchContent, defaultQuality }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        allowHDR = (try? c.decodeIfPresent(Bool.self, forKey: .allowHDR)) ?? true
+        matchContent = (try? c.decodeIfPresent(Bool.self, forKey: .matchContent)) ?? true
+        defaultQuality = (try? c.decodeIfPresent(QualityOption.self, forKey: .defaultQuality)) ?? .auto
+    }
 }
 
 struct SubtitlePreferences: Codable {
@@ -404,6 +472,17 @@ struct DownloadPreferences: Codable {
     var quality: Quality = .high
     var maxStorageGB: Int = 10
     var allowCellular: Bool = false
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey { case quality, maxStorageGB, allowCellular }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        quality = (try? c.decodeIfPresent(Quality.self, forKey: .quality)) ?? .high
+        maxStorageGB = (try? c.decodeIfPresent(Int.self, forKey: .maxStorageGB)) ?? 10
+        allowCellular = (try? c.decodeIfPresent(Bool.self, forKey: .allowCellular)) ?? false
+    }
 }
 
 /// Common languages offered in audio/subtitle pickers (ISO 639-2 codes).
@@ -513,6 +592,22 @@ struct FeaturedPreferences: Codable {
     var autoAdvance: Bool = true
     /// Seconds between rotations.
     var rotationSeconds: Int = 8
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case contentType, source, itemCount, sourceLibraryIDs, autoAdvance, rotationSeconds
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        contentType = (try? c.decodeIfPresent(ContentType.self, forKey: .contentType)) ?? .all
+        source = (try? c.decodeIfPresent(Source.self, forKey: .source)) ?? .shuffle
+        itemCount = (try? c.decodeIfPresent(Int.self, forKey: .itemCount)) ?? 15
+        sourceLibraryIDs = (try? c.decodeIfPresent([String].self, forKey: .sourceLibraryIDs)) ?? []
+        autoAdvance = (try? c.decodeIfPresent(Bool.self, forKey: .autoAdvance)) ?? true
+        rotationSeconds = (try? c.decodeIfPresent(Int.self, forKey: .rotationSeconds)) ?? 8
+    }
 }
 
 /// Ordered, toggleable set of Home rows.
@@ -521,6 +616,14 @@ struct HomeLayoutPreferences: Codable {
 
     init() {
         rows = HomeRowKind.allCases.map { HomeRowConfig(kind: $0, isEnabled: true) }
+    }
+
+    enum CodingKeys: String, CodingKey { case rows }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rows = (try? c.decodeIfPresent([HomeRowConfig].self, forKey: .rows))
+            ?? HomeRowKind.allCases.map { HomeRowConfig(kind: $0, isEnabled: true) }
     }
 
     /// Ensures the stored list contains every known row exactly once, appending
@@ -568,4 +671,19 @@ struct PlaybackPreferences: Codable {
     var preferredSubtitleLanguage: String = "eng"
     /// Cap UI animations to keep the player overlay buttery during playback.
     var maxBufferSeconds: Int = 30
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case enginePolicy, autoResume, seekInterval, preferredSubtitleLanguage, maxBufferSeconds
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enginePolicy = (try? c.decodeIfPresent(EnginePolicy.self, forKey: .enginePolicy)) ?? .hybrid
+        autoResume = (try? c.decodeIfPresent(Bool.self, forKey: .autoResume)) ?? true
+        seekInterval = (try? c.decodeIfPresent(Int.self, forKey: .seekInterval)) ?? 15
+        preferredSubtitleLanguage = (try? c.decodeIfPresent(String.self, forKey: .preferredSubtitleLanguage)) ?? "eng"
+        maxBufferSeconds = (try? c.decodeIfPresent(Int.self, forKey: .maxBufferSeconds)) ?? 30
+    }
 }

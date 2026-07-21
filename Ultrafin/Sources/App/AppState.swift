@@ -113,7 +113,11 @@ final class AppState {
     }
 
     func signOut() {
-        Task { await client?.reportSessionEnded() }
+        // Capture before clearing — the Task body runs after this method
+        // returns, by which point `client` is already nil and the server
+        // would never hear about the logout.
+        let departing = client
+        Task { await departing?.reportSessionEnded() }
         sessionStore.clear()
         client = nil
         currentUser = nil

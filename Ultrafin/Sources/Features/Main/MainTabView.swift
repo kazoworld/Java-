@@ -94,6 +94,11 @@ struct MainTabView: View {
                 MiniPlayerBar(player: music) { showNowPlaying = true }
                     .padding(.horizontal, miniPlayerHPadding)
                     .padding(.bottom, miniPlayerBottomPadding)
+                    #if os(tvOS)
+                    // Overlays aren't in the focus engine's natural sweep — the
+                    // bar was visible but unreachable without its own section.
+                    .focusSection()
+                    #endif
             }
         }
         .animation(.smooth(duration: 0.35), value: music.hasQueue)

@@ -249,7 +249,7 @@ struct HomeView: View {
         #if os(tvOS)
         if let kind = editingRow {
             ZStack(alignment: .top) {
-                Button { commitReorder() } label: { Color.clear }
+                Button { commitReorder(proxy: proxy) } label: { Color.clear }
                     .buttonStyle(.plain)
                     .focused($reorderFocused)
                     .onMoveCommand { direction in
@@ -259,7 +259,7 @@ struct HomeView: View {
                         default: break
                         }
                     }
-                    .onExitCommand { cancelReorder() }
+                    .onExitCommand { cancelReorder(proxy: proxy) }
 
                 reorderBanner
                     .padding(.top, 40)
@@ -294,21 +294,51 @@ struct HomeView: View {
 
     private func moveEditing(_ kind: HomeRowKind, up: Bool, proxy: ScrollViewProxy) {
         withAnimation(.smooth(duration: 0.3)) {
-            settings.moveHomeRow(kind, up: up)
+            // Hop over rows that aren't on screen (disabled or empty) so every
+            // press moves the row past something the user can actually see.
+            settings.moveHomeRow(kind, up: up, isVisible: { k in
+                (settings.homeLayout.rows.first(where: { $0.kind == k })?.isEnabled ?? true)
+                    && rowHasContent(k)
+            })
             proxy.scrollTo(kind, anchor: .center)
         }
     }
 
-    private func commitReorder() {
-        // The new order is already persisted (moveHomeRow writes through).
-        preEditRows = nil
-        withAnimation(.smooth(duration: 0.3)) { editingRow = nil }
+    /// Whether a row currently renders anything — mirrors `row(for:)`'s
+    /// emptiness checks so reordering skips rows that aren't visible.
+    private func rowHasContent(_ kind: HomeRowKind) -> Bool {
+        switch kind {
+        case .featured: return !featured.isEmpty
+        case .continueWatching: return !continueWatching.isEmpty
+        case .comingUp: return false
+        case .recentlyAdded: return !visible(model.latest).isEmpty
+        case .recentShows: return !visible(model.recentShows).isEmpty
+        case .favorites: return !model.favorites.isEmpty
+        case .hiddenGems: return !visible(model.hiddenGems).isEmpty
+        case .libraries: return !model.libraries.isEmpty
+        }
     }
 
-    private func cancelReorder() {
+    private func commitReorder(proxy: ScrollViewProxy) {
+        // The new order is already persisted (moveHomeRow writes through).
+        let kind = editingRow
+        preEditRows = nil
+        withAnimation(.smooth(duration: 0.3)) {
+            editingRow = nil
+            // Keep the settled row centered so focus lands back near it.
+            if let kind { proxy.scrollTo(kind, anchor: .center) }
+        }
+    }
+
+    private func cancelReorder(proxy: ScrollViewProxy) {
+        let kind = editingRow
         if let snapshot = preEditRows { settings.homeLayout.rows = snapshot }
         preEditRows = nil
-        withAnimation(.smooth(duration: 0.3)) { editingRow = nil }
+        withAnimation(.smooth(duration: 0.3)) {
+            editingRow = nil
+            // The row snapped back to its old spot — follow it there.
+            if let kind { proxy.scrollTo(kind, anchor: .center) }
+        }
     }
 
     /// The circular profile avatar in the top-right — opens the Who's Watching

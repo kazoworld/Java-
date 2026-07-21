@@ -227,7 +227,7 @@ struct ProfileSwitcherView: View {
         if let saved = savedSession(user) {
             switchUsing { await appState.validateSaved(saved) ? saved : nil } fallback: {
                 if user.hasPassword == false {
-                    switchUsing { await authenticate(user: user, password: "") } fallback: { promptPassword(user) }
+                    switchUsing { await authenticate(user: user, password: "") } fallback: { unreachable(user) }
                 } else {
                     promptPassword(user)
                 }
@@ -236,7 +236,7 @@ struct ProfileSwitcherView: View {
         }
         // 2) Accounts with no password sign in silently.
         if user.hasPassword == false {
-            switchUsing { await authenticate(user: user, password: "") } fallback: { promptPassword(user) }
+            switchUsing { await authenticate(user: user, password: "") } fallback: { unreachable(user) }
             return
         }
         // 3) Locked account we haven't seen — ask for its password (once).
@@ -246,6 +246,13 @@ struct ProfileSwitcherView: View {
     private func promptPassword(_ user: ServerUser) {
         password = ""
         withAnimation(.smooth(duration: 0.25)) { passwordTarget = user }
+    }
+
+    /// A passwordless account that fails a silent sign-in can only mean the
+    /// server didn't answer — asking for a password it doesn't have would be
+    /// a dead end, so say what actually happened instead.
+    private func unreachable(_ user: ServerUser) {
+        errorMessage = "Couldn't switch to \(user.name) — check the server connection and try again."
     }
 
     /// Obtains a validated session with the busy overlay, then applies it. As a
