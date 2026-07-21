@@ -22,6 +22,7 @@ protocol MusicSource: Sendable {
     func playlistTracks(playlistID: String) async throws -> [MediaItem]
     func artistAlbums(artistID: String) async throws -> [MediaItem]
     func randomSongs() async throws -> [MediaItem]
+    func favoriteSongs() async throws -> [MediaItem]
 
     func lyrics(for track: MediaItem) async -> [LyricLine]
     func audioStreamURL(itemID: String) async -> URL?
@@ -55,6 +56,7 @@ struct JellyfinMusicSource: MusicSource {
         try await client.artistAlbums(artistID: artistID, userID: userID)
     }
     func randomSongs() async throws -> [MediaItem] { try await client.randomSongs(userID: userID) }
+    func favoriteSongs() async throws -> [MediaItem] { try await client.favoriteSongs(userID: userID) }
 
     func lyrics(for track: MediaItem) async -> [LyricLine] { await client.lyrics(itemID: track.id) }
     func audioStreamURL(itemID: String) async -> URL? {
@@ -102,6 +104,7 @@ struct NavidromeMusicSource: MusicSource {
         try await client.artistAlbums(artistID: artistID)
     }
     func randomSongs() async throws -> [MediaItem] { try await client.randomSongs() }
+    func favoriteSongs() async throws -> [MediaItem] { try await client.favoriteSongs() }
 
     func lyrics(for track: MediaItem) async -> [LyricLine] { await client.lyrics(for: track) }
     func audioStreamURL(itemID: String) async -> URL? { client.streamURL(itemID: itemID) }

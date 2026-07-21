@@ -7,6 +7,7 @@ final class MusicHomeViewModel {
     var allAlbums: [MediaItem] = []
     var artists: [MediaItem] = []
     var playlists: [MediaItem] = []
+    var heartedSongs: [MediaItem] = []
     var isLoading = true
     private(set) var didLoad = false
     /// Which backend the current lists came from — switching sources in
@@ -14,13 +15,14 @@ final class MusicHomeViewModel {
     private var loadedKind: MusicSourceKind?
 
     var isEmpty: Bool {
-        recentAlbums.isEmpty && allAlbums.isEmpty && artists.isEmpty && playlists.isEmpty
+        recentAlbums.isEmpty && allAlbums.isEmpty && artists.isEmpty
+            && playlists.isEmpty && heartedSongs.isEmpty
     }
 
     func load(source: MusicSource) async {
         if loadedKind != source.kind {
             didLoad = false
-            recentAlbums = []; allAlbums = []; artists = []; playlists = []
+            recentAlbums = []; allAlbums = []; artists = []; playlists = []; heartedSongs = []
         }
         if !didLoad { isLoading = true }
         defer { isLoading = false; didLoad = true; loadedKind = source.kind }
@@ -28,10 +30,12 @@ final class MusicHomeViewModel {
         async let albumsTask = try? source.allAlbums()
         async let artistsTask = try? source.artists()
         async let playlistsTask = try? source.playlists()
+        async let heartedTask = try? source.favoriteSongs()
         if let v = await recentTask { recentAlbums = v }
         if let v = await albumsTask { allAlbums = v }
         if let v = await artistsTask { artists = v }
         if let v = await playlistsTask { playlists = v }
+        if let v = await heartedTask { heartedSongs = v }
     }
 }
 
@@ -57,11 +61,14 @@ struct MusicHomeView: View {
                     if !model.playlists.isEmpty {
                         albumRail(title: "Playlists", albums: model.playlists)
                     }
-                    if !model.artists.isEmpty {
-                        artistRail
-                    }
                     if !model.allAlbums.isEmpty {
                         albumRail(title: "Albums", albums: model.allAlbums)
+                    }
+                    if !model.heartedSongs.isEmpty {
+                        songRail(title: "Hearted Songs", songs: model.heartedSongs)
+                    }
+                    if !model.artists.isEmpty {
+                        artistRail
                     }
                 }
             }
@@ -144,6 +151,34 @@ struct MusicHomeView: View {
                             ArtistCard(artist: artist)
                         }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
+                    }
+                }
+                .padding(.horizontal, edgePadding)
+                .padding(.vertical, focusInset)
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    /// A rail of individual songs (Hearted Songs) — tapping one starts the
+    /// whole list playing from there.
+    private func songRail(title: String, songs: [MediaItem]) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text(title)
+                .font(sectionFont)
+                .foregroundStyle(UltrafinColors.primaryText)
+                .padding(.horizontal, edgePadding)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: railSpacing) {
+                    ForEach(Array(songs.enumerated()), id: \.element.id) { position, song in
+                        Button {
+                            guard let source = appState.musicSource else { return }
+                            Haptics.play(.selection)
+                            MusicPlayer.shared.play(tracks: songs, startAt: position, source: source)
+                        } label: {
+                            SongCard(song: song)
+                        }
+                        .mediaCardButtonStyle()
                     }
                 }
                 .padding(.horizontal, edgePadding)
@@ -255,6 +290,84 @@ struct AlbumCard: View {
 
     private var artURL: URL? {
         appState.musicSource?.artworkURL(for: album, maxWidth: Int(side * 2))
+    }
+    private var titleFont: Font {
+        #if os(tvOS)
+        .system(size: 22, weight: .semibold, design: .rounded)
+        #else
+        Typography.cardTitle
+        #endif
+    }
+    private var subtitleFont: Font {
+        #if os(tvOS)
+        .system(size: 17, weight: .medium)
+        #else
+        Typography.caption
+        #endif
+    }
+}
+
+/// A square song tile: album art with title + artist beneath. Used by the
+/// Hearted Songs rail.
+struct SongCard: View {
+    @Environment(AppState.self) private var appState
+    @Environment(SettingsStore.self) private var settings
+    @Environment(\.isFocused) private var isFocused
+
+    let song: MediaItem
+
+    private var side: CGFloat {
+        #if os(tvOS)
+        220
+        #else
+        130
+        #endif
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            ZStack(alignment: .bottomTrailing) {
+                RemoteImage(url: artURL)
+                    .frame(width: side, height: side)
+                    .clipShape(RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
+                            .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
+                                          lineWidth: isFocused ? 3 : 1)
+                    )
+                    .shadow(color: isFocused ? settings.theme.accent.color.opacity(0.5) : .clear,
+                            radius: isFocused ? 20 : 0, y: isFocused ? 6 : 0)
+                // A little filled heart marks these as hearted.
+                Image(systemName: "heart.fill")
+                    .font(.system(size: heartSize, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(heartSize * 0.5)
+                    .background(settings.theme.accent.color.opacity(0.92), in: Circle())
+                    .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+                    .padding(Spacing.sm)
+            }
+            Text(song.name)
+                .font(titleFont)
+                .foregroundStyle(isFocused ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
+                .lineLimit(1)
+            Text(song.artistText ?? " ")
+                .font(subtitleFont)
+                .foregroundStyle(UltrafinColors.tertiaryText)
+                .lineLimit(1)
+        }
+        .frame(width: side)
+        .animation(.smooth(duration: 0.2), value: isFocused)
+    }
+
+    private var artURL: URL? {
+        appState.musicSource?.artworkURL(for: song, maxWidth: Int(side * 2))
+    }
+    private var heartSize: CGFloat {
+        #if os(tvOS)
+        14
+        #else
+        10
+        #endif
     }
     private var titleFont: Font {
         #if os(tvOS)

@@ -4,9 +4,17 @@ import AVKit
 /// The full-screen music player, in the spirit of Apple Music: the album art
 /// floats over its own blurred reflection, shrinking when paused and springing
 /// back on play; lyrics scroll karaoke-style; the queue is one tap away.
+///
+/// Layout adapts to the device: tvOS always shows the coverflow carousel; an
+/// iPhone shows the tall art in portrait and switches to the carousel in a
+/// two-column layout when turned to landscape. Every layout sizes the artwork
+/// off the available space so the transport controls are always on screen.
 struct NowPlayingMusicView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SettingsStore.self) private var settings
+    #if os(iOS)
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    #endif
 
     @Bindable var player: MusicPlayer
 
@@ -18,44 +26,118 @@ struct NowPlayingMusicView: View {
     /// Slow scale breath on the center carousel card while music plays.
     @State private var breathing = false
 
+    /// True on an iPhone held in landscape — the carousel becomes the stage.
+    private var isLandscapePhone: Bool {
+        #if os(iOS)
+        vSizeClass == .compact
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
         ZStack {
             backdrop
-
-            VStack(spacing: Spacing.lg) {
-                grabber
-
-                Group {
-                    switch stage {
-                    case .art:
-                        #if os(tvOS)
-                        carouselStage
-                        #else
-                        artStage
-                        #endif
-                    case .lyrics: lyricsStage
-                    case .queue: queueStage
-                    }
-                }
-                .frame(maxHeight: .infinity)
-
-                trackInfo
-                scrubber
-                transport
-                bottomBar
+            GeometryReader { geo in
+                layout(in: geo.size)
             }
-            .padding(.horizontal, edgePadding)
-            .padding(.vertical, Spacing.xl)
-            .frame(maxWidth: stageMaxWidth)
-            .frame(maxWidth: .infinity)
         }
         .environment(\.colorScheme, .dark)
         .animation(.smooth(duration: 0.35), value: stage)
+        #if os(iOS)
+        // The app is otherwise portrait-locked; let the full player rotate so
+        // turning the phone sideways reveals the coverflow carousel. Back to
+        // portrait when it closes.
+        .onAppear { OrientationLock.unlockForPlayback() }
+        .onDisappear { OrientationLock.lockPortrait() }
+        #endif
         #if os(tvOS)
         .onExitCommand { dismiss() }
         .onPlayPauseCommand { player.togglePlayPause() }
         #endif
     }
+
+    // MARK: - Layouts
+
+    @ViewBuilder
+    private func layout(in size: CGSize) -> some View {
+        #if os(tvOS)
+        tvLayout(in: size)
+        #else
+        if isLandscapePhone {
+            landscapePhoneLayout(in: size)
+        } else {
+            portraitLayout(in: size)
+        }
+        #endif
+    }
+
+    #if os(tvOS)
+    private func tvLayout(in size: CGSize) -> some View {
+        VStack(spacing: Spacing.lg) {
+            centerStage(maxSide: 560)
+                .frame(maxHeight: .infinity)
+            trackInfo
+            scrubber
+            transport
+            bottomBar
+        }
+        .padding(.horizontal, 80)
+        .padding(.vertical, Spacing.xl)
+        .frame(maxWidth: 900)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    #endif
+
+    #if os(iOS)
+    /// Portrait iPhone: a vertical stack with the art sized to a fraction of the
+    /// height so the transport can never be pushed off the bottom.
+    private func portraitLayout(in size: CGSize) -> some View {
+        let artMax = min(size.width - edgePadding * 2, size.height * 0.42)
+        return VStack(spacing: Spacing.md) {
+            grabber
+            centerStage(maxSide: artMax)
+                .frame(maxHeight: .infinity)
+            trackInfo
+            scrubber
+            transport
+                .padding(.vertical, Spacing.xs)
+            bottomBar
+        }
+        .padding(.horizontal, edgePadding)
+        .padding(.bottom, Spacing.md)
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Landscape iPhone: the carousel on the left, controls stacked on the
+    /// right — the standard landscape music layout, and where the coverflow
+    /// lives on the phone.
+    private func landscapePhoneLayout(in size: CGSize) -> some View {
+        let artMax = min(size.width * 0.42, size.height * 0.62)
+        return HStack(spacing: Spacing.xl) {
+            centerStage(maxSide: artMax)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            VStack(spacing: Spacing.sm) {
+                HStack {
+                    grabber
+                    Spacer()
+                }
+                Spacer(minLength: 0)
+                trackInfo
+                scrubber
+                transport
+                bottomBar
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, edgePadding)
+        .padding(.vertical, Spacing.md)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    #endif
 
     // MARK: - Backdrop
 
@@ -94,13 +176,31 @@ struct NowPlayingMusicView: View {
         #endif
     }
 
-    // MARK: - Stages
+    // MARK: - Center stage
 
-    private var artStage: some View {
+    @ViewBuilder
+    private func centerStage(maxSide: CGFloat) -> some View {
+        switch stage {
+        case .art:
+            if isLandscapePhone {
+                carouselStage(side: maxSide)
+            } else {
+                #if os(tvOS)
+                carouselStage(side: maxSide)
+                #else
+                artStage(side: maxSide)
+                #endif
+            }
+        case .lyrics: lyricsStage
+        case .queue: queueStage
+        }
+    }
+
+    private func artStage(side: CGFloat) -> some View {
         RemoteImage(url: player.currentTrack.flatMap { player.artworkURL(for: $0) })
-            .frame(width: artSide, height: artSide)
-            .clipShape(RoundedRectangle(cornerRadius: artSide * 0.06, style: .continuous))
-            .specularRim(cornerRadius: artSide * 0.06, intensity: 0.8)
+            .frame(width: side, height: side)
+            .clipShape(RoundedRectangle(cornerRadius: side * 0.06, style: .continuous))
+            .specularRim(cornerRadius: side * 0.06, intensity: 0.8)
             .shadow(color: .black.opacity(0.55), radius: 40, y: 22)
             // The Apple Music breath: full size while playing, settles back when
             // paused.
@@ -109,17 +209,16 @@ struct NowPlayingMusicView: View {
             .frame(maxWidth: .infinity)
     }
 
-    #if os(tvOS)
-    /// The TV's stage: a living coverflow of the queue. The current record
-    /// stands front and center — breathing gently while it plays, mirrored in a
-    /// fading reflection — with its neighbors receding into the room on either
-    /// side. Changing tracks glides the whole shelf across on a spring.
-    private var carouselStage: some View {
+    /// A living coverflow of the queue. The current record stands front and
+    /// center — breathing gently while it plays, mirrored in a fading reflection
+    /// — with its neighbors receding into the room on either side. Changing
+    /// tracks glides the whole shelf across on a spring.
+    private func carouselStage(side: CGFloat) -> some View {
         ZStack {
             // Side cards first, center drawn last so it layers on top.
             ForEach([-2, -1, 2, 1, 0], id: \.self) { offset in
                 if let track = queueTrack(at: offset) {
-                    carouselCard(track: track, offset: offset)
+                    carouselCard(track: track, offset: offset, side: side)
                         // Identity follows the queue slot so a track change
                         // animates cards BETWEEN positions (the glide), not a
                         // crossfade-in-place.
@@ -142,9 +241,9 @@ struct NowPlayingMusicView: View {
         return player.queue[i]
     }
 
-    private func carouselCard(track: MediaItem, offset: Int) -> some View {
+    private func carouselCard(track: MediaItem, offset: Int, side baseSide: CGFloat) -> some View {
         let isCenter = offset == 0
-        let side = artSide * (isCenter ? 1 : 0.58)
+        let side = baseSide * (isCenter ? 1 : 0.58)
         let corner = side * 0.05
         return VStack(spacing: 0) {
             RemoteImage(url: player.artworkURL(for: track, maxWidth: isCenter ? 800 : 400))
@@ -171,14 +270,13 @@ struct NowPlayingMusicView: View {
         }
         // Neighbors turn away into the room, coverflow-style.
         .rotation3DEffect(.degrees(Double(-offset) * 26), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
-        .offset(x: CGFloat(offset) * artSide * 0.60)
+        .offset(x: CGFloat(offset) * baseSide * 0.60)
         .opacity(isCenter ? 1 : max(0.2, 0.5 - Double(abs(offset) - 1) * 0.18))
         .zIndex(isCenter ? 10 : Double(5 - abs(offset)))
         // The center record breathes while the music plays.
         .scaleEffect(isCenter && player.isPlaying ? (breathing ? 1.015 : 0.995) : (isCenter ? 0.96 : 1))
         .animation(isCenter ? .spring(duration: 0.5, bounce: 0.25) : nil, value: player.isPlaying)
     }
-    #endif
 
     private var lyricsStage: some View {
         ScrollViewReader { proxy in
@@ -260,10 +358,12 @@ struct NowPlayingMusicView: View {
                 .font(.system(size: titleSize, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(player.currentTrack?.artistText ?? player.currentTrack?.album ?? " ")
                 .font(.system(size: titleSize * 0.68, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.65))
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
         .multilineTextAlignment(.center)
@@ -379,18 +479,11 @@ struct NowPlayingMusicView: View {
 
     // MARK: - Metrics
 
-    private var artSide: CGFloat {
-        #if os(tvOS)
-        560
-        #else
-        300
-        #endif
-    }
     private var titleSize: CGFloat {
         #if os(tvOS)
         34
         #else
-        20
+        isLandscapePhone ? 18 : 20
         #endif
     }
     private var lyricSize: CGFloat {
@@ -411,42 +504,35 @@ struct NowPlayingMusicView: View {
         #if os(tvOS)
         44
         #else
-        34
+        isLandscapePhone ? 28 : 34
         #endif
     }
     private var sideButtonSize: CGFloat {
         #if os(tvOS)
         30
         #else
-        24
+        isLandscapePhone ? 20 : 24
         #endif
     }
     private var transportSpacing: CGFloat {
         #if os(tvOS)
         Spacing.xxl
         #else
-        Spacing.xl
+        isLandscapePhone ? Spacing.lg : Spacing.xl
         #endif
     }
     private var chipSize: CGFloat {
         #if os(tvOS)
         24
         #else
-        17
+        isLandscapePhone ? 15 : 17
         #endif
     }
     private var edgePadding: CGFloat {
         #if os(tvOS)
         80
         #else
-        28
-        #endif
-    }
-    private var stageMaxWidth: CGFloat {
-        #if os(tvOS)
-        900
-        #else
-        520
+        isLandscapePhone ? Spacing.xl : 28
         #endif
     }
 }

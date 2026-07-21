@@ -33,6 +33,9 @@ final class MusicPlayer {
     private(set) var lyrics: [LyricLine] = []
     var shuffleOn = false
     var repeatMode: RepeatMode = .off
+    /// Bumps every time a NEW listening session starts (not on track changes),
+    /// so the UI can auto-present the full-screen player.
+    private(set) var sessionStamp = 0
 
     var currentTrack: MediaItem? { queue.indices.contains(index) ? queue[index] : nil }
     var hasQueue: Bool { !queue.isEmpty }
@@ -78,6 +81,7 @@ final class MusicPlayer {
     func play(tracks: [MediaItem], startAt startIndex: Int = 0,
               source: MusicSource, shuffled: Bool = false) {
         self.source = source
+        sessionStamp += 1
         originalQueue = tracks
         shuffleOn = shuffled
         if shuffled {

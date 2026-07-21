@@ -88,20 +88,37 @@ struct MainTabView: View {
             #endif
         }
         // The now-playing bar rides above the tab bar on every screen; tap it
-        // to expand into the full player.
+        // (iOS) or focus it (tvOS) to expand into the full player.
+        #if os(tvOS)
+        // A bottom safe-area inset — NOT a floating overlay. An overlay sits
+        // outside the focus engine's sweep, so the bar was visible but
+        // unreachable; an inset is a real sibling below the tab content that the
+        // engine can move focus down into.
+        .safeAreaInset(edge: .bottom) {
+            if music.hasQueue && !showNowPlaying {
+                MiniPlayerBar(player: music) { showNowPlaying = true }
+                    .padding(.horizontal, miniPlayerHPadding)
+                    .padding(.bottom, miniPlayerBottomPadding)
+                    .focusSection()
+            }
+        }
+        #else
         .overlay(alignment: miniPlayerAlignment) {
             if music.hasQueue && !showNowPlaying {
                 MiniPlayerBar(player: music) { showNowPlaying = true }
                     .padding(.horizontal, miniPlayerHPadding)
                     .padding(.bottom, miniPlayerBottomPadding)
-                    #if os(tvOS)
-                    // Overlays aren't in the focus engine's natural sweep — the
-                    // bar was visible but unreachable without its own section.
-                    .focusSection()
-                    #endif
             }
         }
+        #endif
         .animation(.smooth(duration: 0.35), value: music.hasQueue)
+        // Starting a fresh listening session opens the full-screen player
+        // automatically — the carousel is the default look, and on tvOS this
+        // also sidesteps the focus engine ever having to reach the mini bar to
+        // begin controlling playback.
+        .onChange(of: music.sessionStamp) { _, stamp in
+            if stamp > 0 { showNowPlaying = true }
+        }
         .fullScreenCoverCompat(isPresented: $showNowPlaying) {
             NowPlayingMusicView(player: music)
         }

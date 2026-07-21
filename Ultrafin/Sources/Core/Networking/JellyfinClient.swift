@@ -578,6 +578,17 @@ actor JellyfinClient {
         ]).items
     }
 
+    /// Songs the user has hearted — "Hearted Songs".
+    func favoriteSongs(userID: String, limit: Int = 300) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "Audio"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "Filters", value: "IsFavorite"),
+            .init(name: "SortBy", value: "SortName"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
     /// Synced lyrics for a song (Jellyfin 10.9+ / the LrcLib plugin). Empty when
     /// the server has none.
     func lyrics(itemID: String) async -> [LyricLine] {

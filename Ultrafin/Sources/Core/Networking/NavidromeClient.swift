@@ -254,6 +254,15 @@ actor NavidromeClient {
         return (body.randomSongs?.song ?? []).map(\.mediaItem)
     }
 
+    func favoriteSongs() async throws -> [MediaItem] {
+        struct Body: Decodable {
+            let starred2: List?
+            struct List: Decodable { let song: [SubsonicSong]? }
+        }
+        let body = try await get(Body.self, "getStarred2")
+        return (body.starred2?.song ?? []).map(\.mediaItem)
+    }
+
     // MARK: - Lyrics
 
     /// Synced lyrics via the OpenSubsonic `getLyricsBySongId` extension
