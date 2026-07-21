@@ -6,8 +6,8 @@ import Observation
 ///
 /// Handles the whole listening session — queue with shuffle and repeat,
 /// gapless-ish advance, synced lyrics, system Now Playing (Control Center /
-/// lock screen / the TV's transport), and Jellyfin play reporting — so views
-/// only ever render its state.
+/// lock screen / the TV's transport), and play reporting to whichever backend
+/// (Jellyfin or Navidrome) the queue came from — so views only render state.
 @Observable
 @MainActor
 final class MusicPlayer {
@@ -49,8 +49,10 @@ final class MusicPlayer {
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var originalQueue: [MediaItem] = []
-    private var client: JellyfinClient?
-    private var userID: String?
+    /// The backend the current queue streams from (Jellyfin or Navidrome) —
+    /// captured at play time so a source switch in Settings never strands a
+    /// half-played queue against the wrong server.
+    private var source: MusicSource?
     private let nowPlaying = NowPlayingController()
     private var artworkImage: UIImage?
     private var loadGeneration = 0
@@ -74,9 +76,8 @@ final class MusicPlayer {
 
     /// Starts a fresh listening session from a list of songs.
     func play(tracks: [MediaItem], startAt startIndex: Int = 0,
-              client: JellyfinClient, userID: String, shuffled: Bool = false) {
-        self.client = client
-        self.userID = userID
+              source: MusicSource, shuffled: Bool = false) {
+        self.source = source
         originalQueue = tracks
         shuffleOn = shuffled
         if shuffled {
@@ -220,7 +221,7 @@ final class MusicPlayer {
     // MARK: - Loading
 
     private func loadCurrent(autoplay: Bool) {
-        guard let track = currentTrack, let client, let userID else { return }
+        guard let track = currentTrack, let source else { return }
         loadGeneration += 1
         let generation = loadGeneration
         currentTime = 0
@@ -232,7 +233,7 @@ final class MusicPlayer {
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
 
         Task {
-            guard let url = await client.audioStreamURL(itemID: track.id, userID: userID),
+            guard let url = await source.audioStreamURL(itemID: track.id),
                   generation == loadGeneration else { return }
             let item = AVPlayerItem(url: url)
             endObserver = NotificationCenter.default.addObserver(
@@ -258,7 +259,7 @@ final class MusicPlayer {
             reportStarted(track)
 
             // Lyrics + lock-screen artwork ride in behind the audio.
-            let lines = await client.lyrics(itemID: track.id)
+            let lines = await source.lyrics(for: track)
             if generation == loadGeneration { lyrics = lines }
             if let artURL = artworkURL(for: track, maxWidth: 600),
                let image = await ImageLoader.shared.image(for: artURL),
@@ -269,15 +270,9 @@ final class MusicPlayer {
         }
     }
 
-    /// Album art for a song (falls back to the track's own primary image).
+    /// Album art for a song, from whichever backend the queue plays from.
     func artworkURL(for track: MediaItem, maxWidth: Int = 800) -> URL? {
-        guard let client else { return nil }
-        if let albumId = track.albumId {
-            return client.imageURL(itemID: albumId, kind: .primary,
-                                   tag: track.albumPrimaryImageTag, maxWidth: maxWidth)
-        }
-        return client.imageURL(itemID: track.id, kind: .primary,
-                               tag: track.imageTags?["Primary"], maxWidth: maxWidth)
+        source?.artworkURL(for: track, maxWidth: maxWidth)
     }
 
     private func refreshLyricIndex() {
@@ -326,16 +321,16 @@ final class MusicPlayer {
                           artwork: artworkImage)
     }
 
-    // MARK: - Jellyfin reporting (play counts / last-played)
+    // MARK: - Play reporting (play counts / last-played / scrobbles)
 
     private func reportStarted(_ track: MediaItem) {
-        guard let client else { return }
-        Task { await client.reportPlaybackStarted(itemID: track.id, positionTicks: 0, playSessionID: nil) }
+        guard let source else { return }
+        Task { await source.reportStarted(itemID: track.id) }
     }
 
     private func reportStopped() {
-        guard let client, let track = currentTrack else { return }
+        guard let source, let track = currentTrack else { return }
         let ticks = Int64(currentTime * 10_000_000)
-        Task { await client.reportPlaybackStopped(itemID: track.id, positionTicks: ticks, playSessionID: nil) }
+        Task { await source.reportStopped(itemID: track.id, positionTicks: ticks) }
     }
 }

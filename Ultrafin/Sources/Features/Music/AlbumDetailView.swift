@@ -13,10 +13,6 @@ struct AlbumDetailView: View {
     @State private var isLoading = true
     @State private var artColor: ArtworkColor?
 
-    private var session: UserSession? {
-        if case .authenticated(let s) = appState.phase { return s }
-        return nil
-    }
     private var player: MusicPlayer { .shared }
 
     var body: some View {
@@ -37,11 +33,11 @@ struct AlbumDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task {
-            guard let session, let client = appState.client else { return }
+            guard let source = appState.musicSource else { return }
             if container.type == .playlist {
-                tracks = (try? await client.playlistTracks(playlistID: container.id, userID: session.userID)) ?? []
+                tracks = (try? await source.playlistTracks(playlistID: container.id)) ?? []
             } else {
-                tracks = (try? await client.albumTracks(albumID: container.id, userID: session.userID)) ?? []
+                tracks = (try? await source.albumTracks(albumID: container.id)) ?? []
             }
             isLoading = false
             artColor = await ImageColor.vibrant(from: colorURL)
@@ -113,9 +109,9 @@ struct AlbumDetailView: View {
             LazyVStack(spacing: 2) {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { position, track in
                     Button {
-                        guard let session, let client = appState.client else { return }
+                        guard let source = appState.musicSource else { return }
                         Haptics.play(.selection)
-                        player.play(tracks: tracks, startAt: position, client: client, userID: session.userID)
+                        player.play(tracks: tracks, startAt: position, source: source)
                     } label: {
                         TrackRow(track: track,
                                  position: position + 1,
@@ -129,8 +125,8 @@ struct AlbumDetailView: View {
     }
 
     private func start(shuffled: Bool) {
-        guard let session, let client = appState.client, !tracks.isEmpty else { return }
-        player.play(tracks: tracks, startAt: 0, client: client, userID: session.userID, shuffled: shuffled)
+        guard let source = appState.musicSource, !tracks.isEmpty else { return }
+        player.play(tracks: tracks, startAt: 0, source: source, shuffled: shuffled)
     }
 
     // MARK: - Helpers
@@ -151,12 +147,10 @@ struct AlbumDetailView: View {
     }
 
     private var artURL: URL? {
-        appState.client?.imageURL(itemID: container.id, kind: .primary,
-                                  tag: container.imageTags?["Primary"], maxWidth: Int(artSide * 2))
+        appState.musicSource?.artworkURL(for: container, maxWidth: Int(artSide * 2))
     }
     private var colorURL: URL? {
-        appState.client?.imageURL(itemID: container.id, kind: .primary,
-                                  tag: container.imageTags?["Primary"], maxWidth: 240)
+        appState.musicSource?.artworkURL(for: container, maxWidth: 240)
     }
 
     // MARK: - Metrics
@@ -258,13 +252,7 @@ struct TrackRow: View {
     }
 
     private var artURL: URL? {
-        guard let client = appState.client else { return nil }
-        if let albumId = track.albumId {
-            return client.imageURL(itemID: albumId, kind: .primary,
-                                   tag: track.albumPrimaryImageTag, maxWidth: 160)
-        }
-        return client.imageURL(itemID: track.id, kind: .primary,
-                               tag: track.imageTags?["Primary"], maxWidth: 160)
+        appState.musicSource?.artworkURL(for: track, maxWidth: 160)
     }
 
     private var numberSize: CGFloat {
@@ -299,11 +287,6 @@ struct ArtistDetailView: View {
 
     @State private var albums: [MediaItem] = []
     @State private var isLoading = true
-
-    private var session: UserSession? {
-        if case .authenticated(let s) = appState.phase { return s }
-        return nil
-    }
 
     private var columns: [GridItem] {
         #if os(tvOS)
@@ -356,15 +339,14 @@ struct ArtistDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task {
-            guard let session, let client = appState.client else { return }
-            albums = (try? await client.artistAlbums(artistID: artist.id, userID: session.userID)) ?? []
+            guard let source = appState.musicSource else { return }
+            albums = (try? await source.artistAlbums(artistID: artist.id)) ?? []
             isLoading = false
         }
     }
 
     private var artURL: URL? {
-        appState.client?.imageURL(itemID: artist.id, kind: .primary,
-                                  tag: artist.imageTags?["Primary"], maxWidth: Int(portraitSide * 2))
+        appState.musicSource?.artworkURL(for: artist, maxWidth: Int(portraitSide * 2))
     }
 
     private var portraitSide: CGFloat {

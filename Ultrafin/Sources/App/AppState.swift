@@ -112,6 +112,18 @@ final class AppState {
         }
     }
 
+    /// The backend feeding the Music tab, per the user's Settings choice.
+    /// Navidrome only when a server is actually linked — otherwise Music falls
+    /// back to Jellyfin rather than going dark.
+    var musicSource: MusicSource? {
+        if SettingsStore.shared.musicSource == .navidrome,
+           let config = NavidromeStore.shared.config {
+            return NavidromeMusicSource(client: NavidromeClient(config: config))
+        }
+        guard case .authenticated(let session) = phase, let client else { return nil }
+        return JellyfinMusicSource(client: client, userID: session.userID)
+    }
+
     func signOut() {
         // Capture before clearing — the Task body runs after this method
         // returns, by which point `client` is already nil and the server

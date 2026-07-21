@@ -9,18 +9,25 @@ final class MusicHomeViewModel {
     var playlists: [MediaItem] = []
     var isLoading = true
     private(set) var didLoad = false
+    /// Which backend the current lists came from — switching sources in
+    /// Settings blanks and reloads instead of showing the other server's music.
+    private var loadedKind: MusicSourceKind?
 
     var isEmpty: Bool {
         recentAlbums.isEmpty && allAlbums.isEmpty && artists.isEmpty && playlists.isEmpty
     }
 
-    func load(client: JellyfinClient, userID: String) async {
+    func load(source: MusicSource) async {
+        if loadedKind != source.kind {
+            didLoad = false
+            recentAlbums = []; allAlbums = []; artists = []; playlists = []
+        }
         if !didLoad { isLoading = true }
-        defer { isLoading = false; didLoad = true }
-        async let recentTask = try? client.recentAlbums(userID: userID)
-        async let albumsTask = try? client.allAlbums(userID: userID)
-        async let artistsTask = try? client.artists(userID: userID)
-        async let playlistsTask = try? client.playlists(userID: userID)
+        defer { isLoading = false; didLoad = true; loadedKind = source.kind }
+        async let recentTask = try? source.recentAlbums()
+        async let albumsTask = try? source.allAlbums()
+        async let artistsTask = try? source.artists()
+        async let playlistsTask = try? source.playlists()
         if let v = await recentTask { recentAlbums = v }
         if let v = await albumsTask { allAlbums = v }
         if let v = await artistsTask { artists = v }
@@ -33,11 +40,6 @@ struct MusicHomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
     @State private var model = MusicHomeViewModel()
-
-    private var session: UserSession? {
-        if case .authenticated(let s) = appState.phase { return s }
-        return nil
-    }
 
     var body: some View {
         ScrollView {
@@ -76,21 +78,23 @@ struct MusicHomeView: View {
             default: AlbumDetailView(container: item)
             }
         }
-        .task {
-            guard let session, let client = appState.client else { return }
-            await model.load(client: client, userID: session.userID)
+        // Re-runs when the user switches source in Settings, so the tab swaps
+        // to the other server's library without an app restart.
+        .task(id: settings.musicSource) {
+            guard let source = appState.musicSource else { return }
+            await model.load(source: source)
         }
     }
 
     /// "Shuffle Library" — the fastest way into the music.
     private var shuffleHeader: some View {
         Button {
-            guard let session, let client = appState.client else { return }
+            guard let source = appState.musicSource else { return }
             Haptics.play(.medium)
             Task {
-                let songs = (try? await client.randomSongs(userID: session.userID)) ?? []
+                let songs = (try? await source.randomSongs()) ?? []
                 guard !songs.isEmpty else { return }
-                MusicPlayer.shared.play(tracks: songs, client: client, userID: session.userID)
+                MusicPlayer.shared.play(tracks: songs, source: source)
             }
         } label: {
             Label("Shuffle Library", systemImage: "shuffle")
@@ -157,7 +161,9 @@ struct MusicHomeView: View {
             Text("No music on this server")
                 .font(Typography.sectionTitle)
                 .foregroundStyle(UltrafinColors.primaryText)
-            Text("Add a Music library in Jellyfin and it appears here.")
+            Text(settings.musicSource == .navidrome
+                 ? "Your Navidrome server has no music yet — or check its link in Settings → Music."
+                 : "Add a Music library in Jellyfin and it appears here.")
                 .font(Typography.body)
                 .foregroundStyle(UltrafinColors.secondaryText)
         }
@@ -248,8 +254,7 @@ struct AlbumCard: View {
     }
 
     private var artURL: URL? {
-        appState.client?.imageURL(itemID: album.id, kind: .primary,
-                                  tag: album.imageTags?["Primary"], maxWidth: Int(side * 2))
+        appState.musicSource?.artworkURL(for: album, maxWidth: Int(side * 2))
     }
     private var titleFont: Font {
         #if os(tvOS)
@@ -303,8 +308,7 @@ struct ArtistCard: View {
     }
 
     private var artURL: URL? {
-        appState.client?.imageURL(itemID: artist.id, kind: .primary,
-                                  tag: artist.imageTags?["Primary"], maxWidth: Int(side * 2))
+        appState.musicSource?.artworkURL(for: artist, maxWidth: Int(side * 2))
     }
     private var nameFont: Font {
         #if os(tvOS)

@@ -74,6 +74,12 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(themeMusic, forKey: Keys.themeMusic) }
     }
 
+    /// Which backend powers the Music tab — Jellyfin by default, Navidrome once
+    /// a server is linked in Settings → Music. Only one source at a time.
+    var musicSource: MusicSourceKind {
+        didSet { UserDefaults.standard.set(musicSource.rawValue, forKey: Keys.musicSource) }
+    }
+
     /// Libraries the user hid from the Library tab — a client-side preference
     /// only; nothing changes on the Jellyfin server.
     var hiddenLibraryIDs: [String] {
@@ -107,6 +113,7 @@ final class SettingsStore {
         static let theaterMode = "settings.theaterMode"
         static let themeMusic = "settings.themeMusic"
         static let hiddenLibraryIDs = "settings.hiddenLibraryIDs"
+        static let musicSource = "settings.musicSource"
     }
 
     private init() {
@@ -125,6 +132,7 @@ final class SettingsStore {
         theaterMode = UserDefaults.standard.object(forKey: Keys.theaterMode) as? Bool ?? true
         themeMusic = UserDefaults.standard.object(forKey: Keys.themeMusic) as? Bool ?? true
         hiddenLibraryIDs = UserDefaults.standard.stringArray(forKey: Keys.hiddenLibraryIDs) ?? []
+        musicSource = MusicSourceKind(rawValue: UserDefaults.standard.string(forKey: Keys.musicSource) ?? "") ?? .jellyfin
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout
