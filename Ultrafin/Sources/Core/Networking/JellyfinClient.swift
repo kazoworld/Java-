@@ -589,6 +589,56 @@ actor JellyfinClient {
         ]).items
     }
 
+    /// Most-played songs — the "On Repeat" mix.
+    func mostPlayedSongs(userID: String, limit: Int = 100) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "Audio"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "Filters", value: "IsPlayed"),
+            .init(name: "SortBy", value: "PlayCount"),
+            .init(name: "SortOrder", value: "Descending"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
+    /// Recently-played songs, newest play first.
+    func recentlyPlayedSongs(userID: String, limit: Int = 100) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "Audio"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "Filters", value: "IsPlayed"),
+            .init(name: "SortBy", value: "DatePlayed"),
+            .init(name: "SortOrder", value: "Descending"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
+    /// Never-played songs, shuffled — the "Discovery" mix of gems you haven't
+    /// heard yet.
+    func discoverySongs(userID: String, limit: Int = 100) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "Audio"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "Filters", value: "IsUnplayed"),
+            .init(name: "SortBy", value: "Random"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
+    /// A large sample of songs carrying play counts + genres, used to compute
+    /// the listening insights and Music Identity locally.
+    func songsForInsights(userID: String, limit: Int = 2000) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "Audio"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "Filters", value: "IsPlayed"),
+            .init(name: "SortBy", value: "PlayCount"),
+            .init(name: "SortOrder", value: "Descending"),
+            .init(name: "Fields", value: "Genres"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
     /// Synced lyrics for a song (Jellyfin 10.9+ / the LrcLib plugin). Empty when
     /// the server has none.
     func lyrics(itemID: String) async -> [LyricLine] {

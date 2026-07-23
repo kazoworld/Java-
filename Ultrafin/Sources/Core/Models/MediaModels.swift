@@ -149,6 +149,19 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         let total = Int(ticks / 10_000_000)
         return String(format: "%d:%02d", total / 60, total % 60)
     }
+
+    /// Times played (0 when the server hasn't reported any).
+    var playCount: Int { userData?.playCount ?? 0 }
+
+    /// Runtime in seconds (0 when unknown) — used to total listening time.
+    var runtimeSeconds: Double { Double(runTimeTicks ?? 0) / 10_000_000 }
+
+    /// The song's primary artist for grouping in insights.
+    var primaryArtist: String? {
+        if let first = artists?.first, !first.isEmpty { return first }
+        if let albumArtist, !albumArtist.isEmpty { return albumArtist }
+        return nil
+    }
 }
 
 /// A cast or crew member attached to an item.
@@ -193,12 +206,19 @@ struct UserData: Codable, Hashable, Sendable {
     let playedPercentage: Double?
     let isFavorite: Bool?
     let played: Bool?
+    /// How many times this item has been played — drives On Repeat and the
+    /// listening insights.
+    let playCount: Int?
+    /// ISO date of the last play, used for "Recently Played" ordering.
+    let lastPlayedDate: String?
 
     enum CodingKeys: String, CodingKey {
         case playbackPositionTicks = "PlaybackPositionTicks"
         case playedPercentage = "PlayedPercentage"
         case isFavorite = "IsFavorite"
         case played = "Played"
+        case playCount = "PlayCount"
+        case lastPlayedDate = "LastPlayedDate"
     }
 }
 

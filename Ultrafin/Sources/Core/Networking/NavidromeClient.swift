@@ -263,6 +263,48 @@ actor NavidromeClient {
         return (body.starred2?.song ?? []).map(\.mediaItem)
     }
 
+    // MARK: - Smart mixes
+
+    /// Subsonic exposes play frequency at the album level, so the song-level
+    /// mixes are drawn from the most-/recently-played albums' tracks.
+    private func albums(type: String, size: Int) async throws -> [String] {
+        struct Body: Decodable {
+            let albumList2: List?
+            struct List: Decodable { let album: [SubsonicAlbum]? }
+        }
+        let body = try await get(Body.self, "getAlbumList2", query: [
+            .init(name: "type", value: type),
+            .init(name: "size", value: String(size))
+        ])
+        return (body.albumList2?.album ?? []).map(\.id)
+    }
+
+    private func songs(fromAlbums ids: [String]) async -> [MediaItem] {
+        var out: [MediaItem] = []
+        // Sequential to stay gentle on the server; the album counts are small.
+        for id in ids {
+            if let tracks = try? await albumTracks(albumID: id) { out.append(contentsOf: tracks) }
+        }
+        return out
+    }
+
+    func mostPlayedSongs() async throws -> [MediaItem] {
+        await songs(fromAlbums: try await albums(type: "frequent", size: 12))
+    }
+
+    func recentlyPlayedSongs() async throws -> [MediaItem] {
+        await songs(fromAlbums: try await albums(type: "recent", size: 12))
+    }
+
+    /// No "unplayed" filter in Subsonic — a random spread stands in for Discovery.
+    func discoverySongs() async throws -> [MediaItem] {
+        try await randomSongs()
+    }
+
+    func songsForInsights() async throws -> [MediaItem] {
+        await songs(fromAlbums: try await albums(type: "frequent", size: 40))
+    }
+
     // MARK: - Lyrics
 
     /// Synced lyrics via the OpenSubsonic `getLyricsBySongId` extension
@@ -383,11 +425,14 @@ private struct SubsonicSong: Decodable {
     let year: Int?
     let duration: Int? // seconds
     let coverArt: String?
+    let genre: String?
+    let playCount: Int?
 
     var mediaItem: MediaItem {
         .music(id: id, name: title ?? "Song", type: .audio,
                year: year, durationSeconds: duration, artist: artist,
                album: album, albumID: albumId, coverArtID: coverArt,
-               trackNumber: track, discNumber: discNumber)
+               trackNumber: track, discNumber: discNumber,
+               genre: genre, playCount: playCount)
     }
 }

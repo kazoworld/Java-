@@ -24,6 +24,12 @@ protocol MusicSource: Sendable {
     func randomSongs() async throws -> [MediaItem]
     func favoriteSongs() async throws -> [MediaItem]
 
+    // Smart mixes + insights.
+    func mostPlayedSongs() async throws -> [MediaItem]
+    func recentlyPlayedSongs() async throws -> [MediaItem]
+    func discoverySongs() async throws -> [MediaItem]
+    func songsForInsights() async throws -> [MediaItem]
+
     func lyrics(for track: MediaItem) async -> [LyricLine]
     func audioStreamURL(itemID: String) async -> URL?
     /// Synchronous so view bodies can compute artwork URLs inline.
@@ -57,6 +63,10 @@ struct JellyfinMusicSource: MusicSource {
     }
     func randomSongs() async throws -> [MediaItem] { try await client.randomSongs(userID: userID) }
     func favoriteSongs() async throws -> [MediaItem] { try await client.favoriteSongs(userID: userID) }
+    func mostPlayedSongs() async throws -> [MediaItem] { try await client.mostPlayedSongs(userID: userID) }
+    func recentlyPlayedSongs() async throws -> [MediaItem] { try await client.recentlyPlayedSongs(userID: userID) }
+    func discoverySongs() async throws -> [MediaItem] { try await client.discoverySongs(userID: userID) }
+    func songsForInsights() async throws -> [MediaItem] { try await client.songsForInsights(userID: userID) }
 
     func lyrics(for track: MediaItem) async -> [LyricLine] { await client.lyrics(itemID: track.id) }
     func audioStreamURL(itemID: String) async -> URL? {
@@ -105,6 +115,10 @@ struct NavidromeMusicSource: MusicSource {
     }
     func randomSongs() async throws -> [MediaItem] { try await client.randomSongs() }
     func favoriteSongs() async throws -> [MediaItem] { try await client.favoriteSongs() }
+    func mostPlayedSongs() async throws -> [MediaItem] { try await client.mostPlayedSongs() }
+    func recentlyPlayedSongs() async throws -> [MediaItem] { try await client.recentlyPlayedSongs() }
+    func discoverySongs() async throws -> [MediaItem] { try await client.discoverySongs() }
+    func songsForInsights() async throws -> [MediaItem] { try await client.songsForInsights() }
 
     func lyrics(for track: MediaItem) async -> [LyricLine] { await client.lyrics(for: track) }
     func audioStreamURL(itemID: String) async -> URL? { client.streamURL(itemID: itemID) }
@@ -135,16 +149,21 @@ extension MediaItem {
                       artist: String? = nil, album: String? = nil,
                       albumID: String? = nil, coverArtID: String? = nil,
                       trackNumber: Int? = nil, discNumber: Int? = nil,
-                      childCount: Int? = nil) -> MediaItem {
+                      childCount: Int? = nil, genre: String? = nil,
+                      playCount: Int? = nil) -> MediaItem {
         MediaItem(id: id, name: name, type: type, overview: nil,
                   productionYear: year, officialRating: nil,
                   communityRating: nil, criticRating: nil,
                   runTimeTicks: durationSeconds.map { Int64($0) * 10_000_000 },
-                  userData: nil,
+                  userData: playCount.map {
+                      UserData(playbackPositionTicks: nil, playedPercentage: nil,
+                               isFavorite: nil, played: $0 > 0, playCount: $0,
+                               lastPlayedDate: nil)
+                  },
                   imageTags: coverArtID.map { ["Primary": $0] },
                   backdropImageTags: nil, seriesName: nil, seriesId: nil,
                   seasonId: nil, indexNumber: trackNumber,
-                  parentIndexNumber: discNumber, genres: nil,
+                  parentIndexNumber: discNumber, genres: genre.map { [$0] },
                   childCount: childCount, people: nil, trickplay: nil,
                   parentLogoItemId: nil, parentLogoImageTag: nil,
                   albumArtist: artist, artists: artist.map { [$0] },

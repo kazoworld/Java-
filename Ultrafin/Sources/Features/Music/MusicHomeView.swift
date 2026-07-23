@@ -54,6 +54,8 @@ struct MusicHomeView: View {
                     emptyState
                 } else {
                     shuffleHeader
+                    madeForYou
+                    identityBanner
 
                     if !model.recentAlbums.isEmpty {
                         albumRail(title: "Recently Added", albums: model.recentAlbums)
@@ -113,6 +115,82 @@ struct MusicHomeView: View {
                 .shadow(color: settings.theme.accent.color.opacity(0.4), radius: 14, y: 6)
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: true))
+        .padding(.horizontal, edgePadding)
+    }
+
+    // MARK: - Made For You (smart mixes)
+
+    /// A row of app-generated mixes drawn from the user's own listening — the
+    /// "Made For You" shelf, Apple Music-style. Tapping a tile plays it.
+    private var madeForYou: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text("Made For You")
+                .font(sectionFont)
+                .foregroundStyle(UltrafinColors.primaryText)
+                .padding(.horizontal, edgePadding)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: railSpacing) {
+                    ForEach(SmartMix.all) { mix in
+                        Button {
+                            play(mix: mix)
+                        } label: {
+                            SmartMixTile(mix: mix, side: mixSide)
+                        }
+                        .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))
+                    }
+                }
+                .padding(.horizontal, edgePadding)
+                .padding(.vertical, focusInset)
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    private func play(mix: SmartMix) {
+        guard let source = appState.musicSource else { return }
+        Haptics.play(.medium)
+        Task {
+            let songs = await mix.load(from: source)
+            guard !songs.isEmpty else { return }
+            MusicPlayer.shared.play(tracks: songs, source: source)
+        }
+    }
+
+    /// A tappable banner into the Music Identity screen.
+    private var identityBanner: some View {
+        NavigationLink {
+            MusicIdentityView()
+        } label: {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: identityIcon, weight: .semibold))
+                    .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Your Music Identity")
+                        .font(.system(size: shuffleFont, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("See how you listen")
+                        .font(.system(size: shuffleFont * 0.72, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                Spacer(minLength: Spacing.sm)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: shuffleFont * 0.8, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.horizontal, Spacing.xl)
+            .padding(.vertical, Spacing.lg)
+            .background {
+                LinearGradient(colors: [Color(hex: 0x5B2A86), Color(hex: 0x24243E)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(LiquidGlass.rim(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.03, lift: true))
         .padding(.horizontal, edgePadding)
     }
 
@@ -242,6 +320,68 @@ struct MusicHomeView: View {
         #else
         0
         #endif
+    }
+    private var mixSide: CGFloat {
+        #if os(tvOS)
+        300
+        #else
+        170
+        #endif
+    }
+    private var identityIcon: CGFloat {
+        #if os(tvOS)
+        44
+        #else
+        30
+        #endif
+    }
+}
+
+// MARK: - Smart mix tile
+
+/// A gradient "Made For You" tile — the mix's identity is its color and glyph,
+/// no artwork needed.
+struct SmartMixTile: View {
+    @Environment(\.isFocused) private var isFocused
+
+    let mix: SmartMix
+    let side: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: mix.systemImage)
+                .font(.system(size: side * 0.2, weight: .bold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+            Spacer(minLength: 0)
+            Text(mix.title)
+                .font(.system(size: side * 0.11, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Text(mix.subtitle)
+                .font(.system(size: side * 0.072, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(side * 0.1)
+        .frame(width: side, height: side, alignment: .topLeading)
+        .background {
+            ZStack {
+                LinearGradient(colors: mix.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [.white.opacity(0.18), .clear],
+                               startPoint: .top, endPoint: .center)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: side * 0.09, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: side * 0.09, style: .continuous)
+                .strokeBorder(isFocused ? Color.white : .white.opacity(0.25),
+                              lineWidth: isFocused ? 3 : 1)
+        )
+        .shadow(color: mix.colors.first?.opacity(isFocused ? 0.6 : 0.3) ?? .clear,
+                radius: isFocused ? 24 : 12, y: isFocused ? 10 : 6)
+        .animation(.smooth(duration: 0.2), value: isFocused)
     }
 }
 
