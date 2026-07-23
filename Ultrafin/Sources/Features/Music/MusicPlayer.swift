@@ -70,7 +70,11 @@ final class MusicPlayer {
                     self.duration = total
                 }
                 self.refreshLyricIndex()
-                self.pushNowPlaying()
+                // NOTE: deliberately does NOT push Now Playing every tick. iOS
+                // extrapolates the lock-screen scrubber from elapsed + rate, so
+                // we only push on real changes (track / play-pause / seek).
+                // Rewriting the whole info dict twice a second stops the system
+                // from committing to the full-screen immersive artwork.
             }
         }
     }
@@ -263,13 +267,13 @@ final class MusicPlayer {
             reportStarted(track)
 
             // Lyrics + lock-screen artwork ride in behind the audio. The
-            // artwork is fetched large (1024²) so the iPhone lock screen renders
-            // it as the big, full-width Now Playing art rather than a small,
-            // upscaled thumbnail — the system sizes the card from the resolution
-            // we hand it.
+            // artwork is fetched large (1400²) so the iPhone lock screen can use
+            // it as the full-screen immersive backdrop — the system's request
+            // handler upscales from whatever we hand it, so the source must be
+            // big enough to fill a phone screen without looking soft.
             let lines = await source.lyrics(for: track)
             if generation == loadGeneration { lyrics = lines }
-            if let artURL = artworkURL(for: track, maxWidth: 1024),
+            if let artURL = artworkURL(for: track, maxWidth: 1400),
                let image = await ImageLoader.shared.image(for: artURL),
                generation == loadGeneration {
                 artworkImage = image

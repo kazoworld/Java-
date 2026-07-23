@@ -46,18 +46,36 @@ final class NowPlayingController {
     }
 
     func update(title: String, subtitle: String?, duration: Double, elapsed: Double, isPlaying: Bool,
-                album: String? = nil, artwork: UIImage? = nil) {
+                album: String? = nil, artwork: UIImage? = nil, mediaType: MPNowPlayingInfoMediaType = .audio) {
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: title,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: max(0, elapsed),
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+            // Declaring the media type lets iOS present music with its
+            // music-style lock screen (the full-screen immersive artwork),
+            // rather than a generic media card.
+            MPNowPlayingInfoPropertyMediaType: mediaType.rawValue
         ]
         if let subtitle, !subtitle.isEmpty { info[MPMediaItemPropertyArtist] = subtitle }
         if let album, !album.isEmpty { info[MPMediaItemPropertyAlbumTitle] = album }
         if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         if let artwork {
             if cachedArtwork?.image !== artwork {
-                cachedArtwork = (artwork, MPMediaItemArtwork(boundsSize: artwork.size) { _ in artwork })
+                // Serve EXACTLY the size iOS asks for. The lock screen requests
+                // a small thumbnail for the compact widget AND a large size for
+                // the full-screen immersive backdrop; handing back one fixed
+                // image makes iOS treat it as a thumbnail only. Rendering the
+                // requested size (square, matching boundsSize's aspect) lets the
+                // system use the art as the full-screen lock-screen background.
+                let source = artwork
+                let wrapped = MPMediaItemArtwork(boundsSize: source.size) { requested in
+                    let format = UIGraphicsImageRendererFormat.preferred()
+                    format.opaque = true
+                    return UIGraphicsImageRenderer(size: requested, format: format).image { _ in
+                        source.draw(in: CGRect(origin: .zero, size: requested))
+                    }
+                }
+                cachedArtwork = (artwork, wrapped)
             }
             info[MPMediaItemPropertyArtwork] = cachedArtwork?.wrapped
         }

@@ -250,7 +250,7 @@ final class VideoPlayerViewModel {
         let subtitle = item.type == .episode ? item.seriesName : nil
         nowPlaying.update(title: item.name, subtitle: subtitle,
                           duration: state.duration, elapsed: state.currentTime,
-                          isPlaying: state.status == .playing)
+                          isPlaying: state.status == .playing, mediaType: .video)
     }
 
     /// Tears down any current engine and (re)loads the current queue item.
