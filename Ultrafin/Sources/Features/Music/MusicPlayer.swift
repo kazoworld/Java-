@@ -262,10 +262,14 @@ final class MusicPlayer {
             pushNowPlaying()
             reportStarted(track)
 
-            // Lyrics + lock-screen artwork ride in behind the audio.
+            // Lyrics + lock-screen artwork ride in behind the audio. The
+            // artwork is fetched large (1024²) so the iPhone lock screen renders
+            // it as the big, full-width Now Playing art rather than a small,
+            // upscaled thumbnail — the system sizes the card from the resolution
+            // we hand it.
             let lines = await source.lyrics(for: track)
             if generation == loadGeneration { lyrics = lines }
-            if let artURL = artworkURL(for: track, maxWidth: 600),
+            if let artURL = artworkURL(for: track, maxWidth: 1024),
                let image = await ImageLoader.shared.image(for: artURL),
                generation == loadGeneration {
                 artworkImage = image
