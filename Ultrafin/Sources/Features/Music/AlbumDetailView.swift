@@ -46,7 +46,58 @@ struct AlbumDetailView: View {
 
     // MARK: - Header
 
+    @ViewBuilder
     private var header: some View {
+        #if os(tvOS)
+        tvHeader
+        #else
+        phoneHeader
+        #endif
+    }
+
+    #if os(iOS)
+    /// iPhone: a centered vertical layout — big art, title, artist·year, the
+    /// song/runtime line, then full-width Play + Shuffle. (The old shared
+    /// horizontal layout squeezed the buttons until "Play" wrapped.)
+    private var phoneHeader: some View {
+        VStack(spacing: Spacing.lg) {
+            RemoteImage(url: artURL)
+                .frame(width: artSide, height: artSide)
+                .clipShape(RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous))
+                .specularRim(cornerRadius: Spacing.cornerRadius, intensity: 0.7)
+                .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
+
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    if container.isExplicit { ExplicitBadge(size: titleSize * 0.6) }
+                    Text(container.name)
+                        .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(UltrafinColors.primaryText)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
+                Text(subtitleLine)
+                    .font(.system(size: titleSize * 0.6, weight: .semibold, design: .rounded))
+                    .foregroundStyle(artColor?.color ?? settings.theme.accent.color)
+                    .lineLimit(1)
+                if let meta = metaLine {
+                    Text(meta)
+                        .font(.system(size: titleSize * 0.46, weight: .medium))
+                        .foregroundStyle(UltrafinColors.secondaryText)
+                }
+            }
+
+            HStack(spacing: Spacing.md) {
+                actionPill("Play", icon: "play.fill", fill: true) { start(shuffled: false) }
+                actionPill("Shuffle", icon: "shuffle", fill: true) { start(shuffled: true) }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+    #endif
+
+    /// tvOS keeps the wide art-left / info-right hero (plenty of room there).
+    private var tvHeader: some View {
         HStack(alignment: .bottom, spacing: Spacing.xl) {
             RemoteImage(url: artURL)
                 .frame(width: artSide, height: artSide)
@@ -55,23 +106,26 @@ struct AlbumDetailView: View {
                 .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
 
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text(container.name)
-                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(UltrafinColors.primaryText)
-                    .lineLimit(2)
+                HStack(spacing: 8) {
+                    if container.isExplicit { ExplicitBadge(size: titleSize * 0.5) }
+                    Text(container.name)
+                        .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(UltrafinColors.primaryText)
+                        .lineLimit(2)
+                }
                 Text(subtitleLine)
                     .font(.system(size: titleSize * 0.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(artColor?.color ?? settings.theme.accent.color)
                     .lineLimit(1)
-                if !tracks.isEmpty {
-                    Text("\(tracks.count) songs\(totalDurationText.map { " · \($0)" } ?? "")")
+                if let meta = metaLine {
+                    Text(meta)
                         .font(.system(size: titleSize * 0.38, weight: .medium))
                         .foregroundStyle(UltrafinColors.secondaryText)
                 }
 
                 HStack(spacing: Spacing.md) {
-                    actionPill("Play", icon: "play.fill") { start(shuffled: false) }
-                    actionPill("Shuffle", icon: "shuffle") { start(shuffled: true) }
+                    actionPill("Play", icon: "play.fill", fill: false) { start(shuffled: false) }
+                    actionPill("Shuffle", icon: "shuffle", fill: false) { start(shuffled: true) }
                 }
                 .padding(.top, Spacing.sm)
             }
@@ -79,7 +133,7 @@ struct AlbumDetailView: View {
         }
     }
 
-    private func actionPill(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+    private func actionPill(_ title: String, icon: String, fill: Bool, action: @escaping () -> Void) -> some View {
         Button {
             Haptics.play(.medium)
             action()
@@ -87,6 +141,9 @@ struct AlbumDetailView: View {
             Label(title, systemImage: icon)
                 .font(.system(size: pillFont, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .fixedSize(horizontal: !fill, vertical: true)
+                .frame(maxWidth: fill ? .infinity : nil)
                 .padding(.horizontal, Spacing.xl)
                 .padding(.vertical, Spacing.md)
                 .tintedGlassCapsule(artColor?.color ?? settings.theme.accent.color, strength: 0.65)
@@ -138,12 +195,21 @@ struct AlbumDetailView: View {
             .joined(separator: " · ")
     }
 
+    /// "12 songs · 48 min" — grammatically correct count plus total runtime.
+    private var metaLine: String? {
+        guard !tracks.isEmpty else { return nil }
+        let count = tracks.count
+        let songs = "\(count) song\(count == 1 ? "" : "s")"
+        if let dur = totalDurationText { return "\(songs) · \(dur)" }
+        return songs
+    }
+
     private var totalDurationText: String? {
         let ticks = tracks.compactMap(\.runTimeTicks).reduce(0, +)
         guard ticks > 0 else { return nil }
         let minutes = Int(ticks / 600_000_000)
         let h = minutes / 60, m = minutes % 60
-        return h > 0 ? "\(h)h \(m)m" : "\(m) min"
+        return h > 0 ? "\(h) hr \(m) min" : "\(m) min"
     }
 
     private var artURL: URL? {
@@ -159,7 +225,7 @@ struct AlbumDetailView: View {
         #if os(tvOS)
         340
         #else
-        160
+        240
         #endif
     }
     private var titleSize: CGFloat {
@@ -224,10 +290,13 @@ struct TrackRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(track.name)
-                    .font(.system(size: titleSize, weight: .semibold, design: .rounded))
-                    .foregroundStyle(isCurrent ? settings.theme.accent.color : UltrafinColors.primaryText)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(track.name)
+                        .font(.system(size: titleSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(isCurrent ? settings.theme.accent.color : UltrafinColors.primaryText)
+                        .lineLimit(1)
+                    if track.isExplicit { ExplicitBadge(size: titleSize * 0.82) }
+                }
                 if let artist = track.artistText {
                     Text(artist)
                         .font(.system(size: titleSize * 0.78))

@@ -13,6 +13,25 @@ struct ArtworkColor: Equatable, Sendable {
     let isDark: Bool
 
     var color: Color { Color(.sRGB, red: red, green: green, blue: blue, opacity: 1) }
+
+    #if canImport(UIKit)
+    /// A tuned shade of this color for building gradients — scale brightness and
+    /// saturation, and optionally rotate the hue. Used to spin one sampled color
+    /// into the multi-tone wash behind the player, Apple Music-style.
+    func shade(brightness bMul: Double = 1, saturation sMul: Double = 1, hue hShift: Double = 0) -> Color {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(red: red, green: green, blue: blue, alpha: 1).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        var hue = h + CGFloat(hShift)
+        hue -= floor(hue) // wrap into 0...1
+        let ui = UIColor(hue: hue,
+                         saturation: min(1, max(0, s * CGFloat(sMul))),
+                         brightness: min(1, max(0, b * CGFloat(bMul))),
+                         alpha: 1)
+        return Color(ui)
+    }
+    #else
+    func shade(brightness bMul: Double = 1, saturation sMul: Double = 1, hue hShift: Double = 0) -> Color { color }
+    #endif
 }
 
 /// Extracts a vivid representative color from a remote image so UI (like the

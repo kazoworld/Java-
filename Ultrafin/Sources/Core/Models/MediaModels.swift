@@ -162,6 +162,13 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         if let albumArtist, !albumArtist.isEmpty { return albumArtist }
         return nil
     }
+
+    /// Whether the track/album is flagged explicit (servers that tag it put it
+    /// in the official rating). Drives the "E" badge in music lists.
+    var isExplicit: Bool {
+        guard let rating = officialRating?.lowercased() else { return false }
+        return rating.contains("explicit")
+    }
 }
 
 /// A cast or crew member attached to an item.

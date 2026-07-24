@@ -25,6 +25,8 @@ struct NowPlayingMusicView: View {
     @State private var scrubValue: Double = 0
     /// Slow scale breath on the center carousel card while music plays.
     @State private var breathing = false
+    /// The color sampled from the current record — drives the Apple Music wash.
+    @State private var artColor: ArtworkColor?
 
     /// True on an iPhone held in landscape — the carousel becomes the stage.
     private var isLandscapePhone: Bool {
@@ -44,6 +46,11 @@ struct NowPlayingMusicView: View {
         }
         .environment(\.colorScheme, .dark)
         .animation(.smooth(duration: 0.35), value: stage)
+        .task(id: player.currentTrack?.id) {
+            guard let track = player.currentTrack,
+                  let url = player.artworkURL(for: track, maxWidth: 240) else { return }
+            artColor = await ImageColor.vibrant(from: url)
+        }
         #if os(iOS)
         // The app is otherwise portrait-locked; let the full player rotate so
         // turning the phone sideways reveals the coverflow carousel. Back to
@@ -141,24 +148,14 @@ struct NowPlayingMusicView: View {
 
     // MARK: - Backdrop
 
-    /// The album art itself, blown up and heavily blurred — the room takes on
-    /// the record's color, like Apple Music's player.
+    /// The record's color poured into a soft, slowly-drifting wash with the
+    /// blurred art underneath — the Apple Music look, with a hint of the cover's
+    /// own color even on near-monochrome art.
     private var backdrop: some View {
-        ZStack {
-            UltrafinColors.background
-            if let track = player.currentTrack, let url = player.artworkURL(for: track, maxWidth: 300) {
-                RemoteImage(url: url)
-                    .frame(width: 700, height: 700)
-                    .blur(radius: 120)
-                    .opacity(0.55)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-            }
-            LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.5)],
-                           startPoint: .top, endPoint: .bottom)
-        }
-        .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.8), value: player.currentTrack?.id)
+        NowPlayingBackdrop(
+            color: artColor,
+            artURL: player.currentTrack.flatMap { player.artworkURL(for: $0, maxWidth: 400) }
+        )
     }
 
     private var grabber: some View {
@@ -354,19 +351,37 @@ struct NowPlayingMusicView: View {
 
     private var trackInfo: some View {
         VStack(spacing: 4) {
-            Text(player.currentTrack?.name ?? "—")
-                .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(player.currentTrack?.artistText ?? player.currentTrack?.album ?? " ")
-                .font(.system(size: titleSize * 0.68, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.65))
+            HStack(spacing: 6) {
+                if player.currentTrack?.isExplicit == true {
+                    ExplicitBadge(size: titleSize * 0.72)
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                Text(player.currentTrack?.name ?? "—")
+                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Text(artistLine)
+                .font(.system(size: titleSize * 0.68, weight: .semibold, design: .rounded))
+                .foregroundStyle(artColor?.shade(brightness: 1.15, saturation: 0.9) ?? settings.theme.accent.color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
         .multilineTextAlignment(.center)
+    }
+
+    /// "Artist — Album" when both exist, so the player carries more detail.
+    private var artistLine: String {
+        let artist = player.currentTrack?.artistText
+        let album = player.currentTrack?.album
+        switch (artist, album) {
+        case let (a?, b?) where !a.isEmpty && !b.isEmpty && a != b: return "\(a) — \(b)"
+        case let (a?, _) where !a.isEmpty: return a
+        case let (_, b?) where !b.isEmpty: return b
+        default: return " "
+        }
     }
 
     private var scrubber: some View {
@@ -400,8 +415,12 @@ struct NowPlayingMusicView: View {
 
             HStack {
                 Text(timeText(isScrubbing ? scrubValue * player.duration : player.currentTime))
-                Spacer()
+                    .lineLimit(1)
+                    .fixedSize()
+                Spacer(minLength: Spacing.md)
                 Text("-" + timeText(max(0, player.duration - (isScrubbing ? scrubValue * player.duration : player.currentTime))))
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .font(.system(size: 12, weight: .medium, design: .monospaced))
             .foregroundStyle(.white.opacity(0.55))
