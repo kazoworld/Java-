@@ -91,6 +91,9 @@ struct AlbumDetailView: View {
                 actionPill("Play", icon: "play.fill", fill: true) { start(shuffled: false) }
                 actionPill("Shuffle", icon: "shuffle", fill: true) { start(shuffled: true) }
             }
+            // Cap the button row so it doesn't stretch edge-to-edge (and read as
+            // bulky) on a large phone — centered under the art instead.
+            .frame(maxWidth: 420)
         }
         .frame(maxWidth: .infinity)
     }
@@ -144,8 +147,8 @@ struct AlbumDetailView: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: !fill, vertical: true)
                 .frame(maxWidth: fill ? .infinity : nil)
-                .padding(.horizontal, Spacing.xl)
-                .padding(.vertical, Spacing.md)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.sm + 3)
                 .tintedGlassCapsule(artColor?.color ?? settings.theme.accent.color, strength: 0.65)
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: true))

@@ -148,9 +148,10 @@ struct NowPlayingMusicView: View {
             transport
                 .padding(.vertical, Spacing.xs)
             bottomBar
+                .padding(.top, Spacing.xs)
         }
         .padding(.horizontal, edgePadding)
-        .padding(.bottom, Spacing.md)
+        .padding(.bottom, Spacing.lg)
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
