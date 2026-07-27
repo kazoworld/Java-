@@ -419,10 +419,16 @@ struct AlbumCard: View {
                 .font(titleFont)
                 .foregroundStyle(isFocused ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
                 .lineLimit(1)
-            Text(album.artistText ?? album.productionYear.map(String.init) ?? " ")
-                .font(subtitleFont)
-                .foregroundStyle(UltrafinColors.tertiaryText)
-                .lineLimit(1)
+            HStack(spacing: 5) {
+                Text(album.artistText ?? album.productionYear.map(String.init) ?? " ")
+                    .font(subtitleFont)
+                    .foregroundStyle(UltrafinColors.tertiaryText)
+                    .lineLimit(1)
+                if album.isExplicit {
+                    Spacer(minLength: 0)
+                    ExplicitBadge(size: side * 0.075)
+                }
+            }
         }
         .frame(width: side)
         .animation(.smooth(duration: 0.2), value: isFocused)
@@ -490,10 +496,16 @@ struct SongCard: View {
                 .font(titleFont)
                 .foregroundStyle(isFocused ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
                 .lineLimit(1)
-            Text(song.artistText ?? " ")
-                .font(subtitleFont)
-                .foregroundStyle(UltrafinColors.tertiaryText)
-                .lineLimit(1)
+            HStack(spacing: 5) {
+                Text(song.artistText ?? " ")
+                    .font(subtitleFont)
+                    .foregroundStyle(UltrafinColors.tertiaryText)
+                    .lineLimit(1)
+                if song.isExplicit {
+                    Spacer(minLength: 0)
+                    ExplicitBadge(size: side * 0.08)
+                }
+            }
         }
         .frame(width: side)
         .animation(.smooth(duration: 0.2), value: isFocused)

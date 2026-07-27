@@ -12,6 +12,15 @@ struct RootView: View {
     /// One-time welcome tour: shown over the app after the very first sign-in
     /// (the intro overlay fades out above it, revealing page one).
     @State private var tourComplete = UserDefaults.standard.bool(forKey: "onboarding.tourComplete")
+    /// The tab chosen by "What's the vibe?" — nil until the user picks, which is
+    /// when the app tree is built. Reset on each fresh sign-in so the question
+    /// is asked at the start of every session.
+    @State private var startTab: Int?
+
+    private var authenticatedUserID: String? {
+        if case .authenticated(let session) = appState.phase { return session.userID }
+        return nil
+    }
 
     var body: some View {
         ZStack {
@@ -28,21 +37,36 @@ struct RootView: View {
                 LoginView(server: server)
                     .transition(.opacity)
             case .authenticated(let session):
-                MainTabView()
-                    // Rebuild the whole tab tree when the profile changes so every
-                    // screen's cached view model reloads as the new user.
-                    .id(session.userID)
-                    // While the welcome tour is up, take the app out of the tvOS
-                    // focus engine entirely — otherwise the remote keeps driving
-                    // the hidden UI underneath the overlay.
-                    .disabled(!tourComplete)
-                    .transition(.opacity)
+                if let startTab {
+                    MainTabView(initialTab: startTab)
+                        // Rebuild the whole tab tree when the profile changes so
+                        // every screen's cached view model reloads as the new user.
+                        .id(session.userID)
+                        // While the welcome tour is up, take the app out of the
+                        // tvOS focus engine entirely — otherwise the remote keeps
+                        // driving the hidden UI underneath the overlay.
+                        .disabled(!tourComplete)
+                        .transition(.opacity)
+                } else {
+                    // Awaiting the vibe choice — the chooser overlay covers this.
+                    Color.clear
+                }
             case .connectionLost(let session):
                 ConnectionLostView(session: session)
                     .transition(.opacity)
             }
 
-            if case .authenticated = appState.phase, !tourComplete {
+            // "What's the vibe?" — asked at the start of each authenticated
+            // session, before the app tree is built.
+            if case .authenticated = appState.phase, startTab == nil {
+                VibeChooserView { tab in
+                    withAnimation(.smooth(duration: 0.45)) { startTab = tab }
+                }
+                .transition(.opacity)
+                .zIndex(4)
+            }
+
+            if case .authenticated = appState.phase, startTab != nil, !tourComplete {
                 OnboardingTourView {
                     UserDefaults.standard.set(true, forKey: "onboarding.tourComplete")
                     withAnimation(.smooth(duration: 0.45)) { tourComplete = true }
@@ -60,6 +84,11 @@ struct RootView: View {
             }
         }
         .animation(.smooth(duration: 0.35), value: appState.phase)
+        // A new sign-in / profile switch re-asks "What's the vibe?" (the user
+        // identity changed, so any prior choice no longer applies).
+        .onChange(of: authenticatedUserID) { _, _ in
+            startTab = nil
+        }
         .task {
             if case .launching = appState.phase {
                 await appState.bootstrap()

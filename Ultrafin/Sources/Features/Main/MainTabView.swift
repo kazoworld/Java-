@@ -9,7 +9,7 @@ struct MainTabView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
 
-    @State private var selection = 0
+    @State private var selection: Int
     @State private var homePath = NavigationPath()
     @State private var libraryPath = NavigationPath()
     @State private var musicPath = NavigationPath()
@@ -19,6 +19,12 @@ struct MainTabView: View {
     /// persist across every tab).
     @State private var music = MusicPlayer.shared
     @State private var showNowPlaying = false
+
+    /// The tab to land on, chosen by the "What's the vibe?" screen (0 = Media/
+    /// Home, 2 = Music). Defaults to Home.
+    init(initialTab: Int = 0) {
+        _selection = State(initialValue: initialTab)
+    }
 
     /// Selecting a tab — INCLUDING re-selecting the one you're already on —
     /// always returns that tab to its root screen. A custom binding is the only

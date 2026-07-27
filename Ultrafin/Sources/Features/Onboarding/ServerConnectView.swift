@@ -50,8 +50,7 @@ struct ServerConnectView: View {
         VStack {
             Spacer()
             AuthCard {
-                AuthBrand(systemImage: "play.circle.fill",
-                          title: "Ultrafin",
+                AuthBrand(title: "Ultrafin",
                           subtitle: "Enter your Jellyfin server's address or IP to get started — like 192.168.1.20:8096 or media.example.com.")
 
                 discoverySection

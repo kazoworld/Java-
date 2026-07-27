@@ -27,6 +27,8 @@ struct NowPlayingMusicView: View {
     @State private var breathing = false
     /// The color sampled from the current record — drives the Apple Music wash.
     @State private var artColor: ArtworkColor?
+    /// Live vertical drag while swiping the player down to dismiss.
+    @State private var dragOffset: CGFloat = 0
 
     /// True on an iPhone held in landscape — the carousel becomes the stage.
     private var isLandscapePhone: Bool {
@@ -44,7 +46,15 @@ struct NowPlayingMusicView: View {
                 layout(in: geo.size)
             }
         }
+        // Swipe the whole player down to dismiss — the sheet follows your finger
+        // and springs back if you don't pull far enough. Swipe the art
+        // horizontally to change track.
+        .offset(y: max(0, dragOffset))
+        #if os(iOS)
+        .gesture(playerDrag)
+        #endif
         .environment(\.colorScheme, .dark)
+        .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.85), value: dragOffset)
         .animation(.smooth(duration: 0.35), value: stage)
         .task(id: player.currentTrack?.id) {
             guard let track = player.currentTrack,
@@ -63,6 +73,34 @@ struct NowPlayingMusicView: View {
         .onPlayPauseCommand { player.togglePlayPause() }
         #endif
     }
+
+    #if os(iOS)
+    /// One gesture for the whole player: a downward pull dismisses it (the sheet
+    /// tracks your finger), a horizontal flick on the art changes track. The
+    /// scrubber and the lyrics/queue scroll views are children, so they claim
+    /// their own touches first and this never fights them.
+    private var playerDrag: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                if value.translation.height > 0,
+                   value.translation.height > abs(value.translation.width) {
+                    dragOffset = value.translation.height
+                }
+            }
+            .onEnded { value in
+                let dx = value.translation.width, dy = value.translation.height
+                if abs(dx) > abs(dy), abs(dx) > 60, stage == .art {
+                    Haptics.play(.light)
+                    if dx < 0 { player.next() } else { player.previous() }
+                    dragOffset = 0
+                } else if dy > 140 || value.predictedEndTranslation.height > 320 {
+                    dismiss()
+                } else {
+                    dragOffset = 0
+                }
+            }
+    }
+    #endif
 
     // MARK: - Layouts
 

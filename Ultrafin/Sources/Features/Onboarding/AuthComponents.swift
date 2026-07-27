@@ -6,69 +6,80 @@ struct AuthCard<Content: View>: View {
     @ViewBuilder var content: Content
 
     @Environment(SettingsStore.self) private var settings
-    /// Drives the slow "breathing" of the card's colored glow.
-    @State private var breathing = false
 
     var body: some View {
         VStack(spacing: Spacing.lg) { content }
-            .padding(Spacing.xl)
-            .frame(maxWidth: 520)
+            .padding(Spacing.xxl)
+            .frame(maxWidth: 480)
             // Real Liquid Glass + the brand rim — the first surface a new user
-            // ever sees should be the most premium one.
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+            // ever sees should be the most premium one. Calm and still: one soft
+            // depth shadow and a whisper of accent, no pulsing.
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 34, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
                     .strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.3), radius: 34, y: 18)
-            // A slow accent glow that swells and relaxes — the pane feels alive
-            // against the drifting aurora behind it.
-            .shadow(color: settings.theme.accent.color.opacity(breathing ? 0.38 : 0.16),
-                    radius: breathing ? 52 : 30, y: 10)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
-                    breathing = true
-                }
-            }
+            .shadow(color: .black.opacity(0.35), radius: 40, y: 20)
+            .shadow(color: settings.theme.accent.color.opacity(0.18), radius: 34, y: 8)
     }
 }
 
-/// Branded header: a glowing accent glyph + title + subtitle.
+/// Branded header. With no `systemImage` it leads with the real Ultrafin glass
+/// mark (the app identity); pass a symbol for sub-flows like Sign In / Quick
+/// Connect, shown as a clean glass chip rather than a heavy blurred glow.
 struct AuthBrand: View {
-    var systemImage: String = "play.circle.fill"
+    var systemImage: String? = nil
     let title: String
     let subtitle: String
 
     @Environment(SettingsStore.self) private var settings
-    /// Gentle life in the glyph: a slow scale/glow pulse.
-    @State private var pulsing = false
 
     var body: some View {
-        VStack(spacing: Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(settings.theme.accent.color.opacity(pulsing ? 0.5 : 0.3))
-                    .frame(width: 130, height: 130)
-                    .blur(radius: 34)
+        VStack(spacing: Spacing.md) {
+            if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.system(size: 66, weight: .thin))
-                    .foregroundStyle(UltrafinColors.accentGradient)
-                    .scaleEffect(pulsing ? 1.05 : 0.97)
-                    .shadow(color: settings.theme.accent.color.opacity(0.45), radius: 14)
+                    .font(.system(size: chipGlyph, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: chipSize, height: chipSize)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: chipSize * 0.28, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: chipSize * 0.28, style: .continuous)
+                        .strokeBorder(LiquidGlass.rim(0.7), lineWidth: 1))
+                    .shadow(color: settings.theme.accent.color.opacity(0.35), radius: 16, y: 6)
+            } else {
+                UltrafinMark(size: markSize)
             }
-            Text(title)
-                .font(Typography.displayTitle)
-                .foregroundStyle(UltrafinColors.primaryText)
-            Text(subtitle)
-                .font(Typography.body)
-                .foregroundStyle(UltrafinColors.secondaryText)
-                .multilineTextAlignment(.center)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
-                pulsing = true
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(Typography.displayTitle)
+                    .foregroundStyle(UltrafinColors.primaryText)
+                Text(subtitle)
+                    .font(Typography.body)
+                    .foregroundStyle(UltrafinColors.secondaryText)
+                    .multilineTextAlignment(.center)
             }
         }
+    }
+
+    private var markSize: CGFloat {
+        #if os(tvOS)
+        128
+        #else
+        88
+        #endif
+    }
+    private var chipSize: CGFloat {
+        #if os(tvOS)
+        100
+        #else
+        68
+        #endif
+    }
+    private var chipGlyph: CGFloat {
+        #if os(tvOS)
+        46
+        #else
+        32
+        #endif
     }
 }
 
