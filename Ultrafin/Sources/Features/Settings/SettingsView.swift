@@ -25,10 +25,6 @@ struct SettingsView: View {
                     SettingsRowLabel(title: "Playback", subtitle: "Engine, video, audio, subtitles",
                                      systemImage: "play.rectangle.fill", tint: .orange)
                 }
-                NavigationLink { MusicSettingsView() } label: {
-                    SettingsRowLabel(title: "Music", subtitle: musicSubtitle,
-                                     systemImage: "music.note", tint: .green)
-                }
             } header: {
                 // The app's settings motto.
                 Text("Your library, your way.")
@@ -80,11 +76,6 @@ struct SettingsView: View {
         .background(AmbientBackground())
         .navigationTitle("Settings")
         .tint(settings.theme.accent.color)
-    }
-
-    /// The Music row shows the active source at a glance.
-    private var musicSubtitle: String {
-        settings.musicSource == .navidrome ? "Source: Navidrome" : "Source: Jellyfin"
     }
 
     private var sloganSize: CGFloat {

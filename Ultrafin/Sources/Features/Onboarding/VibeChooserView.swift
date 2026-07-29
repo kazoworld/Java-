@@ -4,17 +4,15 @@ import SwiftUI
 /// Music, that route the app to Home or the Music tab. Fluid, focus-friendly on
 /// tvOS, tap/press on iOS.
 struct VibeChooserView: View {
-    /// Called with the tab index to land on: 0 = Media (Home), 2 = Music.
-    let onPick: (Int) -> Void
+    /// Called with the experience the user picked.
+    let onPick: (AppMode) -> Void
 
     @Environment(SettingsStore.self) private var settings
     @State private var appeared = false
-    @State private var chosen: Vibe?
+    @State private var chosen: AppMode?
     #if os(tvOS)
-    @FocusState private var focus: Vibe?
+    @FocusState private var focus: AppMode?
     #endif
-
-    private enum Vibe: Hashable { case media, music }
 
     var body: some View {
         ZStack {
@@ -53,7 +51,7 @@ struct VibeChooserView: View {
         }
     }
 
-    private func orb(_ vibe: Vibe, title: String, subtitle: String,
+    private func orb(_ vibe: AppMode, title: String, subtitle: String,
                      icon: String, colors: [Color]) -> some View {
         let isChosen = chosen == vibe
         #if os(tvOS)
@@ -106,14 +104,14 @@ struct VibeChooserView: View {
         #endif
     }
 
-    private func pick(_ vibe: Vibe) {
+    private func pick(_ vibe: AppMode) {
         guard chosen == nil else { return }
         Haptics.play(.success)
         withAnimation(.spring(duration: 0.5, bounce: 0.3)) { chosen = vibe }
         // Let the pop play, then hand control to the app.
         Task {
             try? await Task.sleep(for: .milliseconds(420))
-            onPick(vibe == .media ? 0 : 2)
+            onPick(vibe)
         }
     }
 

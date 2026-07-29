@@ -305,6 +305,30 @@ actor NavidromeClient {
         await songs(fromAlbums: try await albums(type: "frequent", size: 40))
     }
 
+    // MARK: - Search
+
+    /// Subsonic `search3` — artists, albums and songs in one pass.
+    func searchMusic(query: String) async throws -> [MediaItem] {
+        struct Body: Decodable {
+            let searchResult3: Result?
+            struct Result: Decodable {
+                let artist: [SubsonicArtist]?
+                let album: [SubsonicAlbum]?
+                let song: [SubsonicSong]?
+            }
+        }
+        let body = try await get(Body.self, "search3", query: [
+            .init(name: "query", value: query),
+            .init(name: "artistCount", value: "20"),
+            .init(name: "albumCount", value: "30"),
+            .init(name: "songCount", value: "40")
+        ])
+        guard let result = body.searchResult3 else { return [] }
+        return (result.album ?? []).map(\.mediaItem)
+            + (result.artist ?? []).map(\.mediaItem)
+            + (result.song ?? []).map(\.mediaItem)
+    }
+
     // MARK: - Lyrics
 
     /// Synced lyrics via the OpenSubsonic `getLyricsBySongId` extension

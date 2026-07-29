@@ -625,6 +625,18 @@ actor JellyfinClient {
         ]).items
     }
 
+    /// Music-only search: albums, artists and songs (the media search above is
+    /// scoped to movies/shows, so music mode needs its own).
+    func searchMusic(query: String, userID: String) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "searchTerm", value: query),
+            .init(name: "recursive", value: "true"),
+            .init(name: "includeItemTypes", value: "MusicAlbum,MusicArtist,Audio"),
+            .init(name: "limit", value: "60"),
+            .init(name: "imageTypeLimit", value: "1")
+        ]).items
+    }
+
     /// A large sample of songs carrying play counts + genres, used to compute
     /// the listening insights and Music Identity locally.
     func songsForInsights(userID: String, limit: Int = 2000) async throws -> [MediaItem] {

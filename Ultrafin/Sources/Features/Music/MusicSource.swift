@@ -29,6 +29,8 @@ protocol MusicSource: Sendable {
     func recentlyPlayedSongs() async throws -> [MediaItem]
     func discoverySongs() async throws -> [MediaItem]
     func songsForInsights() async throws -> [MediaItem]
+    /// Albums, artists and songs matching a query.
+    func searchMusic(query: String) async throws -> [MediaItem]
 
     func lyrics(for track: MediaItem) async -> [LyricLine]
     func audioStreamURL(itemID: String) async -> URL?
@@ -70,6 +72,9 @@ struct JellyfinMusicSource: MusicSource {
     func recentlyPlayedSongs() async throws -> [MediaItem] { try await client.recentlyPlayedSongs(userID: userID) }
     func discoverySongs() async throws -> [MediaItem] { try await client.discoverySongs(userID: userID) }
     func songsForInsights() async throws -> [MediaItem] { try await client.songsForInsights(userID: userID) }
+    func searchMusic(query: String) async throws -> [MediaItem] {
+        try await client.searchMusic(query: query, userID: userID)
+    }
 
     func lyrics(for track: MediaItem) async -> [LyricLine] { await client.lyrics(itemID: track.id) }
     func audioStreamURL(itemID: String) async -> URL? {
@@ -125,6 +130,9 @@ struct NavidromeMusicSource: MusicSource {
     func recentlyPlayedSongs() async throws -> [MediaItem] { try await client.recentlyPlayedSongs() }
     func discoverySongs() async throws -> [MediaItem] { try await client.discoverySongs() }
     func songsForInsights() async throws -> [MediaItem] { try await client.songsForInsights() }
+    func searchMusic(query: String) async throws -> [MediaItem] {
+        try await client.searchMusic(query: query)
+    }
 
     func lyrics(for track: MediaItem) async -> [LyricLine] { await client.lyrics(for: track) }
     func audioStreamURL(itemID: String) async -> URL? { client.streamURL(itemID: itemID) }
