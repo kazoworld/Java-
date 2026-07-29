@@ -273,8 +273,15 @@ final class MusicPlayer {
         MusicLibraryCache.shared.notePlay(of: track, source: source)
 
         Task {
-            guard let url = offline ?? await source.audioStreamURL(itemID: track.id),
-                  generation == loadGeneration else { return }
+            // `??` can't carry an `await` on its right-hand side, so resolve the
+            // remote URL only when there's no local copy.
+            let resolved: URL?
+            if let offline {
+                resolved = offline
+            } else {
+                resolved = await source.audioStreamURL(itemID: track.id)
+            }
+            guard let url = resolved, generation == loadGeneration else { return }
             let item = AVPlayerItem(url: url)
             endObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
