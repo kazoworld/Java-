@@ -48,7 +48,31 @@ extension View {
         self
         #endif
     }
+
+    /// tvOS: make Menu/Back pop this *pushed* screen. Without it, a screen whose
+    /// content the focus engine doesn't own lets the exit command fall through to
+    /// the system, which quits to the Apple TV Home Screen instead of going back.
+    /// No-op on iOS, where the navigation bar's back button handles it.
+    @ViewBuilder
+    func tvPopsOnMenu() -> some View {
+        #if os(tvOS)
+        modifier(TVPopOnMenu())
+        #else
+        self
+        #endif
+    }
 }
+
+#if os(tvOS)
+/// Wires the remote's Menu button to dismiss (pop) the current pushed view.
+private struct TVPopOnMenu: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+
+    func body(content: Content) -> some View {
+        content.onExitCommand { dismiss() }
+    }
+}
+#endif
 
 // MARK: - Primary button
 

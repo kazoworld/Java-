@@ -31,6 +31,7 @@ struct StartupSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Startup")
+        .tvPopsOnMenu()
         .tint(settings.theme.accent.color)
         .animation(.smooth(duration: 0.25), value: preference)
     }

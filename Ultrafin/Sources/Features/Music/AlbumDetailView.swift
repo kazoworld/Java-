@@ -48,6 +48,7 @@ struct AlbumDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .adaptsChromeOnScroll()
         #endif
+        .tvPopsOnMenu()
         .task {
             guard let source = appState.musicSource else { return }
             if container.type == .playlist {

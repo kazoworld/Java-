@@ -75,6 +75,7 @@ struct MusicSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Music")
+        .tvPopsOnMenu()
         .tint(settings.theme.accent.color)
     }
 

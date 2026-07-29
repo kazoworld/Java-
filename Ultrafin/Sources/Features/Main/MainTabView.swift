@@ -43,10 +43,16 @@ struct MainTabView: View {
         Binding(
             get: { selection },
             set: { newValue in
+                #if os(iOS)
+                // A tap on the switcher tab is an explicit action, so act on it.
                 guard newValue != Self.switchTag else {
                     switchMode()
                     return
                 }
+                #endif
+                // On tvOS selection follows FOCUS along the top tab row, so the
+                // switcher must never act here — merely moving focus onto it
+                // would flip modes. Its tab shows a screen with a real button.
                 resetPath(for: newValue)
                 // A fresh tab starts at the top, so the chrome starts expanded.
                 ChromeState.shared.reset()
@@ -213,11 +219,13 @@ struct MainTabView: View {
         switcherTab
     }
 
-    /// The mode switcher. Its content is never really shown — selecting it flips
-    /// modes — but a tab needs a body, so it holds a brief hand-off screen.
+    /// The mode switcher. On iOS a tap flips modes straight away. On tvOS the tab
+    /// shows a confirmation screen with a focusable button, because tab selection
+    /// there follows focus — acting on selection alone would switch the moment
+    /// the remote drifted onto it.
     @ViewBuilder
     private var switcherTab: some View {
-        ModeSwitchSplash(target: mode.opposite)
+        ModeSwitchScreen(target: mode.opposite) { switchMode() }
             .tabItem { Label(mode.switchLabel, systemImage: mode.switchImage) }
             .tag(Self.switchTag)
     }
@@ -255,22 +263,76 @@ struct MainTabView: View {
     }
 }
 
-/// A momentary screen behind the switcher tab — the user never really lands
-/// here, but a tab must have content.
-private struct ModeSwitchSplash: View {
+/// The switcher tab's screen: a single, deliberate "Switch to …" button. On
+/// tvOS this is what actually performs the switch (selection follows focus up
+/// there, so it can't be done on selection); on iOS the tap already switched and
+/// this is only a brief hand-off.
+private struct ModeSwitchScreen: View {
     let target: AppMode
+    let onSwitch: () -> Void
+
+    @State private var appeared = false
 
     var body: some View {
         ZStack {
             AmbientBackground()
-            VStack(spacing: Spacing.md) {
+            VStack(spacing: Spacing.xl) {
                 Image(systemName: target.systemImage)
-                    .font(.system(size: 44, weight: .semibold))
-                    .foregroundStyle(UltrafinColors.secondaryText)
-                Text("Switching to \(target.label)…")
-                    .font(Typography.body)
-                    .foregroundStyle(UltrafinColors.secondaryText)
+                    .font(.system(size: glyph, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 18, y: 8)
+
+                VStack(spacing: Spacing.sm) {
+                    Text("Switch to \(target.label)")
+                        .font(.system(size: title, weight: .heavy, design: .rounded))
+                        .foregroundStyle(UltrafinColors.primaryText)
+                    Text(target == .music
+                         ? "Albums, playlists and your listening."
+                         : "Movies, shows and your library.")
+                        .font(.system(size: subtitle, weight: .medium, design: .rounded))
+                        .foregroundStyle(UltrafinColors.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+
+                #if os(tvOS)
+                Button(action: onSwitch) {
+                    Label("Switch to \(target.label)", systemImage: target.systemImage)
+                        .font(.system(size: subtitle, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, Spacing.xxl)
+                        .padding(.vertical, Spacing.lg)
+                        .glassCapsule(dim: 0.12)
+                }
+                .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))
+                .padding(.top, Spacing.md)
+                #endif
             }
+            .opacity(appeared ? 1 : 0)
+            .scaleEffect(appeared ? 1 : 0.96)
+            .padding(Spacing.xxl)
         }
+        .onAppear { withAnimation(.spring(duration: 0.5, bounce: 0.2)) { appeared = true } }
+    }
+
+    private var glyph: CGFloat {
+        #if os(tvOS)
+        90
+        #else
+        48
+        #endif
+    }
+    private var title: CGFloat {
+        #if os(tvOS)
+        46
+        #else
+        26
+        #endif
+    }
+    private var subtitle: CGFloat {
+        #if os(tvOS)
+        26
+        #else
+        16
+        #endif
     }
 }

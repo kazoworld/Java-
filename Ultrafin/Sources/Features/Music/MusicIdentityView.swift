@@ -40,6 +40,7 @@ struct MusicIdentityView: View {
         .navigationTitle("Music Identity")
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .tvPopsOnMenu()
         .task { await load() }
     }
 
@@ -89,6 +90,7 @@ struct MusicIdentityView: View {
                 .strokeBorder(LiquidGlass.rim(0.6), lineWidth: 1)
         )
         .shadow(color: tint.opacity(0.5), radius: 30, y: 16)
+        .tvFocusable()
     }
 
     private var focusPhrase: String {
@@ -127,6 +129,7 @@ struct MusicIdentityView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.lg)
         .liquidGlass(cornerRadius: 18)
+        .tvFocusable()
     }
 
     private var playsText: String {
@@ -179,6 +182,7 @@ struct MusicIdentityView: View {
             }
         }
         .padding(.vertical, 2)
+        .tvFocusable()
     }
 
     // MARK: - Artists
