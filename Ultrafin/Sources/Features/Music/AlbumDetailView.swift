@@ -134,11 +134,12 @@ struct AlbumDetailView: View {
                 switch state {
                 case .downloaded:
                     for track in tracks { downloads.remove(track.id) }
-                case .idle:
+                case .idle, .partial:
                     guard let source = appState.musicSource else { return }
                     Task {
                         await downloads.store(tracks: tracks, source: source,
-                                              label: "Downloading \(container.name)")
+                                              label: "Downloading \(container.name)",
+                                              albumTotal: tracks.count)
                     }
                 case .working:
                     break
@@ -151,10 +152,14 @@ struct AlbumDetailView: View {
                         Text("Downloading…")
                     case .downloaded:
                         Image(systemName: "checkmark.circle.fill")
-                        Text("Downloaded")
+                        Text(tracks.count == 1 ? "Single Downloaded" : "Album Downloaded")
+                    case .partial:
+                        Image(systemName: "arrow.down.circle.dotted")
+                        // Say plainly that only part of the record is here.
+                        Text("Get the rest · \(storedHere) of \(tracks.count)")
                     case .idle:
                         Image(systemName: "arrow.down.circle")
-                        Text("Download")
+                        Text(tracks.count == 1 ? "Download Single" : "Download Album")
                     }
                 }
                 .font(.system(size: pillFont * 0.86, weight: .semibold, design: .rounded))
@@ -169,12 +174,19 @@ struct AlbumDetailView: View {
         }
     }
 
-    private enum DownloadState { case idle, working, downloaded }
+    private enum DownloadState { case idle, working, partial, downloaded }
+
+    /// How many of this release's songs are already downloaded.
+    private var storedHere: Int {
+        tracks.filter { downloads.isDownloaded($0.id) }.count
+    }
 
     private var downloadState: DownloadState {
         if tracks.contains(where: { downloads.isFetching($0.id) }) { return .working }
-        if !tracks.isEmpty && tracks.allSatisfy({ downloads.isDownloaded($0.id) }) { return .downloaded }
-        return .idle
+        guard !tracks.isEmpty else { return .idle }
+        let have = storedHere
+        if have == tracks.count { return .downloaded }
+        return have > 0 ? .partial : .idle
     }
 
     /// The big white Play capsule at the center of the action row.
@@ -352,7 +364,12 @@ struct AlbumDetailView: View {
                 } else {
                     Button {
                         guard let source = appState.musicSource else { return }
-                        Task { await downloads.store(track, source: source, pinned: true) }
+                        // Record the release's real size so one song off a
+                        // twelve-track album never looks like the whole album.
+                        Task {
+                            await downloads.store(track, source: source, pinned: true,
+                                                  albumTotal: tracks.count)
+                        }
                     } label: { Label("Download", systemImage: "arrow.down.circle") }
                 }
             }
@@ -389,23 +406,35 @@ struct AlbumDetailView: View {
             .joined(separator: " · ")
     }
 
-    /// "2012 · FLAC · 12 songs · 48 min" — year, source quality, then size.
+    /// "Single · 2012 · FLAC · 3 min" — what kind of release it is comes first,
+    /// so a one-song release is never mistaken for a full album.
     private var detailLine: String? {
         var parts: [String] = []
         if container.type == .playlist {
             parts.append("Playlist")
-        } else if let year = container.productionYear {
-            parts.append(String(year))
+        } else if let kind = releaseKind {
+            parts.append(kind.label)
         }
+        if let year = container.productionYear { parts.append(String(year)) }
         // Quality comes off the tracks (the album itself has no container).
         if let format = tracks.first?.formatBadge { parts.append(format) }
         if let meta = metaLine { parts.append(meta) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    /// Single vs album, preferring the tracks we actually loaded over the
+    /// server's count (which can be stale or absent).
+    private var releaseKind: ReleaseKind? {
+        guard container.type != .playlist else { return nil }
+        if !tracks.isEmpty { return tracks.count <= 1 ? .single : .album }
+        return container.releaseKind
+    }
+
     /// "12 songs · 48 min" — grammatically correct count plus total runtime.
+    /// A single says only its length; "Single · 1 song" reads as a stutter.
     private var metaLine: String? {
         guard !tracks.isEmpty else { return nil }
+        if releaseKind == .single { return totalDurationText }
         let count = tracks.count
         let songs = "\(count) song\(count == 1 ? "" : "s")"
         if let dur = totalDurationText { return "\(songs) · \(dur)" }

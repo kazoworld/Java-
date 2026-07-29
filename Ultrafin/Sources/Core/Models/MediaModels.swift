@@ -179,6 +179,24 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         guard let container, !container.isEmpty else { return nil }
         return container.uppercased()
     }
+
+    /// How many songs a release holds, when the server reports it.
+    var trackCount: Int? { childCount }
+
+    /// A one-track release is a single, not an album. Two or more makes it an
+    /// album. Without a count from the server we can't tell, so we say nothing
+    /// rather than guess.
+    var releaseKind: ReleaseKind? {
+        guard type == .musicAlbum, let count = trackCount else { return nil }
+        return count <= 1 ? .single : .album
+    }
+}
+
+/// Album vs. single, so a one-song release never masquerades as a full record.
+enum ReleaseKind: String, Sendable {
+    case single, album
+
+    var label: String { self == .single ? "Single" : "Album" }
 }
 
 /// A cast or crew member attached to an item.

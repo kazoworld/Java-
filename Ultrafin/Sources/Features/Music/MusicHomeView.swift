@@ -422,7 +422,9 @@ struct AlbumCard: View {
                 .foregroundStyle(isFocused ? UltrafinColors.primaryText : UltrafinColors.secondaryText)
                 .lineLimit(1)
             HStack(spacing: 5) {
-                Text(album.artistText ?? album.productionYear.map(String.init) ?? " ")
+                // A one-track release says "Single" so it never passes for a
+                // full album on a shelf of covers.
+                Text(albumSubtitle)
                     .font(subtitleFont)
                     .foregroundStyle(UltrafinColors.tertiaryText)
                     .lineLimit(1)
@@ -434,6 +436,13 @@ struct AlbumCard: View {
         }
         .frame(width: side)
         .animation(.smooth(duration: 0.2), value: isFocused)
+    }
+
+    /// Artist normally; "Single · Artist" when the release is one track.
+    private var albumSubtitle: String {
+        let base = album.artistText ?? album.productionYear.map(String.init)
+        guard album.releaseKind == .single else { return base ?? " " }
+        return base.map { "Single · \($0)" } ?? "Single"
     }
 
     private var artURL: URL? {

@@ -74,8 +74,44 @@ final class MusicLibraryCache {
         var album: String?
         var albumID: String?
         var runTimeTicks: Int64?
+        /// How many songs the parent release has in total, when we knew it at
+        /// download time. Lets the UI say "3 of 12" instead of implying a whole
+        /// album is here when only one song is.
+        var albumTotal: Int?
 
         var id: String { trackID }
+    }
+
+    /// What's actually on the device for one release.
+    struct AlbumSummary: Identifiable, Sendable {
+        let albumID: String
+        let title: String
+        let artist: String?
+        let storedCount: Int
+        let total: Int?
+        let bytes: Int64
+        /// A representative track, for artwork lookup.
+        let sampleTrackID: String
+
+        var id: String { albumID }
+
+        /// True when the release is a single — one song, and that's all there is.
+        var isSingle: Bool { total == 1 }
+        /// True when every song of a multi-track album is here.
+        var isComplete: Bool {
+            guard let total else { return false }
+            return storedCount >= total && total > 1
+        }
+
+        /// "Single" · "Album · 12 songs" · "3 of 12 songs".
+        var subtitle: String {
+            if isSingle { return "Single" }
+            guard let total else {
+                return "\(storedCount) song\(storedCount == 1 ? "" : "s")"
+            }
+            if storedCount >= total { return "Album · \(total) songs" }
+            return "\(storedCount) of \(total) songs"
+        }
     }
 
     private(set) var entries: [String: Entry] = [:]
@@ -136,6 +172,42 @@ final class MusicLibraryCache {
     var downloadedCount: Int { entries.values.filter(\.isPinned).count }
     var cachedCount: Int { entries.values.filter { !$0.isPinned }.count }
 
+    /// How many songs of a given release are on the device.
+    func storedCount(forAlbum albumID: String) -> Int {
+        entries.values.filter { $0.albumID == albumID }.count
+    }
+
+    /// What's downloaded, grouped by release — so a single reads as a single and
+    /// three songs off a twelve-track record read as "3 of 12", never as an
+    /// album you own outright.
+    func downloadedAlbums() -> [AlbumSummary] {
+        let pinned = entries.values.filter(\.isPinned)
+        let groups = Dictionary(grouping: pinned) { $0.albumID ?? "single:\($0.trackID)" }
+        return groups.compactMap { key, items -> AlbumSummary? in
+            guard let first = items.first else { return nil }
+            return AlbumSummary(
+                albumID: key,
+                title: first.album ?? first.title,
+                artist: first.artist,
+                storedCount: items.count,
+                // The largest recorded total wins; nil when we never learned it.
+                total: items.compactMap(\.albumTotal).max(),
+                bytes: items.reduce(0) { $0 + $1.bytes },
+                sampleTrackID: first.trackID
+            )
+        }
+        .sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    /// The individual pinned tracks of a release, in track order where known.
+    func downloadedTracks(inAlbum albumID: String) -> [Entry] {
+        entries.values
+            .filter { $0.isPinned && ($0.albumID ?? "single:\($0.trackID)") == albumID }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+
     // MARK: - Play tracking
 
     /// Called when a song starts. Records the play and, once a song has proven
@@ -160,14 +232,20 @@ final class MusicLibraryCache {
 
     // MARK: - Storing
 
-    /// Download one song. `pinned` marks it an explicit download.
+    /// Download one song. `pinned` marks it an explicit download. `albumTotal`
+    /// is the parent release's full track count when the caller knows it, so a
+    /// partial album can be shown as partial rather than passing for complete.
     @discardableResult
-    func store(_ track: MediaItem, source: MusicSource, pinned: Bool) async -> Bool {
+    func store(_ track: MediaItem, source: MusicSource, pinned: Bool,
+               albumTotal: Int? = nil) async -> Bool {
         guard Self.isSupported else { return false }
-        // Already here: an explicit download promotes a cached copy.
+        // Already here: an explicit download promotes a cached copy, and a
+        // newly-known album size fills in a blank.
         if var existing = entries[track.id] {
-            if pinned && !existing.isPinned {
-                existing.isPinned = true
+            var changed = false
+            if pinned && !existing.isPinned { existing.isPinned = true; changed = true }
+            if existing.albumTotal == nil, albumTotal != nil { existing.albumTotal = albumTotal; changed = true }
+            if changed {
                 entries[track.id] = existing
                 saveIndex()
             }
@@ -208,7 +286,8 @@ final class MusicLibraryCache {
                                       isPinned: pinned, playCount: playCounts[track.id] ?? 1,
                                       lastPlayed: Date(), title: track.name,
                                       artist: track.artistText, album: track.album,
-                                      albumID: track.albumId, runTimeTicks: track.runTimeTicks)
+                                      albumID: track.albumId, runTimeTicks: track.runTimeTicks,
+                                      albumTotal: albumTotal)
             saveIndex()
             return true
         } catch {
@@ -216,15 +295,17 @@ final class MusicLibraryCache {
         }
     }
 
-    /// Download a whole album/playlist.
-    func store(tracks: [MediaItem], source: MusicSource, label: String) async {
+    /// Download a whole album/playlist. Every track records the release's full
+    /// size, so the result is recognisably a complete album (or a single).
+    func store(tracks: [MediaItem], source: MusicSource, label: String,
+               albumTotal: Int? = nil) async {
         guard Self.isSupported, !tracks.isEmpty else { return }
         jobLabel = label
         jobProgress = 0
         defer { jobLabel = nil; jobProgress = 0 }
         for (index, track) in tracks.enumerated() {
             if Task.isCancelled { return }
-            await store(track, source: source, pinned: true)
+            await store(track, source: source, pinned: true, albumTotal: albumTotal)
             jobProgress = Double(index + 1) / Double(tracks.count)
         }
     }

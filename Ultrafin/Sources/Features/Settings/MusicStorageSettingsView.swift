@@ -19,10 +19,12 @@ struct MusicStorageSettingsView: View {
 
         Form {
             Section {
-                storageRow(title: "Downloads",
-                           detail: "\(store.downloadedCount) songs",
-                           bytes: store.downloadedBytes,
-                           icon: "arrow.down.circle.fill", tint: .blue)
+                NavigationLink { DownloadedMusicView() } label: {
+                    storageRow(title: "Downloads",
+                               detail: downloadsDetail,
+                               bytes: store.downloadedBytes,
+                               icon: "arrow.down.circle.fill", tint: .blue)
+                }
                 storageRow(title: "Cached",
                            detail: "\(store.cachedCount) songs",
                            bytes: store.cachedBytes,
@@ -138,6 +140,20 @@ struct MusicStorageSettingsView: View {
                 .foregroundStyle(UltrafinColors.secondaryText)
                 .monospacedDigit()
         }
+    }
+
+    /// "4 albums · 2 singles · 1 partial" — the shape of what's on the device.
+    private var downloadsDetail: String {
+        let albums = store.downloadedAlbums()
+        guard !albums.isEmpty else { return "Nothing yet" }
+        let singles = albums.filter(\.isSingle).count
+        let complete = albums.filter(\.isComplete).count
+        let partial = albums.count - singles - complete
+        var parts: [String] = []
+        if complete > 0 { parts.append("\(complete) album\(complete == 1 ? "" : "s")") }
+        if singles > 0 { parts.append("\(singles) single\(singles == 1 ? "" : "s")") }
+        if partial > 0 { parts.append("\(partial) partial") }
+        return parts.joined(separator: " · ")
     }
 
     private func refreshArtworkSize() {
