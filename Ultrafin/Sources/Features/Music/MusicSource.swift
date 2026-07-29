@@ -37,6 +37,9 @@ protocol MusicSource: Sendable {
 
     func reportStarted(itemID: String) async
     func reportStopped(itemID: String, positionTicks: Int64) async
+
+    /// Heart / star an album or track on the backing server.
+    func setFavorite(itemID: String, isFavorite: Bool) async
 }
 
 // MARK: - Jellyfin
@@ -90,6 +93,9 @@ struct JellyfinMusicSource: MusicSource {
     func reportStopped(itemID: String, positionTicks: Int64) async {
         await client.reportPlaybackStopped(itemID: itemID, positionTicks: positionTicks, playSessionID: nil)
     }
+    func setFavorite(itemID: String, isFavorite: Bool) async {
+        _ = await client.setFavorite(itemID: itemID, userID: userID, isFavorite: isFavorite)
+    }
 }
 
 // MARK: - Navidrome
@@ -136,6 +142,9 @@ struct NavidromeMusicSource: MusicSource {
     func reportStopped(itemID: String, positionTicks: Int64) async {
         await client.scrobble(itemID: itemID, submission: true)
     }
+    func setFavorite(itemID: String, isFavorite: Bool) async {
+        await client.setFavorite(itemID: itemID, isFavorite: isFavorite)
+    }
 }
 
 // MARK: - MediaItem factory
@@ -150,16 +159,17 @@ extension MediaItem {
                       albumID: String? = nil, coverArtID: String? = nil,
                       trackNumber: Int? = nil, discNumber: Int? = nil,
                       childCount: Int? = nil, genre: String? = nil,
-                      playCount: Int? = nil) -> MediaItem {
+                      playCount: Int? = nil, container: String? = nil,
+                      isFavorite: Bool? = nil) -> MediaItem {
         MediaItem(id: id, name: name, type: type, overview: nil,
                   productionYear: year, officialRating: nil,
                   communityRating: nil, criticRating: nil,
                   runTimeTicks: durationSeconds.map { Int64($0) * 10_000_000 },
-                  userData: playCount.map {
-                      UserData(playbackPositionTicks: nil, playedPercentage: nil,
-                               isFavorite: nil, played: $0 > 0, playCount: $0,
-                               lastPlayedDate: nil)
-                  },
+                  userData: (playCount != nil || isFavorite != nil)
+                      ? UserData(playbackPositionTicks: nil, playedPercentage: nil,
+                                 isFavorite: isFavorite, played: (playCount ?? 0) > 0,
+                                 playCount: playCount, lastPlayedDate: nil)
+                      : nil,
                   imageTags: coverArtID.map { ["Primary": $0] },
                   backdropImageTags: nil, seriesName: nil, seriesId: nil,
                   seasonId: nil, indexNumber: trackNumber,
@@ -168,6 +178,7 @@ extension MediaItem {
                   parentLogoItemId: nil, parentLogoImageTag: nil,
                   albumArtist: artist, artists: artist.map { [$0] },
                   album: album, albumId: albumID,
-                  albumPrimaryImageTag: coverArtID)
+                  albumPrimaryImageTag: coverArtID,
+                  container: container)
     }
 }

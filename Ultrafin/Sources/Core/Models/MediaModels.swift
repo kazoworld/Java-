@@ -35,6 +35,9 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let album: String?
     let albumId: String?
     let albumPrimaryImageTag: String?
+    /// Source container/codec ("flac", "mp3", "m4a") — shown as the quality
+    /// badge on album pages.
+    let container: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -65,6 +68,7 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case album = "Album"
         case albumId = "AlbumId"
         case albumPrimaryImageTag = "AlbumPrimaryImageTag"
+        case container = "Container"
     }
 
     /// Rotten Tomatoes Tomatometer percentage (Jellyfin's CriticRating).
@@ -168,6 +172,12 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     var isExplicit: Bool {
         guard let rating = officialRating?.lowercased() else { return false }
         return rating.contains("explicit")
+    }
+
+    /// The quality badge for an album page — "FLAC", "MP3", "ALAC"…
+    var formatBadge: String? {
+        guard let container, !container.isEmpty else { return nil }
+        return container.uppercased()
     }
 }
 

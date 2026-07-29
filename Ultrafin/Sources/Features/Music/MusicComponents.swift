@@ -13,6 +13,36 @@ struct ExplicitBadge: View {
     }
 }
 
+/// An album page's backdrop: the cover's color, *muted* into a tasteful wash
+/// that dims to near-black down the page. Deliberately desaturated and darkened
+/// — the raw sampled color is boosted for vividness, which reads garish behind a
+/// full page of text; Apple Music's album pages sit in a quiet, dusky version of
+/// the cover instead.
+struct AlbumBackdrop: View {
+    let color: ArtworkColor?
+
+    var body: some View {
+        ZStack {
+            UltrafinColors.background
+
+            if let color {
+                LinearGradient(stops: [
+                    .init(color: color.shade(brightness: 0.5, saturation: 0.42), location: 0.0),
+                    .init(color: color.shade(brightness: 0.34, saturation: 0.38), location: 0.32),
+                    .init(color: color.shade(brightness: 0.16, saturation: 0.3), location: 0.62),
+                    .init(color: .black.opacity(0.96), location: 1.0)
+                ], startPoint: .top, endPoint: .bottom)
+
+                // A soft pool behind the artwork so the cover sits in its own light.
+                RadialGradient(colors: [color.shade(brightness: 0.62, saturation: 0.5).opacity(0.45), .clear],
+                               center: UnitPoint(x: 0.5, y: 0.16), startRadius: 0, endRadius: 420)
+            }
+        }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.6), value: color)
+    }
+}
+
 /// The player's Apple Music-style backdrop: the record's own color, poured into
 /// a soft multi-tone wash that slowly drifts, with the blurred artwork itself
 /// underneath for texture. Falls back to a quiet neutral when no color is known

@@ -19,6 +19,8 @@ struct MainTabView: View {
     /// persist across every tab).
     @State private var music = MusicPlayer.shared
     @State private var showNowPlaying = false
+    /// Drives the mini player's condensed state as pages scroll.
+    @State private var chrome = ChromeState.shared
 
     /// The tab to land on, chosen by the "What's the vibe?" screen (0 = Media/
     /// Home, 2 = Music). Defaults to Home.
@@ -35,6 +37,8 @@ struct MainTabView: View {
             get: { selection },
             set: { newValue in
                 resetPath(for: newValue)
+                // A fresh tab starts at the top, so the chrome starts expanded.
+                ChromeState.shared.reset()
                 selection = newValue
             }
         )
@@ -111,7 +115,8 @@ struct MainTabView: View {
         #else
         .overlay(alignment: miniPlayerAlignment) {
             if music.hasQueue && !showNowPlaying {
-                MiniPlayerBar(player: music) { showNowPlaying = true }
+                MiniPlayerBar(player: music, onExpand: { showNowPlaying = true },
+                              isCondensed: chrome.isCondensed)
                     .padding(.horizontal, miniPlayerHPadding)
                     .padding(.bottom, miniPlayerBottomPadding)
             }

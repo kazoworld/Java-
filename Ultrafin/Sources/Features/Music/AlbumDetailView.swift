@@ -12,8 +12,21 @@ struct AlbumDetailView: View {
     @State private var tracks: [MediaItem] = []
     @State private var isLoading = true
     @State private var artColor: ArtworkColor?
+    /// Local heart state so the tap reflects instantly; the server catches up.
+    @State private var favoriteOverride: Bool?
 
     private var player: MusicPlayer { .shared }
+
+    private var isFavorite: Bool {
+        favoriteOverride ?? (container.userData?.isFavorite ?? false)
+    }
+
+    private func toggleFavorite() {
+        let next = !isFavorite
+        favoriteOverride = next
+        guard let source = appState.musicSource else { return }
+        Task { await source.setFavorite(itemID: container.id, isFavorite: next) }
+    }
 
     var body: some View {
         ScrollView {
@@ -26,11 +39,12 @@ struct AlbumDetailView: View {
             .frame(maxWidth: contentMaxWidth)
             .frame(maxWidth: .infinity)
         }
-        .background(ArtworkBackground(color: artColor))
+        .background(AlbumBackdrop(color: artColor))
         .environment(\.colorScheme, .dark)
         #if os(iOS)
         .navigationTitle(container.name)
         .navigationBarTitleDisplayMode(.inline)
+        .adaptsChromeOnScroll()
         #endif
         .task {
             guard let source = appState.musicSource else { return }
@@ -56,46 +70,98 @@ struct AlbumDetailView: View {
     }
 
     #if os(iOS)
-    /// iPhone: a centered vertical layout — big art, title, artist·year, the
-    /// song/runtime line, then full-width Play + Shuffle. (The old shared
-    /// horizontal layout squeezed the buttons until "Play" wrapped.)
+    /// iPhone: the Apple Music album layout — centered cover, title, artist, a
+    /// quiet "year · format · length" line, then Shuffle / Play / Heart.
     private var phoneHeader: some View {
         VStack(spacing: Spacing.lg) {
             RemoteImage(url: artURL)
                 .frame(width: artSide, height: artSide)
                 .clipShape(RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous))
                 .specularRim(cornerRadius: Spacing.cornerRadius, intensity: 0.7)
-                .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
+                .shadow(color: .black.opacity(0.5), radius: 30, y: 16)
 
-            VStack(spacing: 6) {
+            VStack(spacing: 5) {
                 HStack(spacing: 6) {
-                    if container.isExplicit { ExplicitBadge(size: titleSize * 0.6) }
                     Text(container.name)
-                        .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                        .foregroundStyle(UltrafinColors.primaryText)
-                        .lineLimit(2)
+                        .font(.system(size: titleSize, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(3)
                         .multilineTextAlignment(.center)
+                    if container.isExplicit { ExplicitBadge(size: titleSize * 0.66) }
                 }
-                Text(subtitleLine)
-                    .font(.system(size: titleSize * 0.6, weight: .semibold, design: .rounded))
-                    .foregroundStyle(artColor?.color ?? settings.theme.accent.color)
-                    .lineLimit(1)
-                if let meta = metaLine {
-                    Text(meta)
-                        .font(.system(size: titleSize * 0.46, weight: .medium))
-                        .foregroundStyle(UltrafinColors.secondaryText)
+                if let artist = container.artistText, !artist.isEmpty {
+                    Text(artist)
+                        .font(.system(size: titleSize * 0.88, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1)
+                }
+                // "2012 · FLAC · 12 songs · 48 min" — the quiet detail line.
+                if let detail = detailLine {
+                    Text(detail)
+                        .font(.system(size: titleSize * 0.6, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             }
 
-            HStack(spacing: Spacing.md) {
-                actionPill("Play", icon: "play.fill", fill: true) { start(shuffled: false) }
-                actionPill("Shuffle", icon: "shuffle", fill: true) { start(shuffled: true) }
+            // Shuffle · Play · Heart — the Apple Music action row.
+            HStack(spacing: Spacing.lg) {
+                circleAction("shuffle", label: "Shuffle", isEnabled: !tracks.isEmpty) {
+                    start(shuffled: true)
+                }
+                playPill
+                circleAction(isFavorite ? "heart.fill" : "heart",
+                             label: isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                             tint: isFavorite ? .red : .white) { toggleFavorite() }
             }
-            // Cap the button row so it doesn't stretch edge-to-edge (and read as
-            // bulky) on a large phone — centered under the art instead.
-            .frame(maxWidth: 420)
+            .padding(.top, Spacing.xs)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// The big white Play capsule at the center of the action row.
+    private var playPill: some View {
+        Button {
+            Haptics.play(.medium)
+            start(shuffled: false)
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: pillFont * 0.95, weight: .bold))
+                Text("Play")
+                    .font(.system(size: pillFont, weight: .semibold))
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.md)
+            .background(.white, in: Capsule())
+            .shadow(color: .black.opacity(0.28), radius: 12, y: 5)
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
+        .frame(maxWidth: 210)
+        .disabled(tracks.isEmpty)
+    }
+
+    /// A round secondary action flanking the Play pill.
+    private func circleAction(_ icon: String, label: String, tint: Color = .white,
+                              isEnabled: Bool = true,
+                              action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.selection)
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: pillFont, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: circleSide, height: circleSide)
+                .background(.white.opacity(0.14), in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
+        .accessibilityLabel(label)
+        .disabled(!isEnabled)
     }
     #endif
 
@@ -166,23 +232,78 @@ struct AlbumDetailView: View {
                 .font(Typography.body)
                 .foregroundStyle(UltrafinColors.secondaryText)
         } else {
-            LazyVStack(spacing: 2) {
+            LazyVStack(spacing: 0) {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { position, track in
-                    Button {
-                        guard let source = appState.musicSource else { return }
-                        Haptics.play(.selection)
-                        player.play(tracks: tracks, startAt: position, source: source)
-                    } label: {
-                        TrackRow(track: track,
-                                 position: position + 1,
-                                 isCurrent: player.currentTrack?.id == track.id,
-                                 showsArt: container.type == .playlist)
+                    HStack(spacing: 0) {
+                        Button {
+                            guard let source = appState.musicSource else { return }
+                            Haptics.play(.selection)
+                            player.play(tracks: tracks, startAt: position, source: source)
+                        } label: {
+                            TrackRow(track: track,
+                                     position: position + 1,
+                                     isCurrent: player.currentTrack?.id == track.id,
+                                     showsArt: container.type == .playlist)
+                        }
+                        .buttonStyle(UltrafinButtonStyle(focusScale: 1.01, lift: false))
+
+                        #if os(iOS)
+                        trackMenu(for: track, at: position)
+                        #endif
                     }
-                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.01, lift: false))
+                    #if os(iOS)
+                    // Hairline separators between songs, inset past the number
+                    // column — the Apple Music track list rhythm.
+                    if position < tracks.count - 1 {
+                        Rectangle()
+                            .fill(.white.opacity(0.09))
+                            .frame(height: 1)
+                            .padding(.leading, Spacing.xxl)
+                    }
+                    #endif
                 }
             }
         }
     }
+
+    #if os(iOS)
+    /// The per-song "..." menu: queue actions and a heart, like Apple Music.
+    private func trackMenu(for track: MediaItem, at position: Int) -> some View {
+        Menu {
+            Button {
+                guard let source = appState.musicSource else { return }
+                player.play(tracks: tracks, startAt: position, source: source)
+            } label: { Label("Play", systemImage: "play.fill") }
+
+            Button {
+                guard let source = appState.musicSource else { return }
+                player.playNext(track, source: source)
+            } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+
+            Button {
+                guard let source = appState.musicSource else { return }
+                player.playLater(track, source: source)
+            } label: { Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward") }
+
+            Divider()
+
+            Button {
+                guard let source = appState.musicSource else { return }
+                let next = !(track.userData?.isFavorite ?? false)
+                Task { await source.setFavorite(itemID: track.id, isFavorite: next) }
+            } label: {
+                Label((track.userData?.isFavorite ?? false) ? "Remove from Favorites" : "Add to Favorites",
+                      systemImage: (track.userData?.isFavorite ?? false) ? "heart.slash" : "heart")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+    #endif
 
     private func start(shuffled: Bool) {
         guard let source = appState.musicSource, !tracks.isEmpty else { return }
@@ -196,6 +317,20 @@ struct AlbumDetailView: View {
         return [container.artistText, container.productionYear.map(String.init)]
             .compactMap { $0 }
             .joined(separator: " · ")
+    }
+
+    /// "2012 · FLAC · 12 songs · 48 min" — year, source quality, then size.
+    private var detailLine: String? {
+        var parts: [String] = []
+        if container.type == .playlist {
+            parts.append("Playlist")
+        } else if let year = container.productionYear {
+            parts.append(String(year))
+        }
+        // Quality comes off the tracks (the album itself has no container).
+        if let format = tracks.first?.formatBadge { parts.append(format) }
+        if let meta = metaLine { parts.append(meta) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// "12 songs · 48 min" — grammatically correct count plus total runtime.
@@ -228,7 +363,14 @@ struct AlbumDetailView: View {
         #if os(tvOS)
         340
         #else
-        240
+        260
+        #endif
+    }
+    private var circleSide: CGFloat {
+        #if os(tvOS)
+        76
+        #else
+        52
         #endif
     }
     private var titleSize: CGFloat {

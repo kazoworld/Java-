@@ -8,13 +8,15 @@ struct MiniPlayerBar: View {
 
     @Bindable var player: MusicPlayer
     let onExpand: () -> Void
+    /// Shrunk to a compact pill while the user scrolls down a page.
+    var isCondensed: Bool = false
 
     var body: some View {
         if let track = player.currentTrack {
             HStack(spacing: Spacing.md) {
                 RemoteImage(url: player.artworkURL(for: track, maxWidth: 200))
                     .frame(width: artSide, height: artSide)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: isCondensed ? 6 : 8, style: .continuous))
                     .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -22,7 +24,8 @@ struct MiniPlayerBar: View {
                         .font(.system(size: titleSize, weight: .semibold, design: .rounded))
                         .foregroundStyle(UltrafinColors.primaryText)
                         .lineLimit(1)
-                    if let artist = track.artistText {
+                    // The artist line is the first thing to go when space tightens.
+                    if !isCondensed, let artist = track.artistText {
                         Text(artist)
                             .font(.system(size: titleSize * 0.78))
                             .foregroundStyle(UltrafinColors.secondaryText)
@@ -34,12 +37,16 @@ struct MiniPlayerBar: View {
                 barButton(player.isPlaying ? "pause.fill" : "play.fill", size: buttonSize) {
                     player.togglePlayPause()
                 }
-                barButton("forward.fill", size: buttonSize * 0.8) {
-                    player.next()
+                if !isCondensed {
+                    barButton("forward.fill", size: buttonSize * 0.8) {
+                        player.next()
+                    }
                 }
                 #if os(iOS)
-                barButton("xmark", size: buttonSize * 0.62) {
-                    player.stop()
+                if !isCondensed {
+                    barButton("xmark", size: buttonSize * 0.62) {
+                        player.stop()
+                    }
                 }
                 #else
                 // tvOS: an explicit expand control (container taps don't mix
@@ -49,17 +56,20 @@ struct MiniPlayerBar: View {
                 }
                 #endif
             }
-            .padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.sm)
-            .frame(maxWidth: barMaxWidth)
-            .liquidGlass(cornerRadius: 18)
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(.horizontal, isCondensed ? Spacing.sm : Spacing.md)
+            .padding(.vertical, isCondensed ? Spacing.xs : Spacing.sm)
+            .frame(maxWidth: isCondensed ? condensedMaxWidth : barMaxWidth)
+            .liquidGlass(cornerRadius: cornerRadius)
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             #if os(iOS)
             .onTapGesture { onExpand() }
             #endif
+            .animation(.smooth(duration: 0.3), value: isCondensed)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
+
+    private var cornerRadius: CGFloat { isCondensed ? 24 : 18 }
 
     private func barButton(_ icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
         Button {
@@ -79,7 +89,7 @@ struct MiniPlayerBar: View {
         #if os(tvOS)
         64
         #else
-        42
+        isCondensed ? 30 : 42
         #endif
     }
     private var titleSize: CGFloat {
@@ -101,6 +111,14 @@ struct MiniPlayerBar: View {
         700
         #else
         .infinity
+        #endif
+    }
+    /// Condensed, the bar pulls in from the edges into a floating pill.
+    private var condensedMaxWidth: CGFloat {
+        #if os(tvOS)
+        520
+        #else
+        290
         #endif
     }
 }

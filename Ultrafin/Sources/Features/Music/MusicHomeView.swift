@@ -79,6 +79,8 @@ struct MusicHomeView: View {
         .background(AmbientBackground())
         #if os(iOS)
         .navigationTitle("Music")
+        // The mini player condenses as this page scrolls down.
+        .adaptsChromeOnScroll()
         #endif
         .navigationDestination(for: MediaItem.self) { item in
             switch item.type {

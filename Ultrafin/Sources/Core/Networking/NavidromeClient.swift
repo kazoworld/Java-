@@ -371,6 +371,13 @@ actor NavidromeClient {
             .init(name: "submission", value: submission ? "true" : "false")
         ])
     }
+
+    /// Subsonic's star/unstar — the Navidrome equivalent of a Jellyfin favorite.
+    func setFavorite(itemID: String, isFavorite: Bool) async {
+        struct Body: Decodable {}
+        _ = try? await get(Body.self, isFavorite ? "star" : "unstar",
+                           query: [.init(name: "id", value: itemID)])
+    }
 }
 
 // MARK: - Subsonic models → MediaItem
@@ -383,10 +390,13 @@ private struct SubsonicAlbum: Decodable {
     let year: Int?
     let coverArt: String?
     let songCount: Int?
+    /// Present (an ISO date) when the user has starred this album.
+    let starred: String?
 
     var mediaItem: MediaItem {
         .music(id: id, name: name ?? album ?? "Album", type: .musicAlbum,
-               year: year, artist: artist, coverArtID: coverArt, childCount: songCount)
+               year: year, artist: artist, coverArtID: coverArt, childCount: songCount,
+               isFavorite: starred != nil)
     }
 }
 
@@ -427,12 +437,17 @@ private struct SubsonicSong: Decodable {
     let coverArt: String?
     let genre: String?
     let playCount: Int?
+    /// File extension ("flac", "mp3") — the Subsonic equivalent of Container.
+    let suffix: String?
+    /// Present (an ISO date) when the user has starred this song.
+    let starred: String?
 
     var mediaItem: MediaItem {
         .music(id: id, name: title ?? "Song", type: .audio,
                year: year, durationSeconds: duration, artist: artist,
                album: album, albumID: albumId, coverArtID: coverArt,
                trackNumber: track, discNumber: discNumber,
-               genre: genre, playCount: playCount)
+               genre: genre, playCount: playCount,
+               container: suffix, isFavorite: starred != nil)
     }
 }

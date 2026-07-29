@@ -203,6 +203,33 @@ final class MusicPlayer {
         repeatMode = all[(all.firstIndex(of: repeatMode)! + 1) % all.count]
     }
 
+    /// Slot a song in right after the current one ("Play Next"). If nothing is
+    /// playing, it just starts.
+    func playNext(_ track: MediaItem, source: MusicSource) {
+        guard hasQueue else {
+            play(tracks: [track], source: source)
+            return
+        }
+        // Pulling an earlier copy out shifts the playing track's index — keep
+        // `index` pointing at the same song so playback doesn't jump.
+        if let existing = queue.firstIndex(where: { $0.id == track.id }) {
+            guard existing != index else { return } // already the current song
+            queue.remove(at: existing)
+            if existing < index { index -= 1 }
+        }
+        queue.insert(track, at: min(index + 1, queue.count))
+    }
+
+    /// Add a song to the end of the queue.
+    func playLater(_ track: MediaItem, source: MusicSource) {
+        guard hasQueue else {
+            play(tracks: [track], source: source)
+            return
+        }
+        guard !queue.contains(where: { $0.id == track.id }) else { return }
+        queue.append(track)
+    }
+
     /// Reorder the up-next portion of the queue (from the queue sheet).
     func moveQueueItems(from source: IndexSet, to destination: Int) {
         queue.move(fromOffsets: source, toOffset: destination)
