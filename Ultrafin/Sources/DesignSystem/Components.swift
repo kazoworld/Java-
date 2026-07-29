@@ -106,12 +106,22 @@ final class ImageLoader: @unchecked Sendable {
     private let cache = NSCache<NSURL, UIImage>()
     private let lock = NSLock()
     private var inFlight: [NSURL: Task<UIImage?, Never>] = [:]
+    /// Album art also lands on disk, so covers survive a relaunch instead of
+    /// being re-downloaded every cold start. Capped and pruned oldest-first.
+    private let diskDirectory: URL?
+    private static let diskBudget: Int64 = 220 * 1024 * 1024
 
     private init() {
         cache.countLimit = 240
+        let base = try? FileManager.default.url(for: .cachesDirectory, in: .userDomainMask,
+                                                appropriateFor: nil, create: true)
+        diskDirectory = base?.appendingPathComponent("UltrafinArtwork", isDirectory: true)
+        if let diskDirectory {
+            try? FileManager.default.createDirectory(at: diskDirectory, withIntermediateDirectories: true)
+        }
     }
 
-    /// Returns a decoded image for `url`, hitting the in-memory cache first.
+    /// Returns a decoded image for `url`: memory first, then disk, then network.
     func image(for url: URL) async -> UIImage? {
         let key = url as NSURL
         if let cached = cache.object(forKey: key) { return cached }
@@ -121,9 +131,18 @@ final class ImageLoader: @unchecked Sendable {
             defer { lock.unlock() }
             if let existing = inFlight[key] { return existing }
             let new = Task<UIImage?, Never> { [weak self] in
+                guard let self else { return nil }
+                if let onDisk = self.readDisk(url) {
+                    self.cache.setObject(onDisk, forKey: key)
+                    self.finish(key)
+                    return onDisk
+                }
                 let image = await Self.download(url)
-                if let image, let self { self.cache.setObject(image, forKey: key) }
-                self?.finish(key)
+                if let image {
+                    self.cache.setObject(image, forKey: key)
+                    self.writeDisk(image, for: url)
+                }
+                self.finish(key)
                 return image
             }
             inFlight[key] = new
@@ -131,6 +150,76 @@ final class ImageLoader: @unchecked Sendable {
         }()
 
         return await task.value
+    }
+
+    // MARK: - Disk layer
+
+    private func diskURL(for url: URL) -> URL? {
+        guard let diskDirectory else { return nil }
+        // A stable, filesystem-safe name from the full URL (which already
+        // carries the server's image tag, so it changes when the art changes).
+        var hash: UInt64 = 5381
+        for byte in Array(url.absoluteString.utf8) {
+            hash = (hash &* 33) &+ UInt64(byte)
+        }
+        return diskDirectory.appendingPathComponent(String(hash, radix: 36) + ".jpg")
+    }
+
+    private func readDisk(_ url: URL) -> UIImage? {
+        guard let path = diskURL(for: url),
+              let data = try? Data(contentsOf: path),
+              let image = UIImage(data: data)?.preparingForDisplay()
+        else { return nil }
+        // Touch it so pruning treats it as recently used.
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path.path)
+        return image
+    }
+
+    private func writeDisk(_ image: UIImage, for url: URL) {
+        guard let path = diskURL(for: url), let data = image.jpegData(compressionQuality: 0.86) else { return }
+        try? data.write(to: path, options: .atomic)
+        pruneDiskIfNeeded()
+    }
+
+    /// Trim the artwork cache to its budget, oldest-touched first.
+    private func pruneDiskIfNeeded() {
+        guard let diskDirectory else { return }
+        let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: diskDirectory, includingPropertiesForKeys: keys) else { return }
+        var total: Int64 = 0
+        var described: [(url: URL, size: Int64, date: Date)] = []
+        for file in files {
+            guard let values = try? file.resourceValues(forKeys: Set(keys)) else { continue }
+            let size = Int64(values.fileSize ?? 0)
+            total += size
+            described.append((file, size, values.contentModificationDate ?? .distantPast))
+        }
+        guard total > Self.diskBudget else { return }
+        for item in described.sorted(by: { $0.date < $1.date }) {
+            try? FileManager.default.removeItem(at: item.url)
+            total -= item.size
+            if total <= Self.diskBudget * 3 / 4 { break }
+        }
+    }
+
+    /// Drop every cached cover from disk and memory (Settings → Storage).
+    func clearArtworkCache() {
+        cache.removeAllObjects()
+        guard let diskDirectory else { return }
+        try? FileManager.default.removeItem(at: diskDirectory)
+        try? FileManager.default.createDirectory(at: diskDirectory, withIntermediateDirectories: true)
+    }
+
+    /// Bytes currently held by cached artwork.
+    func artworkCacheBytes() -> Int64 {
+        guard let diskDirectory,
+              let files = try? FileManager.default.contentsOfDirectory(
+                at: diskDirectory, includingPropertiesForKeys: [.fileSizeKey])
+        else { return 0 }
+        return files.reduce(0) { sum, file in
+            sum + Int64((try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        }
     }
 
     /// Synchronous cache peek — lets a view paint immediately if the art is

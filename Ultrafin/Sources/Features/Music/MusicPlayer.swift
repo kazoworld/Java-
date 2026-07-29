@@ -267,8 +267,13 @@ final class MusicPlayer {
 
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
 
+        // A stored copy (download or cache) plays straight off disk — instant,
+        // and it works with no network at all.
+        let offline = MusicLibraryCache.shared.localURL(for: track.id)
+        MusicLibraryCache.shared.notePlay(of: track, source: source)
+
         Task {
-            guard let url = await source.audioStreamURL(itemID: track.id),
+            guard let url = offline ?? await source.audioStreamURL(itemID: track.id),
                   generation == loadGeneration else { return }
             let item = AVPlayerItem(url: url)
             endObserver = NotificationCenter.default.addObserver(

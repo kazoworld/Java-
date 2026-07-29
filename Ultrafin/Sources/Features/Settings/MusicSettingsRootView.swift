@@ -18,6 +18,14 @@ struct MusicSettingsRootView: View {
                     SettingsRowLabel(title: "Music Identity", subtitle: "How you listen",
                                      systemImage: "waveform", tint: .purple)
                 }
+                #if os(iOS)
+                // Offline storage only makes sense where the device leaves the
+                // network — the TV never does.
+                NavigationLink { MusicStorageSettingsView() } label: {
+                    SettingsRowLabel(title: "Downloads & Storage", subtitle: storageSubtitle,
+                                     systemImage: "arrow.down.circle.fill", tint: .blue)
+                }
+                #endif
             } header: {
                 Text("Your library, your way.")
                     .font(.system(size: sloganSize, weight: .semibold, design: .rounded))
@@ -65,6 +73,14 @@ struct MusicSettingsRootView: View {
     private var sourceSubtitle: String {
         settings.musicSource == .navidrome ? "Navidrome" : "Jellyfin"
     }
+
+    #if os(iOS)
+    private var storageSubtitle: String {
+        let store = MusicLibraryCache.shared
+        guard store.totalBytes > 0 else { return "Nothing stored yet" }
+        return "\(StorageFormat.string(store.totalBytes)) on device"
+    }
+    #endif
 
     private var sloganSize: CGFloat {
         #if os(tvOS)

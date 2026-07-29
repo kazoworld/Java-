@@ -14,6 +14,8 @@ struct AlbumDetailView: View {
     @State private var artColor: ArtworkColor?
     /// Local heart state so the tap reflects instantly; the server catches up.
     @State private var favoriteOverride: Bool?
+    /// Offline storage, so the download button reflects live state.
+    @State private var downloads = MusicLibraryCache.shared
 
     private var player: MusicPlayer { .shared }
 
@@ -116,8 +118,63 @@ struct AlbumDetailView: View {
                              tint: isFavorite ? .red : .white) { toggleFavorite() }
             }
             .padding(.top, Spacing.xs)
+
+            downloadButton
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Keep this album on the device — or, once it's here, remove it again.
+    @ViewBuilder
+    private var downloadButton: some View {
+        if MusicLibraryCache.isSupported && !tracks.isEmpty {
+            let state = downloadState
+            Button {
+                Haptics.play(.selection)
+                switch state {
+                case .downloaded:
+                    for track in tracks { downloads.remove(track.id) }
+                case .idle:
+                    guard let source = appState.musicSource else { return }
+                    Task {
+                        await downloads.store(tracks: tracks, source: source,
+                                              label: "Downloading \(container.name)")
+                    }
+                case .working:
+                    break
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    switch state {
+                    case .working:
+                        ProgressView().controlSize(.small).tint(.white)
+                        Text("Downloading…")
+                    case .downloaded:
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Downloaded")
+                    case .idle:
+                        Image(systemName: "arrow.down.circle")
+                        Text("Download")
+                    }
+                }
+                .font(.system(size: pillFont * 0.86, weight: .semibold, design: .rounded))
+                .foregroundStyle(state == .downloaded ? .white.opacity(0.75) : .white)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.sm)
+                .glassCapsule(dim: 0.1)
+            }
+            .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
+            .disabled(state == .working)
+            .animation(.smooth(duration: 0.25), value: state)
+        }
+    }
+
+    private enum DownloadState { case idle, working, downloaded }
+
+    private var downloadState: DownloadState {
+        if tracks.contains(where: { downloads.isFetching($0.id) }) { return .working }
+        if !tracks.isEmpty && tracks.allSatisfy({ downloads.isDownloaded($0.id) }) { return .downloaded }
+        return .idle
     }
 
     /// The big white Play capsule at the center of the action row.
@@ -286,6 +343,19 @@ struct AlbumDetailView: View {
             } label: { Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward") }
 
             Divider()
+
+            if MusicLibraryCache.isSupported {
+                if downloads.isDownloaded(track.id) {
+                    Button(role: .destructive) {
+                        downloads.remove(track.id)
+                    } label: { Label("Remove Download", systemImage: "trash") }
+                } else {
+                    Button {
+                        guard let source = appState.musicSource else { return }
+                        Task { await downloads.store(track, source: source, pinned: true) }
+                    } label: { Label("Download", systemImage: "arrow.down.circle") }
+                }
+            }
 
             Button {
                 guard let source = appState.musicSource else { return }

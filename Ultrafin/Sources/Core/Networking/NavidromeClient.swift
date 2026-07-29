@@ -305,6 +305,13 @@ actor NavidromeClient {
         await songs(fromAlbums: try await albums(type: "frequent", size: 40))
     }
 
+    /// Every song in the library, walked album by album (Subsonic has no
+    /// "all songs" endpoint). Used for whole-library download and sync.
+    func allSongs() async throws -> [MediaItem] {
+        let ids = try await albums(type: "alphabeticalByName", size: 500)
+        return await songs(fromAlbums: ids)
+    }
+
     // MARK: - Search
 
     /// Subsonic `search3` — artists, albums and songs in one pass.

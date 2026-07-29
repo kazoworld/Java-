@@ -110,6 +110,8 @@ struct RootView: View {
             mode = StartupPreference.current.directMode
         }
         .task {
+            // Give back space held by songs that stopped being played.
+            MusicLibraryCache.shared.evictStale()
             if case .launching = appState.phase {
                 await appState.bootstrap()
             }

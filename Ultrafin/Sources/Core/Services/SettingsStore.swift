@@ -80,6 +80,17 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(musicSource.rawValue, forKey: Keys.musicSource) }
     }
 
+    /// Keep songs you play often on the device automatically (iPhone/iPad).
+    /// They're dropped again after two weeks without a play.
+    var cacheFrequentSongs: Bool {
+        didSet { UserDefaults.standard.set(cacheFrequentSongs, forKey: Keys.cacheFrequentSongs) }
+    }
+
+    /// Allow downloads over cellular; otherwise they wait for Wi-Fi.
+    var downloadOverCellular: Bool {
+        didSet { UserDefaults.standard.set(downloadOverCellular, forKey: Keys.downloadOverCellular) }
+    }
+
     /// Libraries the user hid from the Library tab — a client-side preference
     /// only; nothing changes on the Jellyfin server.
     var hiddenLibraryIDs: [String] {
@@ -114,6 +125,8 @@ final class SettingsStore {
         static let themeMusic = "settings.themeMusic"
         static let hiddenLibraryIDs = "settings.hiddenLibraryIDs"
         static let musicSource = "settings.musicSource"
+        static let cacheFrequentSongs = "settings.cacheFrequentSongs"
+        static let downloadOverCellular = "settings.downloadOverCellular"
     }
 
     private init() {
@@ -133,6 +146,8 @@ final class SettingsStore {
         themeMusic = UserDefaults.standard.object(forKey: Keys.themeMusic) as? Bool ?? true
         hiddenLibraryIDs = UserDefaults.standard.stringArray(forKey: Keys.hiddenLibraryIDs) ?? []
         musicSource = MusicSourceKind(rawValue: UserDefaults.standard.string(forKey: Keys.musicSource) ?? "") ?? .jellyfin
+        cacheFrequentSongs = UserDefaults.standard.object(forKey: Keys.cacheFrequentSongs) as? Bool ?? true
+        downloadOverCellular = UserDefaults.standard.object(forKey: Keys.downloadOverCellular) as? Bool ?? false
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()
         layout.normalize() // pick up any rows added in newer versions
         homeLayout = layout

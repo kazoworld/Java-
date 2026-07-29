@@ -625,6 +625,16 @@ actor JellyfinClient {
         ]).items
     }
 
+    /// Every song in the library, for "download everything" and library sync.
+    func allSongs(userID: String, limit: Int = 5000) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "IncludeItemTypes", value: "Audio"),
+            .init(name: "Recursive", value: "true"),
+            .init(name: "SortBy", value: "AlbumArtist,Album,ParentIndexNumber,IndexNumber"),
+            .init(name: "Limit", value: String(limit))
+        ]).items
+    }
+
     /// Music-only search: albums, artists and songs (the media search above is
     /// scoped to movies/shows, so music mode needs its own).
     func searchMusic(query: String, userID: String) async throws -> [MediaItem] {

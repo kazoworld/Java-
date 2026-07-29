@@ -31,6 +31,8 @@ protocol MusicSource: Sendable {
     func songsForInsights() async throws -> [MediaItem]
     /// Albums, artists and songs matching a query.
     func searchMusic(query: String) async throws -> [MediaItem]
+    /// The whole library, for offline download and sync.
+    func allSongs() async throws -> [MediaItem]
 
     func lyrics(for track: MediaItem) async -> [LyricLine]
     func audioStreamURL(itemID: String) async -> URL?
@@ -75,6 +77,7 @@ struct JellyfinMusicSource: MusicSource {
     func searchMusic(query: String) async throws -> [MediaItem] {
         try await client.searchMusic(query: query, userID: userID)
     }
+    func allSongs() async throws -> [MediaItem] { try await client.allSongs(userID: userID) }
 
     func lyrics(for track: MediaItem) async -> [LyricLine] { await client.lyrics(itemID: track.id) }
     func audioStreamURL(itemID: String) async -> URL? {
@@ -133,6 +136,7 @@ struct NavidromeMusicSource: MusicSource {
     func searchMusic(query: String) async throws -> [MediaItem] {
         try await client.searchMusic(query: query)
     }
+    func allSongs() async throws -> [MediaItem] { try await client.allSongs() }
 
     func lyrics(for track: MediaItem) async -> [LyricLine] { await client.lyrics(for: track) }
     func audioStreamURL(itemID: String) async -> URL? { client.streamURL(itemID: itemID) }
