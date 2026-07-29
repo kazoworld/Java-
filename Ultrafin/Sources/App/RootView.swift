@@ -13,9 +13,11 @@ struct RootView: View {
     /// (the intro overlay fades out above it, revealing page one).
     @State private var tourComplete = UserDefaults.standard.bool(forKey: "onboarding.tourComplete")
     /// The experience chosen by "What's the vibe?" — nil until the user picks,
-    /// which is when the app tree is built. Reset on each fresh sign-in so the
-    /// question is asked at the start of every session.
-    @State private var mode: AppMode?
+    /// which is when the app tree is built. Starts pre-filled when the user has
+    /// set a default launcher, so the question is skipped entirely.
+    @State private var mode: AppMode? = StartupPreference.current.directMode
+    /// Whether the one-time "where's your music?" question has been answered.
+    @State private var musicSourceChosen = MusicSourceOnboarding.isComplete
 
     private var authenticatedUserID: String? {
         if case .authenticated(let session) = appState.phase { return session.userID }
@@ -70,7 +72,19 @@ struct RootView: View {
                 .zIndex(4)
             }
 
-            if case .authenticated = appState.phase, mode != nil, !tourComplete {
+            // First time into Music: ask whether it comes from Jellyfin or a
+            // Navidrome server, rather than defaulting silently.
+            if case .authenticated = appState.phase, mode == .music, !musicSourceChosen {
+                MusicSourceOnboardingView {
+                    withAnimation(.smooth(duration: 0.45)) { musicSourceChosen = true }
+                }
+                .transition(.opacity)
+                .zIndex(4)
+            }
+
+            // The welcome tour waits its turn behind the source question.
+            if case .authenticated = appState.phase, mode != nil,
+               mode != .music || musicSourceChosen, !tourComplete {
                 OnboardingTourView {
                     UserDefaults.standard.set(true, forKey: "onboarding.tourComplete")
                     withAnimation(.smooth(duration: 0.45)) { tourComplete = true }
@@ -90,8 +104,10 @@ struct RootView: View {
         .animation(.smooth(duration: 0.35), value: appState.phase)
         // A new sign-in / profile switch re-asks "What's the vibe?" (the user
         // identity changed, so any prior choice no longer applies).
+        // A new sign-in / profile switch starts the experience over — straight
+        // into the default launcher when one is set, else back to the chooser.
         .onChange(of: authenticatedUserID) { _, _ in
-            mode = nil
+            mode = StartupPreference.current.directMode
         }
         .task {
             if case .launching = appState.phase {

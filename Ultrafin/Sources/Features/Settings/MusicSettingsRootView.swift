@@ -34,6 +34,10 @@ struct MusicSettingsRootView: View {
                     SettingsRowLabel(title: "Appearance", subtitle: "Theme, accent, display",
                                      systemImage: "paintbrush.fill", tint: .pink)
                 }
+                NavigationLink { StartupSettingsView() } label: {
+                    SettingsRowLabel(title: "Startup", subtitle: StartupPreference.current.label,
+                                     systemImage: "arrow.triangle.2.circlepath", tint: .blue)
+                }
             } header: {
                 Text("Playback & Look")
             }

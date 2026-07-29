@@ -25,6 +25,10 @@ struct SettingsView: View {
                     SettingsRowLabel(title: "Playback", subtitle: "Engine, video, audio, subtitles",
                                      systemImage: "play.rectangle.fill", tint: .orange)
                 }
+                NavigationLink { StartupSettingsView() } label: {
+                    SettingsRowLabel(title: "Startup", subtitle: startupSubtitle,
+                                     systemImage: "arrow.triangle.2.circlepath", tint: .green)
+                }
             } header: {
                 // The app's settings motto.
                 Text("Your library, your way.")
@@ -77,6 +81,9 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .tint(settings.theme.accent.color)
     }
+
+    /// Shows the launch default at a glance.
+    private var startupSubtitle: String { StartupPreference.current.label }
 
     private var sloganSize: CGFloat {
         #if os(tvOS)
