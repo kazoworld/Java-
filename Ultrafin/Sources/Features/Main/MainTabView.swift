@@ -133,7 +133,16 @@ struct MainTabView: View {
             if stamp > 0 { showNowPlaying = true }
         }
         .fullScreenCoverCompat(isPresented: $showNowPlaying) {
-            NowPlayingMusicView(player: music)
+            NowPlayingMusicView(player: music) { destination in
+                // Tapping the album/artist in the player opens that page in the
+                // Music tab, switching modes if we're browsing Media.
+                if mode != .music {
+                    mode = .music
+                    mode.remember()
+                }
+                selection = 0
+                listenPath.append(destination)
+            }
         }
         // Read the accent through the observed environment store so an accent
         // change in Settings recolors the tab bar live (the static

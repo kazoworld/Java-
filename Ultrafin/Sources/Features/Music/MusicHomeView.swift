@@ -19,6 +19,27 @@ final class MusicHomeViewModel {
             && playlists.isEmpty && heartedSongs.isEmpty
     }
 
+    /// Only real albums belong in the album rails: two or more tracks. A
+    /// one-track release (often a single song filed under its album) goes to the
+    /// Singles rail instead, so the Albums shelf isn't padded out with them.
+    /// Releases whose size the server didn't report stay with the albums rather
+    /// than being hidden.
+    private func fullAlbums(_ items: [MediaItem]) -> [MediaItem] {
+        items.filter { $0.releaseKind != .single }
+    }
+
+    private func singles(_ items: [MediaItem]) -> [MediaItem] {
+        items.filter { $0.releaseKind == .single }
+    }
+
+    var recentFullAlbums: [MediaItem] { fullAlbums(recentAlbums) }
+    var albumShelf: [MediaItem] { fullAlbums(allAlbums) }
+    /// Every one-track release across what we loaded, de-duplicated.
+    var singlesShelf: [MediaItem] {
+        var seen = Set<String>()
+        return (singles(recentAlbums) + singles(allAlbums)).filter { seen.insert($0.id).inserted }
+    }
+
     func load(source: MusicSource) async {
         if loadedKind != source.kind {
             didLoad = false
@@ -57,17 +78,21 @@ struct MusicHomeView: View {
                     madeForYou
                     identityBanner
 
-                    if !model.recentAlbums.isEmpty {
-                        albumRail(title: "Recently Added", albums: model.recentAlbums)
+                    if !model.recentFullAlbums.isEmpty {
+                        albumRail(title: "Recently Added", albums: model.recentFullAlbums)
                     }
                     if !model.playlists.isEmpty {
                         albumRail(title: "Playlists", albums: model.playlists)
                     }
-                    if !model.allAlbums.isEmpty {
-                        albumRail(title: "Albums", albums: model.allAlbums)
+                    if !model.albumShelf.isEmpty {
+                        albumRail(title: "Albums", albums: model.albumShelf)
                     }
                     if !model.heartedSongs.isEmpty {
                         songRail(title: "Hearted Songs", songs: model.heartedSongs)
+                    }
+                    // One-track releases live here instead of padding out Albums.
+                    if !model.singlesShelf.isEmpty {
+                        albumRail(title: "Singles", albums: model.singlesShelf)
                     }
                     if !model.artists.isEmpty {
                         artistRail

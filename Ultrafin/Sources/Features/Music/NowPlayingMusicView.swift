@@ -1,5 +1,8 @@
 import SwiftUI
 import AVKit
+#if os(iOS)
+import MediaPlayer
+#endif
 
 /// The full-screen music player, in the spirit of Apple Music: the album art
 /// floats over its own blurred reflection, shrinking when paused and springing
@@ -17,6 +20,8 @@ struct NowPlayingMusicView: View {
     #endif
 
     @Bindable var player: MusicPlayer
+    /// Tapping the album or artist name leaves the player and opens that page.
+    var onOpen: ((MediaItem) -> Void)? = nil
 
     /// What fills the center stage.
     private enum Stage { case art, lyrics, queue }
@@ -29,6 +34,8 @@ struct NowPlayingMusicView: View {
     @State private var artColor: ArtworkColor?
     /// Live vertical drag while swiping the player down to dismiss.
     @State private var dragOffset: CGFloat = 0
+    /// Local heart state so the tap lands instantly; cleared on track change.
+    @State private var favoriteOverride: Bool?
 
     /// True on an iPhone held in landscape — the carousel becomes the stage.
     private var isLandscapePhone: Bool {
@@ -57,6 +64,7 @@ struct NowPlayingMusicView: View {
         .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.85), value: dragOffset)
         .animation(.smooth(duration: 0.35), value: stage)
         .task(id: player.currentTrack?.id) {
+            favoriteOverride = nil // the new song has its own heart state
             guard let track = player.currentTrack,
                   let url = player.artworkURL(for: track, maxWidth: 240) else { return }
             artColor = await ImageColor.vibrant(from: url)
@@ -135,24 +143,33 @@ struct NowPlayingMusicView: View {
     #endif
 
     #if os(iOS)
-    /// Portrait iPhone: a vertical stack with the art sized to a fraction of the
-    /// height so the transport can never be pushed off the bottom.
+    /// Portrait iPhone — the Apple Music player: grabber, big square cover, then
+    /// a left-aligned title/artist row with heart and "…" on the right, the
+    /// scrubber, large transport, a volume slider, and three route/lyrics/queue
+    /// controls. Everything inside one padded column so nothing can clip.
     private func portraitLayout(in size: CGSize) -> some View {
-        let artMax = min(size.width - edgePadding * 2, size.height * 0.42)
-        return VStack(spacing: Spacing.md) {
+        // The cover takes the width it can get, capped so the controls below
+        // always have room on a short phone.
+        let artMax = min(size.width - edgePadding * 2, size.height * 0.44)
+        return VStack(spacing: 0) {
             grabber
+                .padding(.bottom, Spacing.sm)
+
             centerStage(maxSide: artMax)
                 .frame(maxHeight: .infinity)
-            trackInfo
-            scrubber
-            transport
-                .padding(.vertical, Spacing.xs)
-            bottomBar
-                .padding(.top, Spacing.xs)
+
+            VStack(spacing: Spacing.lg) {
+                infoRow
+                scrubber
+                transport
+                volumeRow
+                bottomBar
+            }
+            .padding(.top, Spacing.lg)
         }
         .padding(.horizontal, edgePadding)
-        .padding(.bottom, Spacing.lg)
-        .frame(maxWidth: 520)
+        .padding(.bottom, Spacing.md)
+        .frame(maxWidth: 540)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -197,13 +214,14 @@ struct NowPlayingMusicView: View {
         )
     }
 
+    /// The sheet handle — a soft pill, as on Apple Music's player.
     private var grabber: some View {
         #if os(iOS)
         Button { dismiss() } label: {
-            Image(systemName: "chevron.down")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white.opacity(0.7))
-                .frame(width: 40, height: 32)
+            Capsule()
+                .fill(.white.opacity(0.35))
+                .frame(width: 38, height: 5)
+                .frame(width: 90, height: 26) // generous tap target
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -388,6 +406,160 @@ struct NowPlayingMusicView: View {
 
     // MARK: - Info + transport
 
+    #if os(iOS)
+    /// Title and artist on the left, heart and "…" on the right — Apple Music's
+    /// info row. The artist and album names are links to their pages.
+    private var infoRow: some View {
+        HStack(alignment: .center, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(player.currentTrack?.name ?? "—")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    if player.currentTrack?.isExplicit == true {
+                        ExplicitBadge(size: 15).foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+                creditLine
+            }
+            Spacer(minLength: 0)
+
+            roundControl(isFavorite ? "heart.fill" : "heart",
+                         label: "Favorite",
+                         tint: isFavorite ? .red : .white) { toggleFavorite() }
+            moreMenu
+        }
+    }
+
+    /// "Artist — Album", each name tappable and opening its own page.
+    @ViewBuilder
+    private var creditLine: some View {
+        let track = player.currentTrack
+        HStack(spacing: 4) {
+            if let artist = track?.artistText, !artist.isEmpty {
+                Button {
+                    open(track?.artistDestination)
+                } label: {
+                    Text(artist)
+                        .font(.system(size: 19, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .disabled(track?.artistDestination == nil)
+            }
+            if let album = track?.album, !album.isEmpty, album != track?.artistText {
+                Text("—")
+                    .font(.system(size: 19))
+                    .foregroundStyle(.white.opacity(0.4))
+                Button {
+                    open(track?.albumDestination)
+                } label: {
+                    Text(album)
+                        .font(.system(size: 19, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .disabled(track?.albumDestination == nil)
+            }
+        }
+    }
+
+    /// The "…" menu: album, artist, and queue actions.
+    private var moreMenu: some View {
+        Menu {
+            if let album = player.currentTrack?.albumDestination {
+                Button { open(album) } label: {
+                    Label("Go to Album", systemImage: "square.stack")
+                }
+            }
+            if let artist = player.currentTrack?.artistDestination {
+                Button { open(artist) } label: {
+                    Label("Go to Artist", systemImage: "music.mic")
+                }
+            }
+            Divider()
+            Button { player.toggleShuffle() } label: {
+                Label(player.shuffleOn ? "Shuffle Off" : "Shuffle", systemImage: "shuffle")
+            }
+            Button { player.cycleRepeat() } label: {
+                Label(repeatLabel, systemImage: player.repeatMode.icon)
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(.white.opacity(0.16), in: Circle())
+        }
+    }
+
+    private var repeatLabel: String {
+        switch player.repeatMode {
+        case .off: "Repeat"
+        case .all: "Repeat One"
+        case .one: "Repeat Off"
+        }
+    }
+
+    private func roundControl(_ icon: String, label: String, tint: Color,
+                              action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.selection)
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 38, height: 38)
+                .background(.white.opacity(0.16), in: Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    /// Dismiss the player, then hand the destination to the app so it opens in
+    /// the Music tab's own navigation stack.
+    private func open(_ item: MediaItem?) {
+        guard let item, let onOpen else { return }
+        Haptics.play(.light)
+        dismiss()
+        Task {
+            try? await Task.sleep(for: .milliseconds(320))
+            onOpen(item)
+        }
+    }
+
+    private var isFavorite: Bool {
+        favoriteOverride ?? (player.currentTrack?.userData?.isFavorite ?? false)
+    }
+
+    private func toggleFavorite() {
+        guard let track = player.currentTrack, let source = player.activeSource else { return }
+        let next = !isFavorite
+        favoriteOverride = next
+        Task { await source.setFavorite(itemID: track.id, isFavorite: next) }
+    }
+
+    /// The system volume slider, flanked by speaker glyphs.
+    private var volumeRow: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "speaker.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.5))
+            SystemVolumeSlider()
+                .frame(height: 28)
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+    #endif
+
     private var trackInfo: some View {
         VStack(spacing: 4) {
             HStack(spacing: 6) {
@@ -491,24 +663,38 @@ struct NowPlayingMusicView: View {
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.2, lift: false))
     }
 
+    /// Lyrics · AirPlay · Queue, evenly spread. Shuffle and repeat live in the
+    /// "…" menu on iOS, the way Apple Music arranges them; tvOS keeps them here
+    /// since it has no menu affordance.
     private var bottomBar: some View {
-        HStack {
+        HStack(spacing: 0) {
+            #if os(tvOS)
             toggleChip(icon: "shuffle", active: player.shuffleOn) { player.toggleShuffle() }
-            Spacer()
+                .frame(maxWidth: .infinity)
+            #endif
+
             toggleChip(icon: "quote.bubble", active: stage == .lyrics) {
                 stage = stage == .lyrics ? .art : .lyrics
             }
+            .frame(maxWidth: .infinity)
+
             #if os(iOS)
             AirPlayButton()
-                .frame(width: 44, height: 44)
+                .frame(width: 30, height: 30)
+                .frame(maxWidth: .infinity)
             #endif
+
             toggleChip(icon: "list.bullet", active: stage == .queue) {
                 stage = stage == .queue ? .art : .queue
             }
-            Spacer()
+            .frame(maxWidth: .infinity)
+
+            #if os(tvOS)
             toggleChip(icon: player.repeatMode.icon, active: player.repeatMode != .off) {
                 player.cycleRepeat()
             }
+            .frame(maxWidth: .infinity)
+            #endif
         }
     }
 
@@ -562,21 +748,21 @@ struct NowPlayingMusicView: View {
         #if os(tvOS)
         44
         #else
-        isLandscapePhone ? 28 : 34
+        isLandscapePhone ? 28 : 38
         #endif
     }
     private var sideButtonSize: CGFloat {
         #if os(tvOS)
         30
         #else
-        isLandscapePhone ? 20 : 24
+        isLandscapePhone ? 20 : 30
         #endif
     }
     private var transportSpacing: CGFloat {
         #if os(tvOS)
         Spacing.xxl
         #else
-        isLandscapePhone ? Spacing.lg : Spacing.xl
+        isLandscapePhone ? Spacing.lg : Spacing.xxl
         #endif
     }
     private var chipSize: CGFloat {
@@ -606,6 +792,19 @@ private struct AirPlayButton: UIViewRepresentable {
         return view
     }
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
+}
+
+/// The real system volume control (MPVolumeView), so dragging it moves device
+/// volume exactly as Apple Music's slider does — a plain SwiftUI Slider can't
+/// drive output volume.
+private struct SystemVolumeSlider: UIViewRepresentable {
+    func makeUIView(context: Context) -> MPVolumeView {
+        let view = MPVolumeView(frame: .zero)
+        view.showsRouteButton = false
+        view.tintColor = UIColor.white.withAlphaComponent(0.9)
+        return view
+    }
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
 }
 #endif
 

@@ -509,7 +509,9 @@ actor JellyfinClient {
     func recentAlbums(userID: String) async throws -> [MediaItem] {
         try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: [
             .init(name: "limit", value: "24"),
-            .init(name: "includeItemTypes", value: "MusicAlbum")
+            .init(name: "includeItemTypes", value: "MusicAlbum"),
+            // ChildCount tells us a one-track release is a single, not an album.
+            .init(name: "fields", value: "ChildCount")
         ])
     }
 
@@ -519,6 +521,7 @@ actor JellyfinClient {
             .init(name: "IncludeItemTypes", value: "MusicAlbum"),
             .init(name: "Recursive", value: "true"),
             .init(name: "SortBy", value: "SortName"),
+            .init(name: "Fields", value: "ChildCount"),
             .init(name: "Limit", value: String(limit))
         ]).items
     }
@@ -564,7 +567,8 @@ actor JellyfinClient {
             .init(name: "Recursive", value: "true"),
             .init(name: "AlbumArtistIds", value: artistID),
             .init(name: "SortBy", value: "PremiereDate,ProductionYear,SortName"),
-            .init(name: "SortOrder", value: "Descending")
+            .init(name: "SortOrder", value: "Descending"),
+            .init(name: "Fields", value: "ChildCount")
         ]).items
     }
 
@@ -643,7 +647,8 @@ actor JellyfinClient {
             .init(name: "recursive", value: "true"),
             .init(name: "includeItemTypes", value: "MusicAlbum,MusicArtist,Audio"),
             .init(name: "limit", value: "60"),
-            .init(name: "imageTypeLimit", value: "1")
+            .init(name: "imageTypeLimit", value: "1"),
+            .init(name: "fields", value: "ChildCount")
         ]).items
     }
 

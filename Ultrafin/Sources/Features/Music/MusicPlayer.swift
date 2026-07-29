@@ -38,6 +38,9 @@ final class MusicPlayer {
     private(set) var sessionStamp = 0
 
     var currentTrack: MediaItem? { queue.indices.contains(index) ? queue[index] : nil }
+    /// The backend the current queue streams from — views need it to favorite
+    /// the playing song without re-deriving the source.
+    var activeSource: MusicSource? { source }
     var hasQueue: Bool { !queue.isEmpty }
     var progress: Double { duration > 0 ? currentTime / duration : 0 }
 

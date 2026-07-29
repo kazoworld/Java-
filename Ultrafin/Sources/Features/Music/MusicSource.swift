@@ -172,7 +172,7 @@ extension MediaItem {
                       trackNumber: Int? = nil, discNumber: Int? = nil,
                       childCount: Int? = nil, genre: String? = nil,
                       playCount: Int? = nil, container: String? = nil,
-                      isFavorite: Bool? = nil) -> MediaItem {
+                      isFavorite: Bool? = nil, artistID: String? = nil) -> MediaItem {
         MediaItem(id: id, name: name, type: type, overview: nil,
                   productionYear: year, officialRating: nil,
                   communityRating: nil, criticRating: nil,
@@ -191,6 +191,9 @@ extension MediaItem {
                   albumArtist: artist, artists: artist.map { [$0] },
                   album: album, albumId: albumID,
                   albumPrimaryImageTag: coverArtID,
-                  container: container)
+                  container: container,
+                  albumArtists: (artistID.flatMap { id in
+                      artist.map { [NameIdPair(id: id, name: $0)] }
+                  }))
     }
 }

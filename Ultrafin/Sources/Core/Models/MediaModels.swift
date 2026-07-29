@@ -38,6 +38,9 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     /// Source container/codec ("flac", "mp3", "m4a") — shown as the quality
     /// badge on album pages.
     let container: String?
+    /// The release's credited artists, with IDs — lets a song link through to
+    /// its artist page.
+    let albumArtists: [NameIdPair]?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -69,6 +72,7 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case albumId = "AlbumId"
         case albumPrimaryImageTag = "AlbumPrimaryImageTag"
         case container = "Container"
+        case albumArtists = "AlbumArtists"
     }
 
     /// Rotten Tomatoes Tomatometer percentage (Jellyfin's CriticRating).
@@ -189,6 +193,40 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     var releaseKind: ReleaseKind? {
         guard type == .musicAlbum, let count = trackCount else { return nil }
         return count <= 1 ? .single : .album
+    }
+}
+
+/// An id + display name, as Jellyfin returns for artists on an item.
+struct NameIdPair: Codable, Hashable, Sendable {
+    let id: String
+    let name: String
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+        case name = "Name"
+    }
+}
+
+extension MediaItem {
+    /// The artist to open when the user taps the artist name, when the server
+    /// gave us an id for them. (`primaryArtist` is the display string; this is
+    /// the linkable credit.)
+    var artistCredit: NameIdPair? { albumArtists?.first }
+
+    /// A stand-in album item for navigation from a song (the detail page loads
+    /// the rest from the id).
+    var albumDestination: MediaItem? {
+        guard let albumId, !albumId.isEmpty else { return nil }
+        return .music(id: albumId, name: album ?? "Album", type: .musicAlbum,
+                      artist: artistText, albumID: albumId,
+                      coverArtID: albumPrimaryImageTag ?? albumId)
+    }
+
+    /// A stand-in artist item for navigation from a song.
+    var artistDestination: MediaItem? {
+        guard let artist = artistCredit else { return nil }
+        return .music(id: artist.id, name: artist.name, type: .musicArtist,
+                      coverArtID: artist.id)
     }
 }
 

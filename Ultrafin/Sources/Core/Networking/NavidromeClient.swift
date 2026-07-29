@@ -423,11 +423,12 @@ private struct SubsonicAlbum: Decodable {
     let songCount: Int?
     /// Present (an ISO date) when the user has starred this album.
     let starred: String?
+    let artistId: String?
 
     var mediaItem: MediaItem {
         .music(id: id, name: name ?? album ?? "Album", type: .musicAlbum,
                year: year, artist: artist, coverArtID: coverArt, childCount: songCount,
-               isFavorite: starred != nil)
+               isFavorite: starred != nil, artistID: artistId)
     }
 }
 
@@ -472,6 +473,7 @@ private struct SubsonicSong: Decodable {
     let suffix: String?
     /// Present (an ISO date) when the user has starred this song.
     let starred: String?
+    let artistId: String?
 
     var mediaItem: MediaItem {
         .music(id: id, name: title ?? "Song", type: .audio,
@@ -479,6 +481,7 @@ private struct SubsonicSong: Decodable {
                album: album, albumID: albumId, coverArtID: coverArt,
                trackNumber: track, discNumber: discNumber,
                genre: genre, playCount: playCount,
-               container: suffix, isFavorite: starred != nil)
+               container: suffix, isFavorite: starred != nil,
+               artistID: artistId)
     }
 }
