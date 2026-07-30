@@ -47,17 +47,17 @@ struct NowPlayingMusicView: View {
     }
 
     var body: some View {
-        ZStack {
-            backdrop
-            GeometryReader { geo in
-                layout(in: geo.size)
-                    // Hard stop: nothing in the player may paint outside the
-                    // screen. If a subview ever mis-measures, it truncates here
-                    // instead of running off the edge.
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
-            }
+        // The backdrop is a BACKGROUND, not a ZStack sibling. As a sibling its
+        // 110pt blur inflated the stack, so the GeometryReader was handed a size
+        // wider than the screen and every block sized off that — which is what
+        // pushed the controls past both edges. A background is sized to its
+        // content and can never enlarge it.
+        GeometryReader { geo in
+            layout(in: geo.size)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
         }
+        .background(backdrop)
         // Swipe the whole player down to dismiss — the sheet follows your finger
         // and springs back if you don't pull far enough. Swipe the art
         // horizontally to change track.
@@ -315,8 +315,9 @@ struct NowPlayingMusicView: View {
     /// tracks glides the whole shelf across on a spring.
     private func carouselStage(side: CGFloat) -> some View {
         ZStack {
-            // Side cards first, center drawn last so it layers on top.
-            ForEach([-2, -1, 2, 1, 0], id: \.self) { offset in
+            // Three records: the one playing, and one either side. Neighbours
+            // first so the centre draws on top.
+            ForEach([-1, 1, 0], id: \.self) { offset in
                 if let track = queueTrack(at: offset) {
                     carouselCard(track: track, offset: offset, side: side)
                         // Identity follows the queue slot so a track change
@@ -326,6 +327,10 @@ struct NowPlayingMusicView: View {
                 }
             }
         }
+        // A FIXED stage width keeps the playing record dead centre. Sized by its
+        // contents, the stack centred whichever cards happened to exist — so at
+        // the start of a queue (no left neighbour) the current card sat left.
+        .frame(width: side * 2.5, height: side * 1.45)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.spring(duration: 0.75, bounce: 0.16), value: player.index)
         .onAppear {
@@ -372,8 +377,8 @@ struct NowPlayingMusicView: View {
         }
         // Neighbors turn away into the room, coverflow-style.
         .rotation3DEffect(.degrees(Double(-offset) * 26), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
-        .offset(x: CGFloat(offset) * baseSide * 0.60)
-        .opacity(isCenter ? 1 : max(0.2, 0.5 - Double(abs(offset) - 1) * 0.18))
+        .offset(x: CGFloat(offset) * baseSide * 0.66)
+        .opacity(isCenter ? 1 : 0.45)
         .zIndex(isCenter ? 10 : Double(5 - abs(offset)))
         // The center record breathes while the music plays.
         .scaleEffect(isCenter && player.isPlaying ? (breathing ? 1.015 : 0.995) : (isCenter ? 0.96 : 1))

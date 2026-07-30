@@ -61,11 +61,15 @@ struct NowPlayingBackdrop: View {
                 // The blurred artwork — the literal Apple Music move — for real,
                 // content-true color and texture.
                 if let artURL {
-                    RemoteImage(url: artURL, contentMode: .fill)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .blur(radius: 110)
-                        .opacity(0.55)
-                        .clipped()
+                    // Blur first, THEN clip: a 110pt blur grows the rendered
+                    // bounds well past the frame, and an un-clipped one can
+                    // enlarge whatever lays this out.
+                    Color.clear.overlay(
+                        RemoteImage(url: artURL, contentMode: .fill)
+                            .blur(radius: 110)
+                            .opacity(0.55)
+                    )
+                    .clipped()
                 }
 
                 // Drifting color pools spun from the sampled color so even a
