@@ -171,22 +171,30 @@ struct NowPlayingMusicView: View {
     /// scrubber, large transport, a volume slider, and three route/lyrics/queue
     /// controls. Everything inside one padded column so nothing can clip.
     private func portraitLayout(in size: CGSize) -> some View {
-        // The cover takes the width it can get, capped so the controls below
-        // always have room on a short phone.
-        let artMax = min(size.width - edgePadding * 2, size.height * 0.44)
+        // Every block gets an EXPLICIT width rather than relying on padding.
+        // Padding only insets the proposed size; a child that reports a larger
+        // ideal width (a long title Text does exactly that) makes its stack
+        // wider than the padded area and then overflows both edges — which is
+        // why the title, scrubber and volume row ran off-screen while the
+        // artwork and transport looked fine.
+        let contentWidth = max(0, min(size.width - edgePadding * 2, 540))
+        let artMax = min(contentWidth, size.height * 0.44)
         return VStack(spacing: 0) {
             grabber
                 .padding(.bottom, Spacing.sm)
 
             if stage == .art {
                 centerStage(maxSide: artMax)
+                    .frame(width: contentWidth)
                     .frame(maxHeight: .infinity)
             } else {
                 // Lyrics and the queue get the full middle; the cover shrinks to
                 // a thumbnail in a compact header, exactly as Apple Music does.
                 compactHeader
+                    .frame(width: contentWidth)
                     .padding(.bottom, Spacing.md)
                 centerStage(maxSide: artMax)
+                    .frame(width: contentWidth)
                     .frame(maxHeight: .infinity)
             }
 
@@ -197,22 +205,28 @@ struct NowPlayingMusicView: View {
                 volumeRow
                 bottomBar
             }
+            .frame(width: contentWidth)
             .padding(.top, stage == .art ? Spacing.lg : Spacing.sm)
         }
-        .padding(.horizontal, edgePadding)
         .padding(.bottom, Spacing.md)
-        .frame(maxWidth: 540)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: size.width, alignment: .center)
+        .frame(maxHeight: .infinity)
     }
 
     /// Landscape iPhone: the carousel on the left, controls stacked on the
     /// right — the standard landscape music layout, and where the coverflow
     /// lives on the phone.
     private func landscapePhoneLayout(in size: CGSize) -> some View {
-        let artMax = min(size.width * 0.42, size.height * 0.62)
+        // Explicit column widths for the same reason as portrait: padding alone
+        // doesn't stop a long title from widening its stack past the screen.
+        let usable = max(0, size.width - edgePadding * 2)
+        let artColumn = usable * 0.44
+        let controlColumn = usable - artColumn - Spacing.xl
+        let artMax = min(artColumn, size.height * 0.72)
         return HStack(spacing: Spacing.xl) {
             centerStage(maxSide: artMax)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: artColumn)
+                .frame(maxHeight: .infinity)
 
             VStack(spacing: Spacing.sm) {
                 HStack {
@@ -226,11 +240,11 @@ struct NowPlayingMusicView: View {
                 bottomBar
                 Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity)
+            .frame(width: max(0, controlColumn))
         }
-        .padding(.horizontal, edgePadding)
         .padding(.vertical, Spacing.md)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: size.width, alignment: .center)
+        .frame(maxHeight: .infinity)
     }
     #endif
 
@@ -466,20 +480,28 @@ struct NowPlayingMusicView: View {
                         .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .truncationMode(.tail)
                     if player.currentTrack?.isExplicit == true {
-                        ExplicitBadge(size: 15).foregroundStyle(.white.opacity(0.7))
+                        ExplicitBadge(size: 15)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .fixedSize()
                     }
                 }
                 creditLine
             }
-            Spacer(minLength: 0)
+            // Take what's left after the buttons, and no more — without this the
+            // text column reports its full ideal width and widens the whole row.
+            .frame(maxWidth: .infinity, alignment: .leading)
 
+            // The buttons keep their size; only the text gives way.
             roundControl(isFavorite ? "heart.fill" : "heart",
                          label: "Favorite",
                          tint: isFavorite ? .red : .white) { toggleFavorite() }
+                .fixedSize()
             moreMenu
+                .fixedSize()
         }
+        .frame(maxWidth: .infinity)
     }
 
     /// The header shown while lyrics or the queue own the screen: the cover as a
