@@ -9,6 +9,7 @@ import SwiftUI
 struct UltrafinApp: App {
     @State private var appState = AppState()
     @State private var settings = SettingsStore.shared
+    @State private var mode = AppModeState.shared
 
     #if os(iOS)
     // Portrait-only app; the video player unlocks rotation while it's up.
@@ -26,8 +27,23 @@ struct UltrafinApp: App {
             RootView()
                 .environment(appState)
                 .environment(settings)
-                .preferredColorScheme(settings.appearance.colorScheme)
+                .preferredColorScheme(effectiveColorScheme)
                 .tint(settings.theme.accent.color)
         }
+    }
+
+    /// Music mode's Theme owns the window while it's on screen; otherwise the
+    /// media side's Appearance does.
+    ///
+    /// This has to happen at the root: `preferredColorScheme` here sets the
+    /// window's interface style, and `UltrafinColors` resolves through UIKit
+    /// traits — so a nested `.environment(\.colorScheme,)` further down can't
+    /// override it, which is why switching the music theme appeared to do
+    /// nothing.
+    private var effectiveColorScheme: ColorScheme? {
+        if mode.current == .music {
+            return settings.musicTheme.colorScheme
+        }
+        return settings.appearance.colorScheme
     }
 }

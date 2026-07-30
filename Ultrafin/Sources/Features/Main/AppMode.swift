@@ -1,4 +1,17 @@
 import SwiftUI
+import Observation
+
+/// The experience currently on screen, published so the app root can adapt
+/// window-level things to it — chiefly the colour scheme, since Music has its
+/// own black/white canvas that has to override the media side's appearance.
+@Observable
+@MainActor
+final class AppModeState {
+    static let shared = AppModeState()
+    private init() {}
+
+    var current: AppMode?
+}
 
 /// Which experience the app is currently in. The two are deliberately separate:
 /// each has its own tab set, its own settings, and its own idea of "home", so

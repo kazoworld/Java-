@@ -109,6 +109,12 @@ struct RootView: View {
         .onChange(of: authenticatedUserID) { _, _ in
             mode = StartupPreference.current.directMode
         }
+        // Publish the experience so the app root can pick the window's colour
+        // scheme (Music has its own black/white canvas).
+        .onChange(of: mode) { _, current in
+            AppModeState.shared.current = current
+        }
+        .onAppear { AppModeState.shared.current = mode }
         .task {
             // Give back space held by songs that stopped being played.
             MusicLibraryCache.shared.evictStale()

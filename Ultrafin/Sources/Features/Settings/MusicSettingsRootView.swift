@@ -64,6 +64,14 @@ struct MusicSettingsRootView: View {
                                      systemImage: "doc.text.fill", tint: .gray)
                 }
             }
+
+            Section {
+                // A visible marker for which build is actually installed — the
+                // quickest way to tell a stale binary from a fresh one.
+                LabeledContent("Build", value: BuildInfo.marker).tvFocusable()
+            } footer: {
+                Text("Quote this if something on screen doesn't match what you expect.")
+            }
         }
         .glassRows()
         #if !os(tvOS)

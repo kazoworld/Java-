@@ -127,13 +127,14 @@ struct NowPlayingMusicView: View {
 
     #if os(tvOS)
     private func tvLayout(in size: CGSize) -> some View {
-        // Everything below the stage needs about 420pt; the carousel card is
-        // 1.45× its art (art + reflection). Sizing off the real screen keeps the
-        // title and controls on screen instead of pushing them off the bottom,
-        // which a hardcoded 560 did.
-        let available = size.height - 460
-        let side = max(240, min(size.width * 0.28, available / 1.45))
-        return VStack(spacing: Spacing.lg) {
+        // Proportional, not fixed: tvOS hands us points (1920×1080 on both the
+        // 1080p and 4K Apple TV, rendered at 2× on 4K), but a TV's title-safe
+        // area and the block below the stage both scale with the screen. Give
+        // the carousel at most half the height — the card is 1.45× its art once
+        // the reflection is counted — and cap it on width so it never crowds.
+        let stageHeight = size.height * 0.50
+        let side = max(200, min(size.width * 0.24, stageHeight / 1.45))
+        return VStack(spacing: size.height * 0.022) {
             carouselStage(side: side)
                 .frame(height: side * 1.45)
                 .frame(maxWidth: .infinity)
@@ -142,9 +143,9 @@ struct NowPlayingMusicView: View {
             transport
             bottomBar
         }
-        .padding(.horizontal, 90)
-        .padding(.vertical, Spacing.lg)
-        .frame(maxWidth: 1200)
+        // Stay inside the TV's title-safe area, proportionally.
+        .padding(.horizontal, size.width * 0.08)
+        .padding(.vertical, size.height * 0.04)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Left/right on the remote moves through the queue, so the carousel is
         // steerable without hunting for the transport buttons.
@@ -214,7 +215,7 @@ struct NowPlayingMusicView: View {
                     Spacer()
                 }
                 Spacer(minLength: 0)
-                trackInfo
+                infoRow
                 scrubber
                 transport
                 bottomBar
@@ -634,6 +635,7 @@ struct NowPlayingMusicView: View {
     }
     #endif
 
+    #if os(tvOS)
     private var trackInfo: some View {
         VStack(spacing: 4) {
             HStack(spacing: 6) {
@@ -668,6 +670,7 @@ struct NowPlayingMusicView: View {
         default: return " "
         }
     }
+    #endif
 
     private var scrubber: some View {
         VStack(spacing: 6) {

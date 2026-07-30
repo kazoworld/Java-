@@ -69,18 +69,11 @@ extension View {
 }
 
 private struct MusicCanvas: ViewModifier {
-    @Environment(SettingsStore.self) private var settings
-    @Environment(\.colorScheme) private var systemScheme
-
     func body(content: Content) -> some View {
-        content
-            .background(MusicBackground())
-            .environment(\.colorScheme, resolvedScheme)
-    }
-
-    /// Automatic inherits the device; the fixed themes pin their own scheme so
-    /// text never lands white-on-white.
-    private var resolvedScheme: ColorScheme {
-        settings.musicTheme.colorScheme ?? systemScheme
+        // Only the surface here — the window's colour scheme is set at the app
+        // root (see UltrafinApp.effectiveColorScheme), because UltrafinColors
+        // resolves through UIKit traits and a nested environment override
+        // can't beat `preferredColorScheme` set higher up.
+        content.background(MusicBackground())
     }
 }
