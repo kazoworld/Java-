@@ -51,6 +51,11 @@ struct NowPlayingMusicView: View {
             backdrop
             GeometryReader { geo in
                 layout(in: geo.size)
+                    // Hard stop: nothing in the player may paint outside the
+                    // screen. If a subview ever mis-measures, it truncates here
+                    // instead of running off the edge.
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
             }
         }
         // Swipe the whole player down to dismiss — the sheet follows your finger
@@ -512,6 +517,8 @@ struct NowPlayingMusicView: View {
     @ViewBuilder
     private var creditLine: some View {
         let track = player.currentTrack
+        // One row, each part allowed to truncate. Long artist + album strings
+        // used to be able to push this row wider than the screen.
         HStack(spacing: 4) {
             if let artist = track?.artistText, !artist.isEmpty {
                 Button {
@@ -521,6 +528,7 @@ struct NowPlayingMusicView: View {
                         .font(.system(size: 19, weight: .regular))
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
                 .buttonStyle(.plain)
                 .disabled(track?.artistDestination == nil)
@@ -529,6 +537,7 @@ struct NowPlayingMusicView: View {
                 Text("—")
                     .font(.system(size: 19))
                     .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize()
                 Button {
                     open(track?.albumDestination)
                 } label: {
@@ -536,11 +545,13 @@ struct NowPlayingMusicView: View {
                         .font(.system(size: 19, weight: .regular))
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
                 .buttonStyle(.plain)
                 .disabled(track?.albumDestination == nil)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The "…" menu: album, artist, and queue actions.
@@ -620,18 +631,24 @@ struct NowPlayingMusicView: View {
         Task { await source.setFavorite(itemID: track.id, isFavorite: next) }
     }
 
-    /// The system volume slider, flanked by speaker glyphs.
+    /// The system volume slider, flanked by speaker glyphs. The slider is a
+    /// UIKit view with no intrinsic width, so it's given the row's remaining
+    /// space explicitly rather than being left to claim whatever it likes.
     private var volumeRow: some View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: "speaker.fill")
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(0.5))
+                .fixedSize()
             SystemVolumeSlider()
+                .frame(maxWidth: .infinity)
                 .frame(height: 28)
             Image(systemName: "speaker.wave.3.fill")
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(0.5))
+                .fixedSize()
         }
+        .frame(maxWidth: .infinity)
     }
     #endif
 
@@ -743,36 +760,42 @@ struct NowPlayingMusicView: View {
     /// Lyrics · AirPlay · Queue, evenly spread. Shuffle and repeat live in the
     /// "…" menu on iOS, the way Apple Music arranges them; tvOS keeps them here
     /// since it has no menu affordance.
+    /// Fixed-size controls separated by Spacers. Deliberately NOT
+    /// `.frame(maxWidth: .infinity)` per item: AVRoutePickerView is a UIKit view
+    /// with no intrinsic size, and a flexible frame lets it claim far more width
+    /// than it needs — which pushes the outer controls past the screen edge.
     private var bottomBar: some View {
         HStack(spacing: 0) {
             #if os(tvOS)
             toggleChip(icon: "shuffle", active: player.shuffleOn) { player.toggleShuffle() }
-                .frame(maxWidth: .infinity)
+            Spacer(minLength: 0)
             #endif
 
             toggleChip(icon: "quote.bubble", active: stage == .lyrics) {
                 stage = stage == .lyrics ? .art : .lyrics
             }
-            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
 
             #if os(iOS)
             AirPlayButton()
-                .frame(width: 30, height: 30)
-                .frame(maxWidth: .infinity)
+                .frame(width: chipSize * 2.2, height: chipSize * 2.2)
+                .fixedSize()
+            Spacer(minLength: 0)
             #endif
 
             toggleChip(icon: "list.bullet", active: stage == .queue) {
                 stage = stage == .queue ? .art : .queue
             }
-            .frame(maxWidth: .infinity)
 
             #if os(tvOS)
+            Spacer(minLength: 0)
             toggleChip(icon: player.repeatMode.icon, active: player.repeatMode != .off) {
                 player.cycleRepeat()
             }
-            .frame(maxWidth: .infinity)
             #endif
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func toggleChip(icon: String, active: Bool, action: @escaping () -> Void) -> some View {
