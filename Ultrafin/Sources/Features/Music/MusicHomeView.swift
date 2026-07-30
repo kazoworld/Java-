@@ -101,7 +101,7 @@ struct MusicHomeView: View {
             }
             .padding(.vertical, Spacing.lg)
         }
-        .background(AmbientBackground())
+        .musicCanvas()
         #if os(iOS)
         .navigationTitle("Music")
         // The mini player condenses as this page scrolls down.
@@ -315,16 +315,17 @@ struct MusicHomeView: View {
 
     private var sectionFont: Font {
         #if os(tvOS)
-        .system(size: 30, weight: .bold, design: .rounded)
+        .system(size: 32, weight: .bold)
         #else
-        Typography.sectionTitle
+        // Apple Music's shelf headers: SF Pro, bold, tight — not rounded.
+        .system(size: 22, weight: .bold)
         #endif
     }
     private var shuffleFont: CGFloat {
         #if os(tvOS)
         26
         #else
-        16
+        15
         #endif
     }
     private var edgePadding: CGFloat {
@@ -475,16 +476,17 @@ struct AlbumCard: View {
     }
     private var titleFont: Font {
         #if os(tvOS)
-        .system(size: 22, weight: .semibold, design: .rounded)
+        .system(size: 22, weight: .semibold)
         #else
-        Typography.cardTitle
+        // Apple Music card labels are quiet: regular weight, small, not rounded.
+        .system(size: 14, weight: .regular)
         #endif
     }
     private var subtitleFont: Font {
         #if os(tvOS)
-        .system(size: 17, weight: .medium)
+        .system(size: 17, weight: .regular)
         #else
-        Typography.caption
+        .system(size: 14, weight: .regular)
         #endif
     }
 }
@@ -559,16 +561,17 @@ struct SongCard: View {
     }
     private var titleFont: Font {
         #if os(tvOS)
-        .system(size: 22, weight: .semibold, design: .rounded)
+        .system(size: 22, weight: .semibold)
         #else
-        Typography.cardTitle
+        // Apple Music card labels are quiet: regular weight, small, not rounded.
+        .system(size: 14, weight: .regular)
         #endif
     }
     private var subtitleFont: Font {
         #if os(tvOS)
-        .system(size: 17, weight: .medium)
+        .system(size: 17, weight: .regular)
         #else
-        Typography.caption
+        .system(size: 14, weight: .regular)
         #endif
     }
 }
@@ -613,9 +616,9 @@ struct ArtistCard: View {
     }
     private var nameFont: Font {
         #if os(tvOS)
-        .system(size: 20, weight: .semibold, design: .rounded)
+        .system(size: 20, weight: .semibold)
         #else
-        .system(size: 14, weight: .semibold, design: .rounded)
+        .system(size: 14, weight: .regular)
         #endif
     }
 }

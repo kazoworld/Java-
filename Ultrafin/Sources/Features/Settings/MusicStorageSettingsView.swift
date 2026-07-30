@@ -105,7 +105,7 @@ struct MusicStorageSettingsView: View {
         }
         .glassRows()
         .scrollContentBackground(.hidden)
-        .background(AmbientBackground())
+        .musicCanvas()
         .navigationTitle("Downloads & Storage")
         .tint(settings.theme.accent.color)
         .task { refreshArtworkSize() }

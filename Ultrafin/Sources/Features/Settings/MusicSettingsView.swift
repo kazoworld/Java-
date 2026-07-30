@@ -73,7 +73,7 @@ struct MusicSettingsView: View {
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif
-        .background(AmbientBackground())
+        .musicCanvas()
         .navigationTitle("Music")
         .tvPopsOnMenu()
         .tint(settings.theme.accent.color)

@@ -62,7 +62,7 @@ struct MusicSearchView: View {
             }
             .padding(.vertical, Spacing.lg)
         }
-        .background(AmbientBackground())
+        .musicCanvas()
         #if os(iOS)
         .navigationTitle("Search")
         .searchable(text: $model.query, prompt: "Albums, artists, songs")

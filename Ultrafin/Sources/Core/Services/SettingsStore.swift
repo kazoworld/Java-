@@ -80,6 +80,12 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(musicSource.rawValue, forKey: Keys.musicSource) }
     }
 
+    /// Music mode's canvas: true black (default), pure white, or follow the
+    /// device's appearance.
+    var musicTheme: MusicTheme {
+        didSet { UserDefaults.standard.set(musicTheme.rawValue, forKey: Keys.musicTheme) }
+    }
+
     /// Keep songs you play often on the device automatically (iPhone/iPad).
     /// They're dropped again after two weeks without a play.
     var cacheFrequentSongs: Bool {
@@ -125,6 +131,7 @@ final class SettingsStore {
         static let themeMusic = "settings.themeMusic"
         static let hiddenLibraryIDs = "settings.hiddenLibraryIDs"
         static let musicSource = "settings.musicSource"
+        static let musicTheme = "settings.musicTheme"
         static let cacheFrequentSongs = "settings.cacheFrequentSongs"
         static let downloadOverCellular = "settings.downloadOverCellular"
     }
@@ -146,6 +153,7 @@ final class SettingsStore {
         themeMusic = UserDefaults.standard.object(forKey: Keys.themeMusic) as? Bool ?? true
         hiddenLibraryIDs = UserDefaults.standard.stringArray(forKey: Keys.hiddenLibraryIDs) ?? []
         musicSource = MusicSourceKind(rawValue: UserDefaults.standard.string(forKey: Keys.musicSource) ?? "") ?? .jellyfin
+        musicTheme = MusicTheme(rawValue: UserDefaults.standard.string(forKey: Keys.musicTheme) ?? "") ?? .black
         cacheFrequentSongs = UserDefaults.standard.object(forKey: Keys.cacheFrequentSongs) as? Bool ?? true
         downloadOverCellular = UserDefaults.standard.object(forKey: Keys.downloadOverCellular) as? Bool ?? false
         var layout = Self.load(Keys.homeLayout) ?? HomeLayoutPreferences()

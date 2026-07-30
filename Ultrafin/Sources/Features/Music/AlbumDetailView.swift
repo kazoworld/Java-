@@ -647,7 +647,7 @@ struct ArtistDetailView: View {
             }
             .padding(edgePadding)
         }
-        .background(AmbientBackground())
+        .musicCanvas()
         #if os(iOS)
         .navigationTitle(artist.name)
         .navigationBarTitleDisplayMode(.inline)

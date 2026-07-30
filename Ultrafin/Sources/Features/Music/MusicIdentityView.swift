@@ -34,8 +34,7 @@ struct MusicIdentityView: View {
             .frame(maxWidth: contentMaxWidth)
             .frame(maxWidth: .infinity)
         }
-        .background(ArtworkBackground(color: cardColor))
-        .environment(\.colorScheme, .dark)
+        .musicCanvas()
         #if os(iOS)
         .navigationTitle("Music Identity")
         .navigationBarTitleDisplayMode(.inline)
@@ -118,13 +117,13 @@ struct MusicIdentityView: View {
                 .font(.system(size: statIcon, weight: .semibold))
                 .foregroundStyle(settings.theme.accent.color)
             Text(value)
-                .font(.system(size: statValue, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
+                .font(.system(size: statValue, weight: .bold))
+                .foregroundStyle(UltrafinColors.primaryText)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
             Text(label)
-                .font(.system(size: statLabel, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
+                .font(.system(size: statLabel, weight: .regular))
+                .foregroundStyle(UltrafinColors.secondaryText)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.lg)
@@ -161,16 +160,16 @@ struct MusicIdentityView: View {
             Text("\(rank)")
                 .font(.system(size: rowNumber, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(UltrafinColors.tertiaryText)
                 .frame(width: rowNumber * 1.6, alignment: .leading)
             VStack(alignment: .leading, spacing: 5) {
                 Text(genre.name)
-                    .font(.system(size: rowTitle, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(.system(size: rowTitle, weight: .semibold))
+                    .foregroundStyle(UltrafinColors.primaryText)
                     .lineLimit(1)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(.white.opacity(0.12))
+                        Capsule().fill(UltrafinColors.primaryText.opacity(0.12))
                         Capsule()
                             .fill(LinearGradient(colors: [settings.theme.accent.color,
                                                           settings.theme.accent.color.opacity(0.5)],
@@ -197,15 +196,15 @@ struct MusicIdentityView: View {
                             ZStack {
                                 Circle().fill(settings.theme.accent.color.opacity(0.18))
                                 Text(initials(artist.name))
-                                    .font(.system(size: avatarSide * 0.34, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.white)
+                                    .font(.system(size: avatarSide * 0.34, weight: .bold))
+                                    .foregroundStyle(UltrafinColors.primaryText)
                             }
                             .frame(width: avatarSide, height: avatarSide)
                             .overlay(Circle().strokeBorder(LiquidGlass.rim(0.5), lineWidth: 1))
                             .overlay(alignment: .topLeading) { rankBadge(i + 1) }
                             Text(artist.name)
-                                .font(.system(size: rowTitle * 0.9, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
+                                .font(.system(size: rowTitle * 0.9, weight: .regular))
+                                .foregroundStyle(UltrafinColors.primaryText)
                                 .lineLimit(1)
                                 .frame(width: avatarSide + 24)
                         }
@@ -246,21 +245,21 @@ struct MusicIdentityView: View {
                                 .frame(width: rowNumber * 1.6)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(song.name)
-                                    .font(.system(size: rowTitle, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white)
+                                    .font(.system(size: rowTitle, weight: .regular))
+                                    .foregroundStyle(UltrafinColors.primaryText)
                                     .lineLimit(1)
                                 if let artist = song.artistText {
                                     Text(artist)
                                         .font(.system(size: rowTitle * 0.8))
-                                        .foregroundStyle(.white.opacity(0.6))
+                                        .foregroundStyle(UltrafinColors.secondaryText)
                                         .lineLimit(1)
                                 }
                             }
                             Spacer(minLength: Spacing.md)
                             if song.playCount > 0 {
                                 Text("\(song.playCount)×")
-                                    .font(.system(size: rowTitle * 0.82, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.5))
+                                    .font(.system(size: rowTitle * 0.82, weight: .medium))
+                                    .foregroundStyle(UltrafinColors.tertiaryText)
                             }
                         }
                         .padding(.horizontal, Spacing.md)
@@ -277,21 +276,21 @@ struct MusicIdentityView: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: sectionSize, weight: .bold, design: .rounded))
-            .foregroundStyle(.white)
+            .font(.system(size: sectionSize, weight: .bold))
+            .foregroundStyle(UltrafinColors.primaryText)
     }
 
     private var emptyState: some View {
         VStack(spacing: Spacing.md) {
             Image(systemName: "waveform.badge.magnifyingglass")
                 .font(.system(size: 44))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(UltrafinColors.tertiaryText)
             Text("Play some music to build your identity")
-                .font(.system(size: taglineSize, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.8))
+                .font(.system(size: taglineSize, weight: .semibold))
+                .foregroundStyle(UltrafinColors.primaryText)
             Text("As you listen, Ultrafin learns your taste and fills this in.")
                 .font(Typography.body)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(UltrafinColors.secondaryText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

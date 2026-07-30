@@ -155,17 +155,26 @@ struct NowPlayingMusicView: View {
             grabber
                 .padding(.bottom, Spacing.sm)
 
-            centerStage(maxSide: artMax)
-                .frame(maxHeight: .infinity)
+            if stage == .art {
+                centerStage(maxSide: artMax)
+                    .frame(maxHeight: .infinity)
+            } else {
+                // Lyrics and the queue get the full middle; the cover shrinks to
+                // a thumbnail in a compact header, exactly as Apple Music does.
+                compactHeader
+                    .padding(.bottom, Spacing.md)
+                centerStage(maxSide: artMax)
+                    .frame(maxHeight: .infinity)
+            }
 
             VStack(spacing: Spacing.lg) {
-                infoRow
+                if stage == .art { infoRow }
                 scrubber
                 transport
                 volumeRow
                 bottomBar
             }
-            .padding(.top, Spacing.lg)
+            .padding(.top, stage == .art ? Spacing.lg : Spacing.sm)
         }
         .padding(.horizontal, edgePadding)
         .padding(.bottom, Spacing.md)
@@ -344,22 +353,27 @@ struct NowPlayingMusicView: View {
                             .padding(.top, Spacing.xxl)
                     }
                     ForEach(player.lyrics) { line in
-                        let isCurrent = player.currentLyricIndex == line.id
+                        let distance = lyricDistance(to: line.id)
+                        let isCurrent = distance == 0
                         Button {
                             if let start = line.start, player.duration > 0 {
                                 player.seek(toProgress: start / player.duration)
                             }
                         } label: {
                             Text(line.text.isEmpty ? "♪" : line.text)
-                                .font(.system(size: lyricSize, weight: .bold, design: .rounded))
-                                .foregroundStyle(isCurrent ? .white : .white.opacity(0.35))
-                                .scaleEffect(isCurrent ? 1.0 : 0.92, anchor: .leading)
+                                .font(.system(size: lyricSize, weight: .bold))
+                                .foregroundStyle(.white.opacity(isCurrent ? 1 : max(0.22, 0.5 - Double(distance) * 0.06)))
+                                // Apple's signature touch: lines fall out of
+                                // focus the further they are from the one being
+                                // sung, so your eye is pulled to the right place.
+                                .blur(radius: isCurrent ? 0 : min(4.5, Double(distance) * 1.1))
                                 .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.0, lift: false))
                         .id(line.id)
-                        .animation(.smooth(duration: 0.3), value: player.currentLyricIndex)
+                        .animation(.smooth(duration: 0.35), value: player.currentLyricIndex)
                     }
                 }
                 .padding(.vertical, Spacing.xxl)
@@ -373,11 +387,21 @@ struct NowPlayingMusicView: View {
             )
             .onChange(of: player.currentLyricIndex) { _, current in
                 guard let current else { return }
-                withAnimation(.smooth(duration: 0.45)) {
-                    proxy.scrollTo(current, anchor: .center)
+                // Sit the active line a little above centre, the way Apple does,
+                // so you can read ahead rather than only behind.
+                withAnimation(.smooth(duration: 0.5)) {
+                    proxy.scrollTo(current, anchor: UnitPoint(x: 0, y: 0.38))
                 }
             }
         }
+    }
+
+    /// How many lines this one sits from the line currently being sung — drives
+    /// how far out of focus it falls. Lines before the first sung line are
+    /// treated as one step away so the opening verse isn't fully blurred.
+    private func lyricDistance(to id: Int) -> Int {
+        guard let current = player.currentLyricIndex else { return 1 }
+        return abs(id - current)
     }
 
     private var queueStage: some View {
@@ -431,6 +455,37 @@ struct NowPlayingMusicView: View {
                          tint: isFavorite ? .red : .white) { toggleFavorite() }
             moreMenu
         }
+    }
+
+    /// The header shown while lyrics or the queue own the screen: the cover as a
+    /// thumbnail, the song beside it, heart and "…" still to hand.
+    private var compactHeader: some View {
+        HStack(spacing: Spacing.md) {
+            RemoteImage(url: player.currentTrack.flatMap { player.artworkURL(for: $0, maxWidth: 200) })
+                .frame(width: 52, height: 52)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(player.currentTrack?.name ?? "—")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                if let artist = player.currentTrack?.artistText {
+                    Text(artist)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+
+            roundControl(isFavorite ? "heart.fill" : "heart",
+                         label: "Favorite",
+                         tint: isFavorite ? .red : .white) { toggleFavorite() }
+            moreMenu
+        }
+        .transition(.opacity)
     }
 
     /// "Artist — Album", each name tappable and opening its own page.
@@ -705,10 +760,12 @@ struct NowPlayingMusicView: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: chipSize, weight: .semibold))
-                .foregroundStyle(active ? settings.theme.accent.color : .white.opacity(0.7))
-                .frame(width: chipSize * 2.4, height: chipSize * 2.4)
+                // Active reads as a filled chip with a dark glyph, like Apple's
+                // lyrics button when lyrics are showing.
+                .foregroundStyle(active ? .black : .white.opacity(0.75))
+                .frame(width: chipSize * 2.2, height: chipSize * 2.2)
                 .background {
-                    if active { Circle().fill(.white.opacity(0.12)) }
+                    if active { Circle().fill(.white.opacity(0.92)) }
                 }
                 .contentShape(Circle())
         }

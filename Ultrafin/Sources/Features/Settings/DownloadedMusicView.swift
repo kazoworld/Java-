@@ -35,7 +35,7 @@ struct DownloadedMusicView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .background(AmbientBackground())
+        .musicCanvas()
         .navigationTitle("Downloaded")
         .tint(settings.theme.accent.color)
     }

@@ -38,9 +38,13 @@ struct MusicSettingsRootView: View {
                     SettingsRowLabel(title: "Audio", subtitle: "Enhancements and output",
                                      systemImage: "speaker.wave.3.fill", tint: .orange)
                 }
+                NavigationLink { MusicThemeSettingsView() } label: {
+                    SettingsRowLabel(title: "Theme", subtitle: settings.musicTheme.label,
+                                     systemImage: "circle.lefthalf.filled", tint: .pink)
+                }
                 NavigationLink { AppearanceSettingsView() } label: {
-                    SettingsRowLabel(title: "Appearance", subtitle: "Theme, accent, display",
-                                     systemImage: "paintbrush.fill", tint: .pink)
+                    SettingsRowLabel(title: "Accent", subtitle: "Highlight colour",
+                                     systemImage: "paintbrush.fill", tint: .purple)
                 }
                 NavigationLink { StartupSettingsView() } label: {
                     SettingsRowLabel(title: "Startup", subtitle: StartupPreference.current.label,
@@ -65,7 +69,7 @@ struct MusicSettingsRootView: View {
         #if !os(tvOS)
         .scrollContentBackground(.hidden)
         #endif
-        .background(AmbientBackground())
+        .musicCanvas()
         .navigationTitle("Music Settings")
         .tint(settings.theme.accent.color)
     }
