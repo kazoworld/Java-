@@ -177,8 +177,10 @@ struct NowPlayingMusicView: View {
         // wider than the padded area and then overflows both edges — which is
         // why the title, scrubber and volume row ran off-screen while the
         // artwork and transport looked fine.
-        let contentWidth = max(0, min(size.width - edgePadding * 2, 540))
-        let artMax = min(contentWidth, size.height * 0.44)
+        let contentWidth = max(0, min(size.width - edgePadding * 2, 520))
+        // Apple's cover sits at roughly 85% of the screen width; ours matches
+        // that but is capped against height so short phones still fit.
+        let artMax = min(contentWidth * 0.96, size.height * 0.40)
         return VStack(spacing: 0) {
             grabber
                 .padding(.bottom, Spacing.sm)
@@ -198,7 +200,7 @@ struct NowPlayingMusicView: View {
                     .frame(maxHeight: .infinity)
             }
 
-            VStack(spacing: Spacing.lg) {
+            VStack(spacing: Spacing.md) {
                 if stage == .art { infoRow }
                 scrubber
                 transport
@@ -206,7 +208,7 @@ struct NowPlayingMusicView: View {
                 bottomBar
             }
             .frame(width: contentWidth)
-            .padding(.top, stage == .art ? Spacing.lg : Spacing.sm)
+            .padding(.top, stage == .art ? Spacing.md : Spacing.sm)
         }
         .padding(.bottom, Spacing.md)
         .frame(width: size.width, alignment: .center)
@@ -482,12 +484,12 @@ struct NowPlayingMusicView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(player.currentTrack?.name ?? "—")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     if player.currentTrack?.isExplicit == true {
-                        ExplicitBadge(size: 15)
+                        ExplicitBadge(size: 13)
                             .foregroundStyle(.white.opacity(0.7))
                             .fixedSize()
                     }
@@ -552,7 +554,7 @@ struct NowPlayingMusicView: View {
                     open(track?.artistDestination)
                 } label: {
                     Text(artist)
-                        .font(.system(size: 19, weight: .regular))
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -562,14 +564,14 @@ struct NowPlayingMusicView: View {
             }
             if let album = track?.album, !album.isEmpty, album != track?.artistText {
                 Text("—")
-                    .font(.system(size: 19))
+                    .font(.system(size: 16))
                     .foregroundStyle(.white.opacity(0.4))
                     .fixedSize()
                 Button {
                     open(track?.albumDestination)
                 } label: {
                     Text(album)
-                        .font(.system(size: 19, weight: .regular))
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -603,9 +605,9 @@ struct NowPlayingMusicView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
+                .frame(width: 34, height: 34)
                 .background(.white.opacity(0.16), in: Circle())
         }
     }
@@ -625,9 +627,9 @@ struct NowPlayingMusicView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(tint)
-                .frame(width: 38, height: 38)
+                .frame(width: 34, height: 34)
                 .background(.white.opacity(0.16), in: Circle())
                 .contentTransition(.symbolEffect(.replace))
         }
@@ -823,6 +825,12 @@ struct NowPlayingMusicView: View {
             #endif
         }
         .frame(maxWidth: .infinity)
+        #if os(iOS)
+        // Apple insets this row well inside the content margins rather than
+        // pinning the outer icons to the edges.
+        .padding(.horizontal, Spacing.lg)
+        .padding(.top, Spacing.xs)
+        #endif
     }
 
     private func toggleChip(icon: String, active: Bool, action: @escaping () -> Void) -> some View {
@@ -877,28 +885,28 @@ struct NowPlayingMusicView: View {
         #if os(tvOS)
         44
         #else
-        isLandscapePhone ? 28 : 38
+        isLandscapePhone ? 26 : 33
         #endif
     }
     private var sideButtonSize: CGFloat {
         #if os(tvOS)
         30
         #else
-        isLandscapePhone ? 20 : 30
+        isLandscapePhone ? 19 : 26
         #endif
     }
     private var transportSpacing: CGFloat {
         #if os(tvOS)
         Spacing.xxl
         #else
-        isLandscapePhone ? Spacing.lg : Spacing.xxl
+        isLandscapePhone ? Spacing.md : Spacing.xl
         #endif
     }
     private var chipSize: CGFloat {
         #if os(tvOS)
         24
         #else
-        isLandscapePhone ? 15 : 17
+        isLandscapePhone ? 14 : 15
         #endif
     }
     private var edgePadding: CGFloat {
