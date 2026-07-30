@@ -120,6 +120,13 @@ struct MainTabView: View {
                     .focusSection()
             }
         }
+        // Holding Select anywhere in Music reopens the full player. The mini bar
+        // is easy to miss with the remote, so this is the reliable way back into
+        // the carousel without hunting for it.
+        .onLongPressGesture(minimumDuration: 0.7) {
+            guard music.hasQueue, !showNowPlaying else { return }
+            showNowPlaying = true
+        }
         #else
         .overlay(alignment: miniPlayerAlignment) {
             if showsMiniPlayer {

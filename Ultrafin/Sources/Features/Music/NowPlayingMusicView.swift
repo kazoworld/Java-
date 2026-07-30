@@ -127,18 +127,35 @@ struct NowPlayingMusicView: View {
 
     #if os(tvOS)
     private func tvLayout(in size: CGSize) -> some View {
-        VStack(spacing: Spacing.lg) {
-            centerStage(maxSide: 560)
-                .frame(maxHeight: .infinity)
+        // Everything below the stage needs about 420pt; the carousel card is
+        // 1.45× its art (art + reflection). Sizing off the real screen keeps the
+        // title and controls on screen instead of pushing them off the bottom,
+        // which a hardcoded 560 did.
+        let available = size.height - 460
+        let side = max(240, min(size.width * 0.28, available / 1.45))
+        return VStack(spacing: Spacing.lg) {
+            carouselStage(side: side)
+                .frame(height: side * 1.45)
+                .frame(maxWidth: .infinity)
             trackInfo
             scrubber
             transport
             bottomBar
         }
-        .padding(.horizontal, 80)
-        .padding(.vertical, Spacing.xl)
-        .frame(maxWidth: 900)
+        .padding(.horizontal, 90)
+        .padding(.vertical, Spacing.lg)
+        .frame(maxWidth: 1200)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Left/right on the remote moves through the queue, so the carousel is
+        // steerable without hunting for the transport buttons.
+        .focusable()
+        .onMoveCommand { direction in
+            switch direction {
+            case .left: player.previous()
+            case .right: player.next()
+            default: break
+            }
+        }
     }
     #endif
 
@@ -315,6 +332,8 @@ struct NowPlayingMusicView: View {
                 .specularRim(cornerRadius: corner, intensity: isCenter ? 0.85 : 0.4)
                 .shadow(color: .black.opacity(isCenter ? 0.55 : 0.35),
                         radius: isCenter ? 44 : 22, y: isCenter ? 24 : 12)
+                // Side cards hang from the same floor line as the centre one.
+                .frame(maxHeight: .infinity, alignment: .bottom)
 
             // The reflection: the same art flipped, melting into the floor.
             RemoteImage(url: player.artworkURL(for: track, maxWidth: isCenter ? 800 : 400))

@@ -8,6 +8,8 @@ final class MusicHomeViewModel {
     var artists: [MediaItem] = []
     var playlists: [MediaItem] = []
     var heartedSongs: [MediaItem] = []
+    /// Up to four cover URLs per mix, for the playlist-style collage.
+    var mixCovers: [String: [URL]] = [:]
     var isLoading = true
     private(set) var didLoad = false
     /// Which backend the current lists came from — switching sources in
@@ -57,6 +59,16 @@ final class MusicHomeViewModel {
         if let v = await artistsTask { artists = v }
         if let v = await playlistsTask { playlists = v }
         if let v = await heartedTask { heartedSongs = v }
+        await loadMixCovers(source: source)
+    }
+
+    /// Peek at each mix's first few songs so its card can show real artwork.
+    private func loadMixCovers(source: MusicSource) async {
+        for mix in SmartMix.all {
+            let songs = await mix.load(from: source)
+            let urls = songs.prefix(4).compactMap { source.artworkURL(for: $0, maxWidth: 300) }
+            mixCovers[mix.id] = urls
+        }
     }
 }
 
@@ -151,19 +163,17 @@ struct MusicHomeView: View {
     /// "Made For You" shelf, Apple Music-style. Tapping a tile plays it.
     private var madeForYou: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            Text("Made For You")
-                .font(sectionFont)
-                .foregroundStyle(UltrafinColors.primaryText)
-                .padding(.horizontal, edgePadding)
+            sectionHeader("Made For You")
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: railSpacing) {
+                LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(SmartMix.all) { mix in
                         Button {
                             play(mix: mix)
                         } label: {
-                            SmartMixTile(mix: mix, side: mixSide)
+                            SmartMixCard(mix: mix, side: mixSide,
+                                         covers: model.mixCovers[mix.id] ?? [])
                         }
-                        .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))
+                        .mediaCardButtonStyle()
                     }
                 }
                 .padding(.horizontal, edgePadding)
@@ -171,6 +181,19 @@ struct MusicHomeView: View {
             }
             .scrollClipDisabled()
         }
+    }
+
+    /// A shelf title with the Apple Music chevron beside it.
+    private func sectionHeader(_ title: String) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(sectionFont)
+                .foregroundStyle(UltrafinColors.primaryText)
+            Image(systemName: "chevron.right")
+                .font(.system(size: chevronSize, weight: .bold))
+                .foregroundStyle(UltrafinColors.tertiaryText)
+        }
+        .padding(.horizontal, edgePadding)
     }
 
     private func play(mix: SmartMix) {
@@ -223,10 +246,7 @@ struct MusicHomeView: View {
 
     private func albumRail(title: String, albums: [MediaItem]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            Text(title)
-                .font(sectionFont)
-                .foregroundStyle(UltrafinColors.primaryText)
-                .padding(.horizontal, edgePadding)
+            sectionHeader(title)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(albums) { album in
@@ -245,10 +265,7 @@ struct MusicHomeView: View {
 
     private var artistRail: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            Text("Artists")
-                .font(sectionFont)
-                .foregroundStyle(UltrafinColors.primaryText)
-                .padding(.horizontal, edgePadding)
+            sectionHeader("Artists")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(model.artists) { artist in
@@ -269,10 +286,7 @@ struct MusicHomeView: View {
     /// whole list playing from there.
     private func songRail(title: String, songs: [MediaItem]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            Text(title)
-                .font(sectionFont)
-                .foregroundStyle(UltrafinColors.primaryText)
-                .padding(.horizontal, edgePadding)
+            sectionHeader(title)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(Array(songs.enumerated()), id: \.element.id) { position, song in
@@ -349,6 +363,13 @@ struct MusicHomeView: View {
         0
         #endif
     }
+    private var chevronSize: CGFloat {
+        #if os(tvOS)
+        22
+        #else
+        15
+        #endif
+    }
     private var mixSide: CGFloat {
         #if os(tvOS)
         300
@@ -367,49 +388,91 @@ struct MusicHomeView: View {
 
 // MARK: - Smart mix tile
 
-/// A gradient "Made For You" tile — the mix's identity is its color and glyph,
-/// no artwork needed.
-struct SmartMixTile: View {
+/// A "Made For You" mix, presented as a playlist: a square cover built from the
+/// songs actually in it (a four-up collage, like Apple Music's generated
+/// playlists), with the title and description beneath — so it sits in the shelf
+/// as a peer of the albums rather than as a differently-shaped tile.
+struct SmartMixCard: View {
     @Environment(\.isFocused) private var isFocused
+    @Environment(SettingsStore.self) private var settings
 
     let mix: SmartMix
     let side: CGFloat
+    /// Cover art for the first few songs in the mix, when they're known.
+    let covers: [URL]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: mix.systemImage)
-                .font(.system(size: side * 0.2, weight: .bold))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            cover
+                .frame(width: side, height: side)
+                .clipShape(RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
+                        .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
+                                      lineWidth: isFocused ? 3 : 1)
+                )
+                .shadow(color: isFocused ? settings.theme.accent.color.opacity(0.5) : .clear,
+                        radius: isFocused ? 20 : 0, y: isFocused ? 6 : 0)
+
             Text(mix.title)
-                .font(.system(size: side * 0.11, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
+                .font(titleFont)
+                .foregroundStyle(UltrafinColors.primaryText)
                 .lineLimit(1)
             Text(mix.subtitle)
-                .font(.system(size: side * 0.072, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.85))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+                .font(subtitleFont)
+                .foregroundStyle(UltrafinColors.tertiaryText)
+                .lineLimit(1)
         }
-        .padding(side * 0.1)
-        .frame(width: side, height: side, alignment: .topLeading)
-        .background {
-            ZStack {
-                LinearGradient(colors: mix.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                LinearGradient(colors: [.white.opacity(0.18), .clear],
-                               startPoint: .top, endPoint: .center)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: side * 0.09, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: side * 0.09, style: .continuous)
-                .strokeBorder(isFocused ? Color.white : .white.opacity(0.25),
-                              lineWidth: isFocused ? 3 : 1)
-        )
-        .shadow(color: mix.colors.first?.opacity(isFocused ? 0.6 : 0.3) ?? .clear,
-                radius: isFocused ? 24 : 12, y: isFocused ? 10 : 6)
+        .frame(width: side)
         .animation(.smooth(duration: 0.2), value: isFocused)
+    }
+
+    /// Four covers in a grid when we have them, else the mix's own colours.
+    @ViewBuilder
+    private var cover: some View {
+        ZStack {
+            LinearGradient(colors: mix.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+
+            if covers.count >= 4 {
+                let half = side / 2
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        RemoteImage(url: covers[0]).frame(width: half, height: half).clipped()
+                        RemoteImage(url: covers[1]).frame(width: half, height: half).clipped()
+                    }
+                    HStack(spacing: 0) {
+                        RemoteImage(url: covers[2]).frame(width: half, height: half).clipped()
+                        RemoteImage(url: covers[3]).frame(width: half, height: half).clipped()
+                    }
+                }
+            } else if let first = covers.first {
+                RemoteImage(url: first).frame(width: side, height: side).clipped()
+            }
+
+            // A wash so the glyph always reads over whatever art landed here.
+            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.55)],
+                           startPoint: .top, endPoint: .bottom)
+
+            Image(systemName: mix.systemImage)
+                .font(.system(size: side * 0.24, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+        }
+    }
+
+    private var titleFont: Font {
+        #if os(tvOS)
+        .system(size: 22, weight: .semibold)
+        #else
+        .system(size: 14, weight: .medium)
+        #endif
+    }
+    private var subtitleFont: Font {
+        #if os(tvOS)
+        .system(size: 17, weight: .regular)
+        #else
+        .system(size: 14, weight: .regular)
+        #endif
     }
 }
 
