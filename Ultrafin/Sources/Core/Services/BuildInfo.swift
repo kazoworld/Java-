@@ -8,7 +8,7 @@ import Foundation
 /// device, and read it in Music → Settings.
 enum BuildInfo {
     /// Increment on each round of UI work worth verifying on hardware.
-    static let marker = "player-7 · flat-bg"
+    static let marker = "home-library-1"
 
     /// The bundle's own version/build, for completeness.
     static var bundleVersion: String {

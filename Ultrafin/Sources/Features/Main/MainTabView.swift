@@ -23,6 +23,7 @@ struct MainTabView: View {
     // Music mode's own stacks — kept separate so the two experiences never
     // inherit each other's navigation.
     @State private var listenPath = NavigationPath()
+    @State private var musicLibraryPath = NavigationPath()
     @State private var musicSearchPath = NavigationPath()
     @State private var musicSettingsPath = NavigationPath()
     /// The app-wide music session (mini-player + full player live here so they
@@ -86,8 +87,9 @@ struct MainTabView: View {
         case .music:
             switch tab {
             case 0: listenPath = NavigationPath()
-            case 1: musicSearchPath = NavigationPath()
-            case 2: musicSettingsPath = NavigationPath()
+            case 1: musicLibraryPath = NavigationPath()
+            case 2: musicSearchPath = NavigationPath()
+            case 3: musicSettingsPath = NavigationPath()
             default: break
             }
         }
@@ -96,8 +98,8 @@ struct MainTabView: View {
     private func resetAllPaths() {
         homePath = NavigationPath(); libraryPath = NavigationPath()
         searchPath = NavigationPath(); settingsPath = NavigationPath()
-        listenPath = NavigationPath(); musicSearchPath = NavigationPath()
-        musicSettingsPath = NavigationPath()
+        listenPath = NavigationPath(); musicLibraryPath = NavigationPath()
+        musicSearchPath = NavigationPath(); musicSettingsPath = NavigationPath()
     }
 
     var body: some View {
@@ -206,16 +208,20 @@ struct MainTabView: View {
     @ViewBuilder
     private var musicTabs: some View {
         NavigationStack(path: $listenPath) { MusicHomeView() }
-            .tabItem { Label("Listen Now", systemImage: "play.circle.fill") }
+            .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
+
+        NavigationStack(path: $musicLibraryPath) { MusicLibraryView() }
+            .tabItem { Label("Library", systemImage: "square.stack.fill") }
+            .tag(1)
 
         NavigationStack(path: $musicSearchPath) { MusicSearchView() }
             .tabItem { Label("Search", systemImage: "magnifyingglass") }
-            .tag(1)
+            .tag(2)
 
         NavigationStack(path: $musicSettingsPath) { MusicSettingsRootView() }
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-            .tag(2)
+            .tag(3)
 
         #if os(tvOS)
         ProfileSwitcherView(isTab: true, onDone: { selection = 0 })

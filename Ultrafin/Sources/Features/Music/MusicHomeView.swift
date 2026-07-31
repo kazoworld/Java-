@@ -8,6 +8,10 @@ final class MusicHomeViewModel {
     var artists: [MediaItem] = []
     var playlists: [MediaItem] = []
     var heartedSongs: [MediaItem] = []
+    /// Songs for the Up Next shelf when nothing is queued.
+    var recentSongs: [MediaItem] = []
+    /// Albums you've played lately, for the Recently Played shelf.
+    var recentlyPlayedAlbums: [MediaItem] = []
     /// Up to four cover URLs per mix, for the playlist-style collage.
     var mixCovers: [String: [URL]] = [:]
     var isLoading = true
@@ -69,6 +73,16 @@ final class MusicHomeViewModel {
         if let v = await artistsTask { artists = v }
         if let v = await playlistsTask { playlists = v }
         if let v = await heartedTask { heartedSongs = v }
+        if let played = try? await source.recentlyPlayedSongs() {
+            recentSongs = played
+            // Collapse the recently-played songs into the albums they came from.
+            var seen = Set<String>()
+            recentlyPlayedAlbums = played.compactMap { song -> MediaItem? in
+                guard let album = song.albumDestination,
+                      seen.insert(album.id).inserted else { return nil }
+                return album
+            }
+        }
         await loadMixCovers(source: source)
     }
 
@@ -97,24 +111,28 @@ struct MusicHomeView: View {
                     emptyState
                 } else {
                     shuffleHeader
-                    madeForYou
-                    identityBanner
 
+                    if !upNextSongs.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            sectionHeader("Up Next")
+                            UpNextSection(songs: upNextSongs)
+                        }
+                    }
+                    if !model.recentlyPlayedAlbums.isEmpty {
+                        albumRail(title: "Recently Played", albums: model.recentlyPlayedAlbums)
+                    }
                     if !model.recentFullAlbums.isEmpty {
                         albumRail(title: "Recently Added", albums: model.recentFullAlbums)
                     }
+
+                    madeForYou
+                    identityBanner
+
                     if !model.playlists.isEmpty {
                         albumRail(title: "Playlists", albums: model.playlists)
                     }
-                    if !model.albumShelf.isEmpty {
-                        albumRail(title: "Albums", albums: model.albumShelf)
-                    }
                     if !model.heartedSongs.isEmpty {
                         songRail(title: "Hearted Songs", songs: model.heartedSongs)
-                    }
-                    // One-track releases live here instead of padding out Albums.
-                    if !model.singlesShelf.isEmpty {
-                        albumRail(title: "Singles", albums: model.singlesShelf)
                     }
                     if !model.artists.isEmpty {
                         artistRail
@@ -142,6 +160,14 @@ struct MusicHomeView: View {
             guard let source = appState.musicSource else { return }
             await model.load(source: source)
         }
+    }
+
+    /// What's actually coming up: the rest of the play queue when there is one,
+    /// otherwise the songs played most recently.
+    private var upNextSongs: [MediaItem] {
+        let player = MusicPlayer.shared
+        let queued = Array(player.queue.dropFirst(player.index + 1))
+        return queued.isEmpty ? model.recentSongs : queued
     }
 
     /// "Shuffle Library" — the fastest way into the music.
