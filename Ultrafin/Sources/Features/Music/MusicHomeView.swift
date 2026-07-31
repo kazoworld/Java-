@@ -21,17 +21,27 @@ final class MusicHomeViewModel {
             && playlists.isEmpty && heartedSongs.isEmpty
     }
 
-    /// Only real albums belong in the album rails: two or more tracks. A
-    /// one-track release (often a single song filed under its album) goes to the
-    /// Singles rail instead, so the Albums shelf isn't padded out with them.
-    /// Releases whose size the server didn't report stay with the albums rather
-    /// than being hidden.
+    /// Only real albums belong in the album rails: two or more tracks. A single
+    /// song carries its parent album's name in its metadata, so the server
+    /// happily creates a one-track "album" for it — that's what was flooding the
+    /// shelf.
+    ///
+    /// The rule is now positive: a release must be KNOWN to hold two or more
+    /// tracks. The one exception is a server that reports no counts at all, in
+    /// which case we can't tell anything apart and show everything rather than
+    /// emptying the shelf.
+    private func serverReportsTrackCounts(_ items: [MediaItem]) -> Bool {
+        items.contains { $0.trackCount != nil }
+    }
+
     private func fullAlbums(_ items: [MediaItem]) -> [MediaItem] {
-        items.filter { $0.releaseKind != .single }
+        guard serverReportsTrackCounts(items) else { return items }
+        return items.filter { ($0.trackCount ?? 0) >= 2 }
     }
 
     private func singles(_ items: [MediaItem]) -> [MediaItem] {
-        items.filter { $0.releaseKind == .single }
+        guard serverReportsTrackCounts(items) else { return [] }
+        return items.filter { ($0.trackCount ?? 0) <= 1 }
     }
 
     var recentFullAlbums: [MediaItem] { fullAlbums(recentAlbums) }

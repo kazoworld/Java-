@@ -178,17 +178,20 @@ struct NowPlayingMusicView: View {
         // why the title, scrubber and volume row ran off-screen while the
         // artwork and transport looked fine.
         let contentWidth = max(0, min(size.width - edgePadding * 2, 520))
-        // Apple's cover sits at roughly 85% of the screen width; ours matches
-        // that but is capped against height so short phones still fit.
-        let artMax = min(contentWidth * 0.96, size.height * 0.40)
+        // Apple's cover is ~85% of the screen width and sits high — its top edge
+        // is about 12% down the screen, with a modest gap to the title. Matching
+        // that means a bigger cover, pinned near the top rather than floating in
+        // the middle of the remaining space.
+        let artMax = min(contentWidth, size.height * 0.42)
         return VStack(spacing: 0) {
             grabber
-                .padding(.bottom, Spacing.sm)
+                .padding(.bottom, Spacing.md)
 
             if stage == .art {
                 centerStage(maxSide: artMax)
                     .frame(width: contentWidth)
-                    .frame(maxHeight: .infinity)
+                // Nudge the cover toward the top and let the slack fall below.
+                Spacer(minLength: 0)
             } else {
                 // Lyrics and the queue get the full middle; the cover shrinks to
                 // a thumbnail in a compact header, exactly as Apple Music does.
@@ -542,45 +545,23 @@ struct NowPlayingMusicView: View {
         .transition(.opacity)
     }
 
-    /// "Artist — Album", each name tappable and opening its own page.
+    /// Just the artist, tappable — Apple shows the artist alone here. The album
+    /// name made the line long and busy; it lives in the "…" menu instead.
     @ViewBuilder
     private var creditLine: some View {
         let track = player.currentTrack
-        // One row, each part allowed to truncate. Long artist + album strings
-        // used to be able to push this row wider than the screen.
-        HStack(spacing: 4) {
-            if let artist = track?.artistText, !artist.isEmpty {
-                Button {
-                    open(track?.artistDestination)
-                } label: {
-                    Text(artist)
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .buttonStyle(.plain)
-                .disabled(track?.artistDestination == nil)
-            }
-            if let album = track?.album, !album.isEmpty, album != track?.artistText {
-                Text("—")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.white.opacity(0.4))
-                    .fixedSize()
-                Button {
-                    open(track?.albumDestination)
-                } label: {
-                    Text(album)
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .buttonStyle(.plain)
-                .disabled(track?.albumDestination == nil)
-            }
+        Button {
+            open(track?.artistDestination)
+        } label: {
+            Text(track?.artistText ?? " ")
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(.white.opacity(0.62))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
+        .disabled(track?.artistDestination == nil)
     }
 
     /// The "…" menu: album, artist, and queue actions.

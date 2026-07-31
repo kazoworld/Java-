@@ -49,60 +49,30 @@ struct AlbumBackdrop: View {
 /// yet, so it never flashes flat gray.
 struct NowPlayingBackdrop: View {
     let color: ArtworkColor?
-    let artURL: URL?
+    /// Kept for call-site compatibility; the backdrop no longer renders the
+    /// artwork. Apple's player is a flat field of the record's colour, not a
+    /// blurred copy of the cover — the blur read as murky and drew the eye away
+    /// from the art itself.
+    var artURL: URL? = nil
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: false)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            ZStack {
-                // A deep base pulled from the art (dark enough for white text).
-                (color?.shade(brightness: 0.42, saturation: 0.85) ?? UltrafinColors.background)
-
-                // The blurred artwork — the literal Apple Music move — for real,
-                // content-true color and texture.
-                if let artURL {
-                    // Blur first, THEN clip: a 110pt blur grows the rendered
-                    // bounds well past the frame, and an un-clipped one can
-                    // enlarge whatever lays this out.
-                    Color.clear.overlay(
-                        RemoteImage(url: artURL, contentMode: .fill)
-                            .blur(radius: 110)
-                            .opacity(0.55)
-                    )
-                    .clipped()
-                }
-
-                // Drifting color pools spun from the sampled color so even a
-                // near-monochrome cover still carries a hint of color.
-                if let color {
-                    pool(color.shade(brightness: 0.9, saturation: 1.0),
-                         x: drift(t, 0.05, 0.18), y: 0.12 + drift(t, 0.04, 0.06), radius: 520)
-                    pool(color.shade(brightness: 0.7, saturation: 0.9, hue: 0.06),
-                         x: 0.85 + drift(t, 0.06, 0.1), y: 0.2 + drift(t, 0.05, 0.08), radius: 460)
-                    pool(color.shade(brightness: 0.55, saturation: 0.95, hue: -0.05),
-                         x: 0.2 + drift(t, 0.05, 0.12), y: 0.85 + drift(t, 0.04, 0.06), radius: 560)
-                }
-
-                // Legibility scrim: darken top (status bar) and bottom (controls).
-                LinearGradient(stops: [
-                    .init(color: .black.opacity(0.35), location: 0.0),
-                    .init(color: .black.opacity(0.05), location: 0.4),
-                    .init(color: .black.opacity(0.25), location: 0.8),
-                    .init(color: .black.opacity(0.55), location: 1.0)
-                ], startPoint: .top, endPoint: .bottom)
-            }
+        ZStack {
+            base
+            // The faintest vertical shading, so it isn't a dead flat fill —
+            // brighter under the cover, settling darker behind the controls.
+            LinearGradient(stops: [
+                .init(color: .white.opacity(0.05), location: 0.0),
+                .init(color: .clear, location: 0.45),
+                .init(color: .black.opacity(0.10), location: 1.0)
+            ], startPoint: .top, endPoint: .bottom)
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.8), value: color)
+        .animation(.easeInOut(duration: 0.7), value: color)
     }
 
-    private func pool(_ color: Color, x: Double, y: Double, radius: CGFloat) -> some View {
-        RadialGradient(colors: [color.opacity(0.5), .clear],
-                       center: UnitPoint(x: x, y: y), startRadius: 0, endRadius: radius)
-    }
-
-    /// A slow sine drift so the wash breathes without ever looking busy.
-    private func drift(_ t: Double, _ speed: Double, _ amount: Double) -> Double {
-        sin(t * speed) * amount
+    /// A muted, mid-dark version of the cover's colour: saturated enough to be
+    /// clearly "this record", dark enough for white text to sit on it.
+    private var base: Color {
+        color?.shade(brightness: 0.46, saturation: 0.55) ?? UltrafinColors.background
     }
 }
