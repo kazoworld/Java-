@@ -8,7 +8,7 @@ import Foundation
 /// device, and read it in Music → Settings.
 enum BuildInfo {
     /// Increment on each round of UI work worth verifying on hardware.
-    static let marker = "home-library-1"
+    static let marker = "landscape-carousel-1"
 
     /// The bundle's own version/build, for completeness.
     static var bundleVersion: String {

@@ -225,29 +225,39 @@ struct NowPlayingMusicView: View {
         // Explicit column widths for the same reason as portrait: padding alone
         // doesn't stop a long title from widening its stack past the screen.
         let usable = max(0, size.width - edgePadding * 2)
-        let artColumn = usable * 0.44
+        let artColumn = usable * 0.48
         let controlColumn = usable - artColumn - Spacing.xl
-        let artMax = min(artColumn, size.height * 0.72)
+        // The card is 1.45× its art once the reflection counts, and the stage
+        // needs room for both neighbours. Sizing off BOTH constraints is what
+        // stops the cover being cropped top-and-bottom and the next record
+        // spilling over the controls.
+        let side = max(80, min(artColumn / 1.75, size.height * 0.58))
         return HStack(spacing: Spacing.xl) {
-            centerStage(maxSide: artMax)
-                .frame(width: artColumn)
-                .frame(maxHeight: .infinity)
-
-            VStack(spacing: Spacing.sm) {
-                HStack {
-                    grabber
-                    Spacer()
+            Group {
+                if stage == .art {
+                    carouselStage(side: side, spread: 0.52, stageWidth: artColumn)
+                } else {
+                    // Lyrics / queue take the same column so the controls stay put.
+                    centerStage(maxSide: side)
                 }
+            }
+            .frame(width: artColumn)
+            .frame(maxHeight: .infinity)
+
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 Spacer(minLength: 0)
                 infoRow
-                scrubber
+                // No scrubber here: the carousel IS the navigation in landscape
+                // — swipe or tap through records — so a duration bar just
+                // crowds a short screen. Portrait and tvOS keep theirs.
                 transport
                 bottomBar
                 Spacer(minLength: 0)
             }
             .frame(width: max(0, controlColumn))
         }
-        .padding(.vertical, Spacing.md)
+        .overlay(alignment: .top) { grabber }
+        .padding(.vertical, Spacing.sm)
         .frame(width: size.width, alignment: .center)
         .frame(maxHeight: .infinity)
     }
@@ -318,13 +328,14 @@ struct NowPlayingMusicView: View {
     /// center — breathing gently while it plays, mirrored in a fading reflection
     /// — with its neighbors receding into the room on either side. Changing
     /// tracks glides the whole shelf across on a spring.
-    private func carouselStage(side: CGFloat) -> some View {
+    private func carouselStage(side: CGFloat, spread: CGFloat = 0.66,
+                               stageWidth: CGFloat? = nil) -> some View {
         ZStack {
             // Three records: the one playing, and one either side. Neighbours
             // first so the centre draws on top.
             ForEach([-1, 1, 0], id: \.self) { offset in
                 if let track = queueTrack(at: offset) {
-                    carouselCard(track: track, offset: offset, side: side)
+                    carouselCard(track: track, offset: offset, side: side, spread: spread)
                         // Identity follows the queue slot so a track change
                         // animates cards BETWEEN positions (the glide), not a
                         // crossfade-in-place.
@@ -335,7 +346,10 @@ struct NowPlayingMusicView: View {
         // A FIXED stage width keeps the playing record dead centre. Sized by its
         // contents, the stack centred whichever cards happened to exist — so at
         // the start of a queue (no left neighbour) the current card sat left.
-        .frame(width: side * 2.5, height: side * 1.45)
+        // Callers that live in a narrow column pass their own width and the
+        // neighbours tuck in closer.
+        .frame(width: stageWidth ?? side * 2.5, height: side * 1.45)
+        .clipped()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.spring(duration: 0.75, bounce: 0.16), value: player.index)
         .onAppear {
@@ -351,7 +365,8 @@ struct NowPlayingMusicView: View {
         return player.queue[i]
     }
 
-    private func carouselCard(track: MediaItem, offset: Int, side baseSide: CGFloat) -> some View {
+    private func carouselCard(track: MediaItem, offset: Int, side baseSide: CGFloat,
+                              spread: CGFloat = 0.66) -> some View {
         let isCenter = offset == 0
         let side = baseSide * (isCenter ? 1 : 0.58)
         let corner = side * 0.05
@@ -382,7 +397,7 @@ struct NowPlayingMusicView: View {
         }
         // Neighbors turn away into the room, coverflow-style.
         .rotation3DEffect(.degrees(Double(-offset) * 26), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
-        .offset(x: CGFloat(offset) * baseSide * 0.66)
+        .offset(x: CGFloat(offset) * baseSide * spread)
         .opacity(isCenter ? 1 : 0.45)
         .zIndex(isCenter ? 10 : Double(5 - abs(offset)))
         // The center record breathes while the music plays.
