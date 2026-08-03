@@ -65,6 +65,7 @@ struct MusicSearchView: View {
         .musicCanvas()
         #if os(iOS)
         .navigationTitle("Search")
+        .navigationBarTitleDisplayMode(.large)
         .searchable(text: $model.query, prompt: "Albums, artists, songs")
         .adaptsChromeOnScroll()
         #else

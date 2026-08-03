@@ -40,12 +40,11 @@ final class MusicLibraryViewModel {
     private var loadedKind: MusicSourceKind?
 
     /// Real albums only — a one-track release is a single filed under its
-    /// parent album's name, not an album. Positive test: it must be *known* to
-    /// hold two or more tracks. If the server reports no counts at all we can't
-    /// tell anything apart, so everything is shown.
+    /// parent album's name. A count of exactly 1 means single; nil (or the 0
+    /// some servers return in place of a real figure) is unknown and stays,
+    /// since filtering on a number we never got is what emptied these lists.
     private func realAlbums(_ items: [MediaItem]) -> [MediaItem] {
-        guard items.contains(where: { $0.trackCount != nil }) else { return items }
-        return items.filter { ($0.trackCount ?? 0) >= 2 }
+        items.filter { $0.trackCount != 1 }
     }
 
     func load(source: MusicSource) async {

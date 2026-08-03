@@ -79,33 +79,22 @@ enum UltrafinColors {
 }
 
 /// User-selectable accent colors exposed in Settings.
+/// The app's single accent. Ultrafin follows Apple Music's look now, so the
+/// old multi-colour palette is gone — one red, everywhere.
 enum AccentColor: String, CaseIterable, Identifiable, Codable {
-    case aurora, ocean, mint, orchid, rose, ember, gold
+    case ultrafinRed
 
     var id: String { rawValue }
+    var displayName: String { "Ultrafin Red" }
 
-    var displayName: String {
-        switch self {
-        case .aurora: "Aurora"
-        case .ocean: "Ocean"
-        case .mint: "Mint"
-        case .orchid: "Orchid"
-        case .rose: "Rose"
-        case .ember: "Ember"
-        case .gold: "Gold"
-        }
-    }
+    /// Apple Music's red.
+    var color: Color { Color(hex: 0xFA2D48) }
 
-    var color: Color {
-        switch self {
-        case .aurora: Color(hex: 0x6D8BFF)
-        case .ocean: Color(hex: 0x38BDF8)
-        case .mint: Color(hex: 0x3DD9A0)
-        case .orchid: Color(hex: 0xB56DFF) // matches the brand accent gradient
-        case .rose: Color(hex: 0xFF6DAE)
-        case .ember: Color(hex: 0xFF6D5A)
-        case .gold: Color(hex: 0xFFC857)
-        }
+    /// Anything stored by an older build (aurora, ocean, …) resolves here
+    /// rather than failing to decode and resetting the whole theme group.
+    init(from decoder: Decoder) throws {
+        _ = try? decoder.singleValueContainer().decode(String.self)
+        self = .ultrafinRed
     }
 }
 

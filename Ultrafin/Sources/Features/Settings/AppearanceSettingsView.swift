@@ -19,12 +19,6 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                accentPicker
-            } header: {
-                Text("Accent")
-            }
-
-            Section {
                 Toggle("OLED mode", isOn: $settings.appearance.oledMode)
                 Toggle("Ambient background", isOn: $settings.appearance.ambientBackground)
                     .disabled(settings.appearance.oledMode)
@@ -43,25 +37,4 @@ struct AppearanceSettingsView: View {
         .tint(settings.theme.accent.color)
     }
 
-    private var accentPicker: some View {
-        HStack(spacing: Spacing.md) {
-            ForEach(AccentColor.allCases) { accent in
-                Button {
-                    withAnimation(.smooth) { settings.theme.accent = accent }
-                } label: {
-                    Circle()
-                        .fill(accent.color)
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Circle().strokeBorder(UltrafinColors.primaryText,
-                                                  lineWidth: settings.theme.accent == accent ? 3 : 0)
-                        )
-                        .scaleEffect(settings.theme.accent == accent ? 1.12 : 1)
-                }
-                .buttonStyle(UltrafinButtonStyle(focusScale: 1.18, lift: false))
-                .accessibilityLabel(accent.displayName)
-            }
-        }
-        .padding(.vertical, Spacing.xs)
-    }
 }

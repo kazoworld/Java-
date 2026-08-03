@@ -190,8 +190,11 @@ struct NowPlayingMusicView: View {
             if stage == .art {
                 centerStage(maxSide: artMax)
                     .frame(width: contentWidth)
-                // Nudge the cover toward the top and let the slack fall below.
-                Spacer(minLength: 0)
+                // A measured gap under the cover — Apple's is about 5% of the
+                // screen. The slack is then shared BETWEEN the control rows
+                // below rather than dumped here, which is what left a hole
+                // under the artwork and crushed the controls to the bottom.
+                Spacer(minLength: 0).frame(height: size.height * 0.045)
             } else {
                 // Lyrics and the queue get the full middle; the cover shrinks to
                 // a thumbnail in a compact header, exactly as Apple Music does.
@@ -203,15 +206,19 @@ struct NowPlayingMusicView: View {
                     .frame(maxHeight: .infinity)
             }
 
-            VStack(spacing: Spacing.md) {
+            VStack(spacing: 0) {
                 if stage == .art { infoRow }
+                Spacer(minLength: Spacing.sm)
                 scrubber
+                Spacer(minLength: Spacing.sm)
                 transport
+                Spacer(minLength: Spacing.sm)
                 volumeRow
+                Spacer(minLength: Spacing.sm)
                 bottomBar
             }
             .frame(width: contentWidth)
-            .padding(.top, stage == .art ? Spacing.md : Spacing.sm)
+            .frame(maxHeight: .infinity)
         }
         .padding(.bottom, Spacing.md)
         .frame(width: size.width, alignment: .center)

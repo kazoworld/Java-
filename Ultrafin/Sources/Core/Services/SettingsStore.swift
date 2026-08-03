@@ -224,7 +224,7 @@ final class SettingsStore {
 // MARK: - Preference groups
 
 struct ThemePreferences: Codable {
-    var accent: AccentColor = .aurora
+    var accent: AccentColor = .ultrafinRed
 
     init() {}
 
@@ -237,7 +237,7 @@ struct ThemePreferences: Codable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        accent = (try? c.decodeIfPresent(AccentColor.self, forKey: .accent)) ?? .aurora
+        accent = (try? c.decodeIfPresent(AccentColor.self, forKey: .accent)) ?? .ultrafinRed
     }
 }
 

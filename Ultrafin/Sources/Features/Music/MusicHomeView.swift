@@ -25,27 +25,22 @@ final class MusicHomeViewModel {
             && playlists.isEmpty && heartedSongs.isEmpty
     }
 
-    /// Only real albums belong in the album rails: two or more tracks. A single
+    /// Only real albums belong in the album shelves: two or more tracks. A single
     /// song carries its parent album's name in its metadata, so the server
-    /// happily creates a one-track "album" for it — that's what was flooding the
-    /// shelf.
+    /// happily creates a one-track "album" for it — that's what floods the shelf.
     ///
-    /// The rule is now positive: a release must be KNOWN to hold two or more
-    /// tracks. The one exception is a server that reports no counts at all, in
-    /// which case we can't tell anything apart and show everything rather than
-    /// emptying the shelf.
-    private func serverReportsTrackCounts(_ items: [MediaItem]) -> Bool {
-        items.contains { $0.trackCount != nil }
-    }
+    /// A count of exactly 1 means single. Anything else — nil, or a 0 some
+    /// servers return instead of a real figure — is UNKNOWN and stays with the
+    /// albums, because filtering on a number the server never really provided is
+    /// how the shelves ended up empty.
+    private func isSingle(_ item: MediaItem) -> Bool { item.trackCount == 1 }
 
     private func fullAlbums(_ items: [MediaItem]) -> [MediaItem] {
-        guard serverReportsTrackCounts(items) else { return items }
-        return items.filter { ($0.trackCount ?? 0) >= 2 }
+        items.filter { !isSingle($0) }
     }
 
     private func singles(_ items: [MediaItem]) -> [MediaItem] {
-        guard serverReportsTrackCounts(items) else { return [] }
-        return items.filter { ($0.trackCount ?? 0) <= 1 }
+        items.filter { isSingle($0) }
     }
 
     var recentFullAlbums: [MediaItem] { fullAlbums(recentAlbums) }
@@ -110,7 +105,7 @@ struct MusicHomeView: View {
                 } else if model.isEmpty {
                     emptyState
                 } else {
-                    shuffleHeader
+                    madeForYou
 
                     if !upNextSongs.isEmpty {
                         VStack(alignment: .leading, spacing: Spacing.md) {
@@ -125,9 +120,9 @@ struct MusicHomeView: View {
                         albumRail(title: "Recently Added", albums: model.recentFullAlbums)
                     }
 
-                    madeForYou
-                    identityBanner
-
+                    if !model.albumShelf.isEmpty {
+                        albumRail(title: "Albums", albums: model.albumShelf)
+                    }
                     if !model.playlists.isEmpty {
                         albumRail(title: "Playlists", albums: model.playlists)
                     }
@@ -137,13 +132,15 @@ struct MusicHomeView: View {
                     if !model.artists.isEmpty {
                         artistRail
                     }
+                    identityBanner
                 }
             }
             .padding(.vertical, Spacing.lg)
         }
         .musicCanvas()
         #if os(iOS)
-        .navigationTitle("Music")
+        .navigationTitle("Home")
+        .navigationBarTitleDisplayMode(.large)
         // The mini player condenses as this page scrolls down.
         .adaptsChromeOnScroll()
         #endif
@@ -153,6 +150,9 @@ struct MusicHomeView: View {
             case .musicArtist: ArtistDetailView(artist: item)
             default: AlbumDetailView(container: item)
             }
+        }
+        .navigationDestination(for: SmartMix.self) { mix in
+            SmartMixDetailView(mix: mix)
         }
         // Re-runs when the user switches source in Settings, so the tab swaps
         // to the other server's library without an app restart.
@@ -170,29 +170,6 @@ struct MusicHomeView: View {
         return queued.isEmpty ? model.recentSongs : queued
     }
 
-    /// "Shuffle Library" — the fastest way into the music.
-    private var shuffleHeader: some View {
-        Button {
-            guard let source = appState.musicSource else { return }
-            Haptics.play(.medium)
-            Task {
-                let songs = (try? await source.randomSongs()) ?? []
-                guard !songs.isEmpty else { return }
-                MusicPlayer.shared.play(tracks: songs, source: source)
-            }
-        } label: {
-            Label("Shuffle Library", systemImage: "shuffle")
-                .font(.system(size: shuffleFont, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .padding(.horizontal, Spacing.xl)
-                .padding(.vertical, Spacing.md)
-                .tintedGlassCapsule(settings.theme.accent.color, strength: 0.7)
-                .shadow(color: settings.theme.accent.color.opacity(0.4), radius: 14, y: 6)
-        }
-        .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: true))
-        .padding(.horizontal, edgePadding)
-    }
-
     // MARK: - Made For You (smart mixes)
 
     /// A row of app-generated mixes drawn from the user's own listening — the
@@ -203,9 +180,8 @@ struct MusicHomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(SmartMix.all) { mix in
-                        Button {
-                            play(mix: mix)
-                        } label: {
+                        // Opens the mix so you can see what's in it first.
+                        NavigationLink(value: mix) {
                             SmartMixCard(mix: mix, side: mixSide,
                                          covers: model.mixCovers[mix.id] ?? [])
                         }
@@ -230,16 +206,6 @@ struct MusicHomeView: View {
                 .foregroundStyle(UltrafinColors.tertiaryText)
         }
         .padding(.horizontal, edgePadding)
-    }
-
-    private func play(mix: SmartMix) {
-        guard let source = appState.musicSource else { return }
-        Haptics.play(.medium)
-        Task {
-            let songs = await mix.load(from: source)
-            guard !songs.isEmpty else { return }
-            MusicPlayer.shared.play(tracks: songs, source: source)
-        }
     }
 
     /// A tappable banner into the Music Identity screen.
@@ -464,36 +430,8 @@ struct SmartMixCard: View {
     }
 
     /// Four covers in a grid when we have them, else the mix's own colours.
-    @ViewBuilder
     private var cover: some View {
-        ZStack {
-            LinearGradient(colors: mix.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-
-            if covers.count >= 4 {
-                let half = side / 2
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        RemoteImage(url: covers[0]).frame(width: half, height: half).clipped()
-                        RemoteImage(url: covers[1]).frame(width: half, height: half).clipped()
-                    }
-                    HStack(spacing: 0) {
-                        RemoteImage(url: covers[2]).frame(width: half, height: half).clipped()
-                        RemoteImage(url: covers[3]).frame(width: half, height: half).clipped()
-                    }
-                }
-            } else if let first = covers.first {
-                RemoteImage(url: first).frame(width: side, height: side).clipped()
-            }
-
-            // A wash so the glyph always reads over whatever art landed here.
-            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.55)],
-                           startPoint: .top, endPoint: .bottom)
-
-            Image(systemName: mix.systemImage)
-                .font(.system(size: side * 0.24, weight: .semibold))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
-        }
+        SmartMixArtwork(mix: mix, side: side, covers: covers)
     }
 
     private var titleFont: Font {
