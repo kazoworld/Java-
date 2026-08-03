@@ -25,30 +25,34 @@ final class MusicHomeViewModel {
             && playlists.isEmpty && heartedSongs.isEmpty
     }
 
-    /// Only real albums belong in the album shelves: two or more tracks. A single
-    /// song carries its parent album's name in its metadata, so the server
-    /// happily creates a one-track "album" for it — that's what floods the shelf.
+    /// Only full-length releases belong on the album shelves — see
+    /// `MediaItem.albumTrackThreshold`. A single song carries its parent album's
+    /// name in its metadata, so the server happily creates a one-track "album"
+    /// for it; that's what floods the shelf.
     ///
-    /// A count of exactly 1 means single. Anything else — nil, or a 0 some
-    /// servers return instead of a real figure — is UNKNOWN and stays with the
-    /// albums, because filtering on a number the server never really provided is
-    /// how the shelves ended up empty.
-    private func isSingle(_ item: MediaItem) -> Bool { item.trackCount == 1 }
-
-    private func fullAlbums(_ items: [MediaItem]) -> [MediaItem] {
-        items.filter { !isSingle($0) }
+    /// Unknown counts (nil, or the 0 some servers send instead of a real figure)
+    /// stay with the albums — filtering on a number we never really got is what
+    /// emptied the shelves.
+    private func isShortRelease(_ item: MediaItem) -> Bool {
+        guard let kind = item.releaseKind else { return false }
+        return !kind.isAlbum
     }
 
-    private func singles(_ items: [MediaItem]) -> [MediaItem] {
-        items.filter { isSingle($0) }
+    private func fullAlbums(_ items: [MediaItem]) -> [MediaItem] {
+        items.filter { !isShortRelease($0) }
+    }
+
+    private func shortReleases(_ items: [MediaItem]) -> [MediaItem] {
+        items.filter { isShortRelease($0) }
     }
 
     var recentFullAlbums: [MediaItem] { fullAlbums(recentAlbums) }
     var albumShelf: [MediaItem] { fullAlbums(allAlbums) }
-    /// Every one-track release across what we loaded, de-duplicated.
+    /// Every single and EP across what we loaded, de-duplicated.
     var singlesShelf: [MediaItem] {
         var seen = Set<String>()
-        return (singles(recentAlbums) + singles(allAlbums)).filter { seen.insert($0.id).inserted }
+        return (shortReleases(recentAlbums) + shortReleases(allAlbums))
+            .filter { seen.insert($0.id).inserted }
     }
 
     func load(source: MusicSource) async {
@@ -501,11 +505,12 @@ struct AlbumCard: View {
         .animation(.smooth(duration: 0.2), value: isFocused)
     }
 
-    /// Artist normally; "Single · Artist" when the release is one track.
+    /// Artist normally; "Single · Artist" or "EP · Artist" when the release is
+    /// too short to be a full record.
     private var albumSubtitle: String {
         let base = album.artistText ?? album.productionYear.map(String.init)
-        guard album.releaseKind == .single else { return base ?? " " }
-        return base.map { "Single · \($0)" } ?? "Single"
+        guard let kind = album.releaseKind, !kind.isAlbum else { return base ?? " " }
+        return base.map { "\(kind.label) · \($0)" } ?? kind.label
     }
 
     private var artURL: URL? {

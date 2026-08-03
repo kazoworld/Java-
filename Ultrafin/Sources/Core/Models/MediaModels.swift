@@ -187,12 +187,17 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     /// How many songs a release holds, when the server reports it.
     var trackCount: Int? { childCount }
 
-    /// A one-track release is a single, not an album. Two or more makes it an
-    /// album. Without a count from the server we can't tell, so we say nothing
-    /// rather than guess.
+    /// How many tracks a release needs before it counts as an album. Below this
+    /// it's a single or an EP — a song filed under its parent album's name
+    /// shouldn't stand alongside real records.
+    static let albumTrackThreshold = 5
+
+    /// Single / EP / album. Without a real count from the server we say nothing
+    /// rather than guess — a nil (or the 0 some servers send in place of a
+    /// figure) must not be mistaken for "no tracks".
     var releaseKind: ReleaseKind? {
-        guard type == .musicAlbum, let count = trackCount else { return nil }
-        return count <= 1 ? .single : .album
+        guard type == .musicAlbum, let count = trackCount, count > 0 else { return nil }
+        return ReleaseKind(trackCount: count)
     }
 }
 
@@ -230,11 +235,29 @@ extension MediaItem {
     }
 }
 
-/// Album vs. single, so a one-song release never masquerades as a full record.
+/// Album vs. EP vs. single, so a short release never masquerades as a full
+/// record.
 enum ReleaseKind: String, Sendable {
-    case single, album
+    case single, ep, album
 
-    var label: String { self == .single ? "Single" : "Album" }
+    init(trackCount: Int) {
+        switch trackCount {
+        case ..<2: self = .single
+        case ..<MediaItem.albumTrackThreshold: self = .ep
+        default: self = .album
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .single: "Single"
+        case .ep: "EP"
+        case .album: "Album"
+        }
+    }
+
+    /// Only a full-length release belongs on an album shelf.
+    var isAlbum: Bool { self == .album }
 }
 
 /// A cast or crew member attached to an item.

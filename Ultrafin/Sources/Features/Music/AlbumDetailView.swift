@@ -423,11 +423,11 @@ struct AlbumDetailView: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// Single vs album, preferring the tracks we actually loaded over the
+    /// Single vs EP vs album, preferring the tracks we actually loaded over the
     /// server's count (which can be stale or absent).
     private var releaseKind: ReleaseKind? {
         guard container.type != .playlist else { return nil }
-        if !tracks.isEmpty { return tracks.count <= 1 ? .single : .album }
+        if !tracks.isEmpty { return ReleaseKind(trackCount: tracks.count) }
         return container.releaseKind
     }
 
@@ -435,6 +435,7 @@ struct AlbumDetailView: View {
     /// A single says only its length; "Single · 1 song" reads as a stutter.
     private var metaLine: String? {
         guard !tracks.isEmpty else { return nil }
+        // A single says only its length; "Single · 1 song" reads as a stutter.
         if releaseKind == .single { return totalDurationText }
         let count = tracks.count
         let songs = "\(count) song\(count == 1 ? "" : "s")"

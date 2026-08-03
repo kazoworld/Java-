@@ -44,7 +44,8 @@ final class MusicLibraryViewModel {
     /// some servers return in place of a real figure) is unknown and stays,
     /// since filtering on a number we never got is what emptied these lists.
     private func realAlbums(_ items: [MediaItem]) -> [MediaItem] {
-        items.filter { $0.trackCount != 1 }
+        // No reported count means unknown, and unknown stays — see MediaItem.
+        items.filter { $0.releaseKind?.isAlbum ?? true }
     }
 
     func load(source: MusicSource) async {
