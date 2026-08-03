@@ -23,11 +23,11 @@ enum UltrafinColors {
     static var separator: Color { dynamicAlpha(light: (0x000000, 0.10), dark: (0xFFFFFF, 0.10)) }
 
     /// Default accent; the live accent is resolved through `SettingsStore.theme`.
-    static var accent: Color { AccentColor.aurora.color }
+    static var accent: Color { AccentColor.ultrafinRed.color }
 
     static var accentGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: 0x6D8BFF), Color(hex: 0xB56DFF)],
+            colors: [Color(hex: 0xFA2D48), Color(hex: 0xFF5E6E)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
