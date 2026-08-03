@@ -510,7 +510,7 @@ actor JellyfinClient {
         try await get([MediaItem].self, path: "/Users/\(userID)/Items/Latest", query: [
             .init(name: "limit", value: "24"),
             .init(name: "includeItemTypes", value: "MusicAlbum"),
-            // ChildCount tells us a one-track release is a single, not an album.
+            // ChildCount is what separates a single or EP from a real album.
             .init(name: "fields", value: "ChildCount")
         ])
     }
