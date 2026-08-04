@@ -40,12 +40,23 @@ struct AlbumDetailView: View {
             .padding(.vertical, Spacing.xl)
             .frame(maxWidth: contentMaxWidth)
             .frame(maxWidth: .infinity)
+            #if os(iOS)
+            // Clear the mini player and the floating tab bar — the last songs
+            // were sitting underneath both.
+            .padding(.bottom, 110)
+            #endif
         }
         .background(AlbumBackdrop(color: artColor))
         .environment(\.colorScheme, .dark)
         #if os(iOS)
-        .navigationTitle(container.name)
+        // No title in the bar and no material behind it: the record's own wash
+        // runs edge to edge, and the back button floats over it as a glass
+        // circle. Repeating the album name above its own cover was the busiest
+        // thing on the page.
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { albumMenu } }
         .adaptsChromeOnScroll()
         #endif
         .tvPopsOnMenu()
@@ -73,17 +84,15 @@ struct AlbumDetailView: View {
     }
 
     #if os(iOS)
-    /// iPhone: the Apple Music album layout — centered cover, title, artist, a
-    /// quiet "year · format · length" line, then Shuffle / Play / Heart.
+    /// iPhone: cover in a white frame, then title, artist and a quiet
+    /// "kind · genre · year · format" line, then Shuffle / Play / Heart. Nothing
+    /// else — downloading and queueing live in the "…" menu up in the bar, which
+    /// is what keeps this block as calm as the reference.
     private var phoneHeader: some View {
         VStack(spacing: Spacing.lg) {
-            RemoteImage(url: artURL)
-                .frame(width: artSide, height: artSide)
-                .clipShape(RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous))
-                .specularRim(cornerRadius: Spacing.cornerRadius, intensity: 0.7)
-                .shadow(color: .black.opacity(0.5), radius: 30, y: 16)
+            albumCover
 
-            VStack(spacing: 5) {
+            VStack(spacing: 4) {
                 HStack(spacing: 6) {
                     Text(container.name)
                         .font(.system(size: titleSize, weight: .bold))
@@ -94,17 +103,18 @@ struct AlbumDetailView: View {
                 }
                 if let artist = container.artistText, !artist.isEmpty {
                     Text(artist)
-                        .font(.system(size: titleSize * 0.88, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
+                        .font(.system(size: titleSize * 0.85, weight: .regular))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
+                        .multilineTextAlignment(.center)
                 }
-                // "2012 · FLAC · 12 songs · 48 min" — the quiet detail line.
                 if let detail = detailLine {
                     Text(detail)
-                        .font(.system(size: titleSize * 0.6, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .font(.system(size: titleSize * 0.58, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.5))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.75)
+                        .padding(.top, 2)
                 }
             }
 
@@ -118,60 +128,95 @@ struct AlbumDetailView: View {
                              label: isFavorite ? "Remove from Favorites" : "Add to Favorites",
                              tint: isFavorite ? .red : .white) { toggleFavorite() }
             }
-            .padding(.top, Spacing.xs)
-
-            downloadButton
+            .padding(.top, Spacing.sm)
         }
         .frame(maxWidth: .infinity)
     }
 
+    /// The cover, matted in white like a print in a frame — the detail that
+    /// makes the artwork sit *on* the page rather than in it.
+    private var albumCover: some View {
+        RemoteImage(url: artURL)
+            .frame(width: artSide, height: artSide)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .padding(matWidth)
+            .background(
+                RoundedRectangle(cornerRadius: 6 + matWidth, style: .continuous)
+                    .fill(.white)
+            )
+            .shadow(color: .black.opacity(0.45), radius: 26, y: 14)
+    }
+
+    private var matWidth: CGFloat { 9 }
+
+    /// The bar's "…": everything that isn't Play, Shuffle or the heart.
+    private var albumMenu: some View {
+        Menu {
+            Button {
+                guard let source = appState.musicSource, !tracks.isEmpty else { return }
+                player.addToQueue(tracks: tracks, source: source)
+                Haptics.play(.success)
+            } label: { Label("Add to Queue", systemImage: "text.append") }
+
+            Button {
+                guard let source = appState.musicSource, !tracks.isEmpty else { return }
+                player.play(tracks: tracks, startAt: 0, source: source,
+                            shuffled: true, context: container.name)
+            } label: { Label("Shuffle", systemImage: "shuffle") }
+
+            if let artist = container.artistDestination {
+                Divider()
+                NavigationLink(value: artist) {
+                    Label("Go to Artist", systemImage: "music.mic")
+                }
+            }
+
+            if MusicLibraryCache.isSupported && !tracks.isEmpty {
+                Divider()
+                downloadMenuItem
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+    }
+
     /// Keep this album on the device — or, once it's here, remove it again.
     @ViewBuilder
-    private var downloadButton: some View {
-        if MusicLibraryCache.isSupported && !tracks.isEmpty {
-            let state = downloadState
-            Button {
-                Haptics.play(.selection)
-                switch state {
-                case .downloaded:
-                    for track in tracks { downloads.remove(track.id) }
-                case .idle, .partial:
-                    guard let source = appState.musicSource else { return }
-                    Task {
-                        await downloads.store(tracks: tracks, source: source,
-                                              label: "Downloading \(container.name)",
-                                              albumTotal: tracks.count)
-                    }
-                case .working:
-                    break
-                }
+    private var downloadMenuItem: some View {
+        switch downloadState {
+        case .working:
+            Label("Downloading…", systemImage: "arrow.down.circle.dotted")
+                .foregroundStyle(.secondary)
+        case .downloaded:
+            Button(role: .destructive) {
+                for track in tracks { downloads.remove(track.id) }
             } label: {
-                HStack(spacing: 7) {
-                    switch state {
-                    case .working:
-                        ProgressView().controlSize(.small).tint(.white)
-                        Text("Downloading…")
-                    case .downloaded:
-                        Image(systemName: "checkmark.circle.fill")
-                        Text(tracks.count == 1 ? "Single Downloaded" : "Album Downloaded")
-                    case .partial:
-                        Image(systemName: "arrow.down.circle.dotted")
-                        // Say plainly that only part of the record is here.
-                        Text("Get the rest · \(storedHere) of \(tracks.count)")
-                    case .idle:
-                        Image(systemName: "arrow.down.circle")
-                        Text(tracks.count == 1 ? "Download Single" : "Download Album")
-                    }
-                }
-                .font(.system(size: pillFont * 0.86, weight: .semibold, design: .rounded))
-                .foregroundStyle(state == .downloaded ? .white.opacity(0.75) : .white)
-                .padding(.horizontal, Spacing.lg)
-                .padding(.vertical, Spacing.sm)
-                .glassCapsule(dim: 0.1)
+                Label(tracks.count == 1 ? "Remove Download" : "Remove Album Download",
+                      systemImage: "trash")
             }
-            .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
-            .disabled(state == .working)
-            .animation(.smooth(duration: 0.25), value: state)
+        case .partial:
+            Button { downloadAll() } label: {
+                // Say plainly that only part of the record is here.
+                Label("Get the Rest · \(storedHere) of \(tracks.count)",
+                      systemImage: "arrow.down.circle.dotted")
+            }
+        case .idle:
+            Button { downloadAll() } label: {
+                Label(tracks.count == 1 ? "Download Single" : "Download Album",
+                      systemImage: "arrow.down.circle")
+            }
+        }
+    }
+
+    private func downloadAll() {
+        guard let source = appState.musicSource else { return }
+        Haptics.play(.selection)
+        Task {
+            await downloads.store(tracks: tracks, source: source,
+                                  label: "Downloading \(container.name)",
+                                  albumTotal: tracks.count)
         }
     }
 
@@ -303,17 +348,25 @@ struct AlbumDetailView: View {
                 .foregroundStyle(UltrafinColors.secondaryText)
         } else {
             LazyVStack(spacing: 0) {
-                ForEach(Array(tracks.enumerated()), id: \.element.id) { position, track in
+                ForEach(Array(tracks.enumerated()), id: \.offset) { position, track in
                     HStack(spacing: 0) {
                         Button {
                             guard let source = appState.musicSource else { return }
                             Haptics.play(.selection)
-                            player.play(tracks: tracks, startAt: position, source: source)
+                            player.play(tracks: tracks, startAt: position,
+                                        source: source, context: container.name)
                         } label: {
+                            #if os(iOS)
+                            AlbumTrackRow(track: track,
+                                          position: position + 1,
+                                          isCurrent: player.currentTrack?.id == track.id,
+                                          showsArt: container.type == .playlist)
+                            #else
                             TrackRow(track: track,
                                      position: position + 1,
                                      isCurrent: player.currentTrack?.id == track.id,
                                      showsArt: container.type == .playlist)
+                            #endif
                         }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.01, lift: false))
 
@@ -322,13 +375,13 @@ struct AlbumDetailView: View {
                         #endif
                     }
                     #if os(iOS)
-                    // Hairline separators between songs, inset past the number
-                    // column — the Apple Music track list rhythm.
+                    // Hairline separators between songs, inset to where the title
+                    // starts and running out to the edge — the Apple Music rhythm.
                     if position < tracks.count - 1 {
                         Rectangle()
-                            .fill(.white.opacity(0.09))
-                            .frame(height: 1)
-                            .padding(.leading, Spacing.xxl)
+                            .fill(.white.opacity(0.12))
+                            .frame(height: 0.5)
+                            .padding(.leading, AlbumTrackRow.titleInset)
                     }
                     #endif
                 }
@@ -342,18 +395,21 @@ struct AlbumDetailView: View {
         Menu {
             Button {
                 guard let source = appState.musicSource else { return }
-                player.play(tracks: tracks, startAt: position, source: source)
+                player.play(tracks: tracks, startAt: position,
+                            source: source, context: container.name)
             } label: { Label("Play", systemImage: "play.fill") }
 
             Button {
                 guard let source = appState.musicSource else { return }
+                Haptics.play(.success)
                 player.playNext(track, source: source)
             } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
 
             Button {
                 guard let source = appState.musicSource else { return }
-                player.playLater(track, source: source)
-            } label: { Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward") }
+                Haptics.play(.success)
+                player.addToQueue(track, source: source)
+            } label: { Label("Add to Queue", systemImage: "text.append") }
 
             Divider()
 
@@ -395,7 +451,8 @@ struct AlbumDetailView: View {
 
     private func start(shuffled: Bool) {
         guard let source = appState.musicSource, !tracks.isEmpty else { return }
-        player.play(tracks: tracks, startAt: 0, source: source, shuffled: shuffled)
+        player.play(tracks: tracks, startAt: 0, source: source,
+                    shuffled: shuffled, context: container.name)
     }
 
     // MARK: - Helpers
@@ -407,8 +464,12 @@ struct AlbumDetailView: View {
             .joined(separator: " · ")
     }
 
-    /// "Single · 2012 · FLAC · 3 min" — what kind of release it is comes first,
-    /// so a one-song release is never mistaken for a full album.
+    /// "Album · Hip Hop · 2017 · FLAC" — what kind of release it is, then where
+    /// it sits and how it sounds.
+    ///
+    /// The song count and total length used to live here too; they made the line
+    /// long enough to shrink, and the list right below already answers both. What
+    /// stays is what you can't see anywhere else on the page.
     private var detailLine: String? {
         var parts: [String] = []
         if container.type == .playlist {
@@ -416,10 +477,12 @@ struct AlbumDetailView: View {
         } else if let kind = releaseKind {
             parts.append(kind.label)
         }
+        if let genre = container.genres?.first ?? tracks.first?.genres?.first {
+            parts.append(genre)
+        }
         if let year = container.productionYear { parts.append(String(year)) }
         // Quality comes off the tracks (the album itself has no container).
         if let format = tracks.first?.formatBadge { parts.append(format) }
-        if let meta = metaLine { parts.append(meta) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -478,7 +541,7 @@ struct AlbumDetailView: View {
         #if os(tvOS)
         44
         #else
-        24
+        26
         #endif
     }
     private var pillFont: CGFloat {
@@ -503,6 +566,71 @@ struct AlbumDetailView: View {
         #endif
     }
 }
+
+#if os(iOS)
+/// One song on an album page: track number, title, and nothing else.
+///
+/// No artist line (every song on a record shares one) and no duration — a
+/// column of times turns a track list into a spreadsheet. The song that's
+/// playing swaps its number for a bar glyph, which is all the marking it needs.
+struct AlbumTrackRow: View {
+    @Environment(AppState.self) private var appState
+    @Environment(SettingsStore.self) private var settings
+
+    let track: MediaItem
+    let position: Int
+    let isCurrent: Bool
+    /// Playlists mix artists, so they show artwork and a credit; albums don't.
+    var showsArt: Bool = false
+
+    /// Where the title starts — the separators line up with it.
+    static let titleInset: CGFloat = 44
+
+    var body: some View {
+        HStack(spacing: 0) {
+            leading
+                .frame(width: Self.titleInset, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 5) {
+                    Text(track.name)
+                        .font(.system(size: 17))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    if track.isExplicit { ExplicitBadge(size: 12) }
+                }
+                if showsArt, let artist = track.artistText {
+                    Text(artist)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: Spacing.sm)
+        }
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var leading: some View {
+        if showsArt {
+            RemoteImage(url: appState.musicSource?.artworkURL(for: track, maxWidth: 120))
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        } else if isCurrent {
+            Image(systemName: "waveform")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(settings.theme.accent.color)
+        } else {
+            Text("\(position)")
+                .font(.system(size: 16))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.45))
+        }
+    }
+}
+#endif
 
 /// One song in a track list: number (or art for playlists), title/artist,
 /// duration — with the current song lit in the accent.

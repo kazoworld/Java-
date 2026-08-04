@@ -549,7 +549,9 @@ actor JellyfinClient {
         try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
             .init(name: "ParentId", value: albumID),
             .init(name: "IncludeItemTypes", value: "Audio"),
-            .init(name: "SortBy", value: "ParentIndexNumber,IndexNumber,SortName")
+            .init(name: "SortBy", value: "ParentIndexNumber,IndexNumber,SortName"),
+            // Genres aren't sent by default, and the album header leads with one.
+            .init(name: "Fields", value: "Genres")
         ]).items
     }
 

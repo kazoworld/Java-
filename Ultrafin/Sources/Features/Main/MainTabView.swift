@@ -140,13 +140,18 @@ struct MainTabView: View {
         }
         #endif
         .animation(.smooth(duration: 0.35), value: music.hasQueue)
-        // Starting a fresh listening session opens the full-screen player
-        // automatically — the carousel is the default look, and on tvOS this
-        // also sidesteps the focus engine ever having to reach the mini bar to
-        // begin controlling playback.
+        #if os(tvOS)
+        // On the TV a new session opens the full-screen carousel: it's the
+        // default look there, and it saves the focus engine from having to
+        // reach the mini bar before you can control anything.
+        //
+        // On the phone it deliberately does NOT. Tapping a song should leave you
+        // where you were, browsing, with the mini player picking up at the
+        // bottom — the player opens when you ask for it.
         .onChange(of: music.sessionStamp) { _, stamp in
             if stamp > 0 { showNowPlaying = true }
         }
+        #endif
         .fullScreenCoverCompat(isPresented: $showNowPlaying) {
             NowPlayingMusicView(player: music) { destination in
                 // Tapping the album/artist in the player opens that page in the

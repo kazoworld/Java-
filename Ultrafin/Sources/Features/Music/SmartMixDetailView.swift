@@ -118,7 +118,8 @@ struct SmartMixDetailView: View {
                     Button {
                         guard let source = appState.musicSource else { return }
                         Haptics.play(.selection)
-                        player.play(tracks: tracks, startAt: position, source: source)
+                        player.play(tracks: tracks, startAt: position, source: source,
+                                    context: mix.title)
                     } label: {
                         TrackRow(track: track, position: position + 1,
                                  isCurrent: player.currentTrack?.id == track.id,
@@ -135,7 +136,8 @@ struct SmartMixDetailView: View {
 
     private func start(shuffled: Bool) {
         guard let source = appState.musicSource, !tracks.isEmpty else { return }
-        player.play(tracks: tracks, startAt: 0, source: source, shuffled: shuffled)
+        player.play(tracks: tracks, startAt: 0, source: source,
+                    shuffled: shuffled, context: mix.title)
     }
 
     // MARK: - Metrics

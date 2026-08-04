@@ -2,6 +2,26 @@ import SwiftUI
 import AVFoundation
 import Observation
 
+/// One slot in the play queue.
+///
+/// Identity is per-slot, not per-song, so the same track can legitimately sit
+/// in the queue more than once — a playlist that repeats a song, or the same
+/// song queued twice by hand — and dragging a row moves the row you grabbed
+/// rather than the first one that happens to share its id.
+struct QueueEntry: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let track: MediaItem
+    /// Added by hand rather than coming from the album or playlist being
+    /// played. Hand-picked songs jump ahead of the record and drain as they go.
+    var isManual: Bool
+
+    init(_ track: MediaItem, isManual: Bool = false) {
+        self.id = UUID()
+        self.track = track
+        self.isManual = isManual
+    }
+}
+
 /// The app-wide music engine: one queue, one player, alive across every tab.
 ///
 /// Handles the whole listening session — queue with shuffle and repeat,
@@ -25,7 +45,7 @@ final class MusicPlayer {
 
     // MARK: - Published state
 
-    private(set) var queue: [MediaItem] = []
+    private(set) var queue: [QueueEntry] = []
     private(set) var index = 0
     private(set) var isPlaying = false
     private(set) var currentTime: Double = 0
@@ -36,13 +56,36 @@ final class MusicPlayer {
     /// Bumps every time a NEW listening session starts (not on track changes),
     /// so the UI can auto-present the full-screen player.
     private(set) var sessionStamp = 0
+    /// What the queue is playing from — "American Teen", "On Repeat". The queue
+    /// sheet labels the tail "Next from …" so it's always clear where the songs
+    /// after your hand-picked ones are coming from.
+    private(set) var contextTitle: String?
 
-    var currentTrack: MediaItem? { queue.indices.contains(index) ? queue[index] : nil }
+    var currentEntry: QueueEntry? { queue.indices.contains(index) ? queue[index] : nil }
+    var currentTrack: MediaItem? { currentEntry?.track }
     /// The backend the current queue streams from — views need it to favorite
     /// the playing song without re-deriving the source.
     var activeSource: MusicSource? { source }
     var hasQueue: Bool { !queue.isEmpty }
     var progress: Double { duration > 0 ? currentTime / duration : 0 }
+
+    // MARK: - Up next
+
+    /// Everything still to play. What's behind the playhead stays in the queue
+    /// so Back keeps working, but it's history — no screen shows it.
+    var upcoming: [QueueEntry] {
+        guard queue.indices.contains(index) else { return [] }
+        return Array(queue[(index + 1)...])
+    }
+
+    var upNext: [MediaItem] { upcoming.map(\.track) }
+
+    /// Songs added by hand. They sit directly after the current one and play
+    /// before the record resumes — Spotify's "Next in queue".
+    var manualUpNext: [QueueEntry] { upcoming.filter(\.isManual) }
+
+    /// The rest of the album, playlist or mix the session started from.
+    var contextUpNext: [QueueEntry] { upcoming.filter { !$0.isManual } }
 
     /// The lyric line the song is currently on (synced lyrics only). Stored and
     /// refreshed once per playback tick — a computed scan here made the lyrics
@@ -54,7 +97,7 @@ final class MusicPlayer {
     private let player = AVPlayer()
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
-    private var originalQueue: [MediaItem] = []
+    private var originalQueue: [QueueEntry] = []
     /// The backend the current queue streams from (Jellyfin or Navidrome) —
     /// captured at play time so a source switch in Settings never strands a
     /// half-played queue against the wrong server.
@@ -84,22 +127,25 @@ final class MusicPlayer {
 
     // MARK: - Session
 
-    /// Starts a fresh listening session from a list of songs.
+    /// Starts a fresh listening session from a list of songs. `context` names
+    /// where they came from, for the queue sheet's "Next from …" heading.
     func play(tracks: [MediaItem], startAt startIndex: Int = 0,
-              source: MusicSource, shuffled: Bool = false) {
+              source: MusicSource, shuffled: Bool = false, context: String? = nil) {
         self.source = source
+        contextTitle = context
         sessionStamp += 1
-        originalQueue = tracks
+        let entries = tracks.map { QueueEntry($0) }
+        originalQueue = entries
         shuffleOn = shuffled
         if shuffled {
-            var rest = tracks
+            var rest = entries
             let first = rest.indices.contains(startIndex) ? rest.remove(at: startIndex) : nil
             rest.shuffle()
             queue = (first.map { [$0] } ?? []) + rest
             index = 0
         } else {
-            queue = tracks
-            index = min(max(0, startIndex), max(0, tracks.count - 1))
+            queue = entries
+            index = min(max(0, startIndex), max(0, entries.count - 1))
         }
         configureRemote()
         loadCurrent(autoplay: true)
@@ -163,6 +209,7 @@ final class MusicPlayer {
             pushNowPlaying()
             return
         }
+        retireManual()
         loadCurrent(autoplay: true)
     }
 
@@ -179,25 +226,48 @@ final class MusicPlayer {
         loadCurrent(autoplay: true)
     }
 
-    /// Jump straight to a song in the visible queue.
-    func jump(to track: MediaItem) {
-        guard let target = queue.firstIndex(where: { $0.id == track.id }) else { return }
+    /// Jump straight to a slot in the queue.
+    func jump(to entry: QueueEntry) {
+        guard let target = queue.firstIndex(where: { $0.id == entry.id }) else { return }
         reportStopped()
         index = target
+        retireManual()
         loadCurrent(autoplay: true)
+    }
+
+    /// A hand-picked song stops being "next in queue" once it's had its turn. It
+    /// stays in the list so Back still reaches it, but the queue sheet only ever
+    /// shows what's still to come — so it reads as drained, like Spotify's.
+    private func retireManual() {
+        for i in queue.indices where i <= index && queue[i].isManual {
+            queue[i].isManual = false
+        }
     }
 
     func toggleShuffle() {
         shuffleOn.toggle()
-        guard let current = currentTrack else { return }
+        guard let current = currentEntry else { return }
+        // Hand-picked songs are a promise: they keep their place at the head of
+        // what's next either way. Only the record itself gets shuffled.
+        let manual = manualUpNext
         if shuffleOn {
-            var rest = queue.filter { $0.id != current.id }
+            var rest = queue.filter { $0.id != current.id && !$0.isManual }
             rest.shuffle()
-            queue = [current] + rest
+            queue = [current] + manual + rest
             index = 0
         } else {
-            queue = originalQueue
-            index = queue.firstIndex(where: { $0.id == current.id }) ?? 0
+            var restored = originalQueue
+            var at = restored.firstIndex(where: { $0.id == current.id })
+            if at == nil {
+                // The playing song was queued by hand, so it was never part of
+                // the record — it stays at the head of what's left.
+                restored.insert(current, at: 0)
+                at = 0
+            }
+            let resume = at ?? 0
+            restored.insert(contentsOf: manual, at: min(resume + 1, restored.count))
+            queue = restored
+            index = resume
         }
     }
 
@@ -206,39 +276,83 @@ final class MusicPlayer {
         repeatMode = all[(all.firstIndex(of: repeatMode)! + 1) % all.count]
     }
 
-    /// Slot a song in right after the current one ("Play Next"). If nothing is
+    /// Slot a song in right ahead of everything ("Play Next"). If nothing is
     /// playing, it just starts.
     func playNext(_ track: MediaItem, source: MusicSource) {
         guard hasQueue else {
             play(tracks: [track], source: source)
             return
         }
-        // Pulling an earlier copy out shifts the playing track's index — keep
-        // `index` pointing at the same song so playback doesn't jump.
-        if let existing = queue.firstIndex(where: { $0.id == track.id }) {
-            guard existing != index else { return } // already the current song
-            queue.remove(at: existing)
-            if existing < index { index -= 1 }
-        }
-        queue.insert(track, at: min(index + 1, queue.count))
+        queue.insert(QueueEntry(track, isManual: true), at: min(index + 1, queue.count))
     }
 
-    /// Add a song to the end of the queue.
-    func playLater(_ track: MediaItem, source: MusicSource) {
+    /// "Add to Queue": the song joins the end of the hand-picked block, so it
+    /// plays after anything already queued but still before the record resumes.
+    /// Adding the same song twice is allowed — that's what a queue is for.
+    func addToQueue(_ track: MediaItem, source: MusicSource) {
         guard hasQueue else {
             play(tracks: [track], source: source)
             return
         }
-        guard !queue.contains(where: { $0.id == track.id }) else { return }
-        queue.append(track)
+        var at = index + 1
+        while at < queue.count, queue[at].isManual { at += 1 }
+        queue.insert(QueueEntry(track, isManual: true), at: at)
     }
 
-    /// Reorder the up-next portion of the queue (from the queue sheet).
-    func moveQueueItems(from source: IndexSet, to destination: Int) {
-        queue.move(fromOffsets: source, toOffset: destination)
-        if let current = currentTrack, let i = queue.firstIndex(where: { $0.id == current.id }) {
-            index = i
+    /// Queue a whole record or playlist at once, in order.
+    func addToQueue(tracks: [MediaItem], source: MusicSource) {
+        guard hasQueue else {
+            play(tracks: tracks, source: source)
+            return
         }
+        for track in tracks { addToQueue(track, source: source) }
+    }
+
+    /// Drop a song from what's coming up. The one playing can't be removed —
+    /// that's what Next is for.
+    func remove(_ entry: QueueEntry) {
+        guard let at = queue.firstIndex(where: { $0.id == entry.id }), at != index else { return }
+        queue.remove(at: at)
+        if at < index { index -= 1 }
+    }
+
+    /// Empty everything still to come, leaving the song that's playing.
+    func clearUpNext() {
+        guard queue.indices.contains(index), index + 1 < queue.count else { return }
+        queue.removeSubrange((index + 1)...)
+    }
+
+    /// Reorder the hand-picked block. Offsets come from the queue sheet's own
+    /// section, so they're relative to that block, not the whole queue.
+    func moveManual(from offsets: IndexSet, to destination: Int) {
+        moveSlice(offsets, to: destination, in: upcomingBlock(manual: true))
+    }
+
+    /// Reorder the rest of the record, below the hand-picked block.
+    func moveContext(from offsets: IndexSet, to destination: Int) {
+        moveSlice(offsets, to: destination, in: upcomingBlock(manual: false))
+    }
+
+    /// Where one of the two up-next blocks actually sits in the queue.
+    ///
+    /// Normally each block is a single run, but stepping BACK past a song that
+    /// was queued by hand leaves a retired entry sitting among the ones still
+    /// waiting, which splits the run. Rather than reorder the wrong rows on a
+    /// guessed offset, this returns nil and the drag simply does nothing.
+    private func upcomingBlock(manual: Bool) -> Range<Int>? {
+        let start = index + 1
+        guard start <= queue.count else { return nil }
+        let matches = queue[start...].indices.filter { queue[$0].isManual == manual }
+        guard let first = matches.first, let last = matches.last,
+              last - first + 1 == matches.count else { return nil }
+        return first ..< (last + 1)
+    }
+
+    private func moveSlice(_ offsets: IndexSet, to destination: Int, in range: Range<Int>?) {
+        guard let range, !range.isEmpty, range.upperBound <= queue.count else { return }
+        var slice = Array(queue[range])
+        slice.move(fromOffsets: offsets, toOffset: destination)
+        queue.replaceSubrange(range, with: slice)
     }
 
     /// Stop everything and clear the session (mini-player's ✕).
@@ -253,6 +367,7 @@ final class MusicPlayer {
         duration = 0
         lyrics = []
         artworkImage = nil
+        contextTitle = nil
         nowPlaying.clear()
     }
 

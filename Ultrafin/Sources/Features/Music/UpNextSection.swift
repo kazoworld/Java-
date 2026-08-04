@@ -88,8 +88,8 @@ struct UpNextSection: View {
 
             Button {
                 guard let source = appState.musicSource else { return }
-                MusicPlayer.shared.playLater(song, source: source)
-            } label: { Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward") }
+                MusicPlayer.shared.addToQueue(song, source: source)
+            } label: { Label("Add to Queue", systemImage: "text.append") }
 
             if let album = song.albumDestination {
                 Divider()

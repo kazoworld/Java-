@@ -26,16 +26,21 @@ struct AlbumBackdrop: View {
             UltrafinColors.background
 
             if let color {
+                // The record's colour, held rich through the top two thirds
+                // before it settles into black behind the track list. The old
+                // ramp gave the colour up by a third of the way down, which read
+                // as a grey page with a tint rather than a page made of the
+                // artwork.
                 LinearGradient(stops: [
-                    .init(color: color.shade(brightness: 0.5, saturation: 0.42), location: 0.0),
-                    .init(color: color.shade(brightness: 0.34, saturation: 0.38), location: 0.32),
-                    .init(color: color.shade(brightness: 0.16, saturation: 0.3), location: 0.62),
-                    .init(color: .black.opacity(0.96), location: 1.0)
+                    .init(color: color.shade(brightness: 0.62, saturation: 0.52), location: 0.0),
+                    .init(color: color.shade(brightness: 0.52, saturation: 0.5), location: 0.34),
+                    .init(color: color.shade(brightness: 0.3, saturation: 0.42), location: 0.62),
+                    .init(color: .black.opacity(0.97), location: 1.0)
                 ], startPoint: .top, endPoint: .bottom)
 
                 // A soft pool behind the artwork so the cover sits in its own light.
-                RadialGradient(colors: [color.shade(brightness: 0.62, saturation: 0.5).opacity(0.45), .clear],
-                               center: UnitPoint(x: 0.5, y: 0.16), startRadius: 0, endRadius: 420)
+                RadialGradient(colors: [color.shade(brightness: 0.74, saturation: 0.55).opacity(0.5), .clear],
+                               center: UnitPoint(x: 0.5, y: 0.18), startRadius: 0, endRadius: 460)
             }
         }
         .ignoresSafeArea()

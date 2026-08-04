@@ -369,7 +369,7 @@ struct NowPlayingMusicView: View {
     private func queueTrack(at offset: Int) -> MediaItem? {
         let i = player.index + offset
         guard player.queue.indices.contains(i) else { return nil }
-        return player.queue[i]
+        return player.queue[i].track
     }
 
     private func carouselCard(track: MediaItem, offset: Int, side baseSide: CGFloat,
@@ -475,29 +475,120 @@ struct NowPlayingMusicView: View {
         return abs(id - current)
     }
 
+    /// The queue, Spotify's way: what's playing, then the songs you added by
+    /// hand, then the rest of wherever this came from. Both up-next blocks drag
+    /// to reorder and swipe to remove.
     private var queueStage: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 2) {
-                    ForEach(Array(player.queue.enumerated()), id: \.element.id) { position, track in
-                        Button {
-                            player.jump(to: track)
-                        } label: {
-                            TrackRow(track: track,
-                                     position: position + 1,
-                                     isCurrent: player.currentTrack?.id == track.id,
-                                     showsArt: true)
-                        }
-                        .buttonStyle(UltrafinButtonStyle(focusScale: 1.01, lift: false))
-                        .id(track.id)
+        #if os(tvOS)
+        // No edit mode on the TV — the remote can't drag. Focus a row and click
+        // to jump to it.
+        ScrollView(showsIndicators: false) {
+            LazyVStack(spacing: 2) {
+                ForEach(Array(player.queue.enumerated()), id: \.element.id) { position, entry in
+                    Button { player.jump(to: entry) } label: {
+                        TrackRow(track: entry.track,
+                                 position: position + 1,
+                                 isCurrent: entry.id == player.currentEntry?.id,
+                                 showsArt: true)
                     }
+                    .buttonStyle(UltrafinButtonStyle(focusScale: 1.01, lift: false))
                 }
             }
-            .onAppear {
-                if let current = player.currentTrack?.id { proxy.scrollTo(current, anchor: .center) }
+        }
+        #else
+        List {
+            if let current = player.currentEntry {
+                Section {
+                    QueueRow(entry: current, isCurrent: true) {}
+                        .queueRowChrome()
+                        // The song that's playing is not something to drag or
+                        // delete — Next is what moves past it.
+                        .moveDisabled(true)
+                        .deleteDisabled(true)
+                } header: {
+                    queueHeader("Now Playing") { EmptyView() }
+                }
+            }
+
+            if !player.manualUpNext.isEmpty {
+                Section {
+                    ForEach(player.manualUpNext) { entry in
+                        QueueRow(entry: entry, isCurrent: false) { player.jump(to: entry) }
+                            .queueRowChrome()
+                    }
+                    .onMove { player.moveManual(from: $0, to: $1) }
+                    .onDelete { offsets in
+                        let doomed = offsets.map { player.manualUpNext[$0] }
+                        withAnimation(.smooth(duration: 0.25)) {
+                            for entry in doomed { player.remove(entry) }
+                        }
+                    }
+                } header: {
+                    queueHeader("Next in Queue") { clearQueueButton }
+                }
+            }
+
+            if !player.contextUpNext.isEmpty {
+                Section {
+                    ForEach(player.contextUpNext) { entry in
+                        QueueRow(entry: entry, isCurrent: false) { player.jump(to: entry) }
+                            .queueRowChrome()
+                    }
+                    .onMove { player.moveContext(from: $0, to: $1) }
+                    .onDelete { offsets in
+                        let doomed = offsets.map { player.contextUpNext[$0] }
+                        withAnimation(.smooth(duration: 0.25)) {
+                            for entry in doomed { player.remove(entry) }
+                        }
+                    }
+                } header: {
+                    queueHeader(contextHeader) { EmptyView() }
+                }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)
+        // Always-on edit mode so the drag handles are simply there, the way
+        // Spotify's queue works — no "Edit" button to hunt for first.
+        .environment(\.editMode, .constant(.active))
+        #endif
     }
+
+    #if os(iOS)
+    /// "Next From: American Teen" — or a plain heading when the session didn't
+    /// come from anywhere nameable.
+    private var contextHeader: String {
+        guard let title = player.contextTitle, !title.isEmpty else { return "Up Next" }
+        return "Next From: \(title)"
+    }
+
+    private func queueHeader<Trailing: View>(_ title: String,
+                                             @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.55))
+            Spacer(minLength: Spacing.sm)
+            trailing()
+        }
+        .textCase(nil)
+        .listRowInsets(EdgeInsets(top: Spacing.md, leading: 0, bottom: 4, trailing: 0))
+        .listRowBackground(Color.clear)
+    }
+
+    private var clearQueueButton: some View {
+        Button {
+            Haptics.play(.selection)
+            withAnimation(.smooth(duration: 0.25)) { player.clearUpNext() }
+        } label: {
+            Text("Clear")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.75))
+        }
+        .buttonStyle(.plain)
+    }
+    #endif
 
     // MARK: - Info + transport
 
@@ -918,6 +1009,66 @@ struct NowPlayingMusicView: View {
         #else
         isLandscapePhone ? Spacing.xl : 28
         #endif
+    }
+}
+
+/// One song in the queue sheet: artwork, title, artist — and, for the song
+/// that's playing, a live equalizer instead of a tap target.
+struct QueueRow: View {
+    let entry: QueueEntry
+    let isCurrent: Bool
+    let onTap: () -> Void
+
+    private var player: MusicPlayer { .shared }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: Spacing.md) {
+                ZStack {
+                    RemoteImage(url: player.artworkURL(for: entry.track, maxWidth: 160))
+                        .frame(width: 46, height: 46)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    if isCurrent {
+                        // The playing song dims its cover under a bar glyph, so
+                        // the eye lands on it without needing a colour cue.
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(.black.opacity(0.5))
+                            .frame(width: 46, height: 46)
+                        Image(systemName: "waveform")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 5) {
+                        Text(entry.track.name)
+                            .font(.system(size: 16, weight: isCurrent ? .semibold : .regular))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        if entry.track.isExplicit { ExplicitBadge(size: 11) }
+                    }
+                    Text(entry.track.artistText ?? " ")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isCurrent)
+    }
+}
+
+extension View {
+    /// Strips a queue row back to bare content: no separators, no fill, no
+    /// inset — the list has to read as part of the player, not as Settings.
+    func queueRowChrome() -> some View {
+        listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }
 

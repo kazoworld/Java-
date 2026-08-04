@@ -169,8 +169,7 @@ struct MusicHomeView: View {
     /// What's actually coming up: the rest of the play queue when there is one,
     /// otherwise the songs played most recently.
     private var upNextSongs: [MediaItem] {
-        let player = MusicPlayer.shared
-        let queued = Array(player.queue.dropFirst(player.index + 1))
+        let queued = MusicPlayer.shared.upNext
         return queued.isEmpty ? model.recentSongs : queued
     }
 
