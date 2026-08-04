@@ -42,18 +42,11 @@ final class MusicHomeViewModel {
         items.filter { !isShortRelease($0) }
     }
 
-    private func shortReleases(_ items: [MediaItem]) -> [MediaItem] {
-        items.filter { isShortRelease($0) }
-    }
-
-    var recentFullAlbums: [MediaItem] { fullAlbums(recentAlbums) }
+    /// The **Albums** shelf, and only that one. Recently Added shows everything
+    /// new — a shelf answering "what did I just add" that hides half the answer
+    /// is worse than no shelf, and for a library that grows a single at a time
+    /// it was empty outright.
     var albumShelf: [MediaItem] { fullAlbums(allAlbums) }
-    /// Every single and EP across what we loaded, de-duplicated.
-    var singlesShelf: [MediaItem] {
-        var seen = Set<String>()
-        return (shortReleases(recentAlbums) + shortReleases(allAlbums))
-            .filter { seen.insert($0.id).inserted }
-    }
 
     func load(source: MusicSource) async {
         if loadedKind != source.kind {
@@ -120,8 +113,8 @@ struct MusicHomeView: View {
                     if !model.recentlyPlayedAlbums.isEmpty {
                         albumRail(title: "Recently Played", albums: model.recentlyPlayedAlbums)
                     }
-                    if !model.recentFullAlbums.isEmpty {
-                        albumRail(title: "Recently Added", albums: model.recentFullAlbums)
+                    if !model.recentAlbums.isEmpty {
+                        albumRail(title: "Recently Added", albums: model.recentAlbums)
                     }
 
                     if !model.albumShelf.isEmpty {

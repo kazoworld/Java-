@@ -39,10 +39,14 @@ final class MusicLibraryViewModel {
     var isLoading = true
     private var loadedKind: MusicSourceKind?
 
-    /// Real albums only — a one-track release is a single filed under its
-    /// parent album's name. A count of exactly 1 means single; nil (or the 0
-    /// some servers return in place of a real figure) is unknown and stays,
-    /// since filtering on a number we never got is what emptied these lists.
+    /// Real albums only, for the **Albums** section — a short release is a
+    /// single or an EP filed under its parent album's name, and putting those on
+    /// an album shelf is what made it impossible to tell what you actually own.
+    ///
+    /// Recently Added deliberately does NOT use this. "What did I just add" is a
+    /// different question from "what albums do I have", and answering it with
+    /// only full-length records leaves the shelf empty for anyone whose library
+    /// grows a single at a time.
     private func realAlbums(_ items: [MediaItem]) -> [MediaItem] {
         // No reported count means unknown, and unknown stays — see MediaItem.
         items.filter { $0.releaseKind?.isAlbum ?? true }
@@ -64,7 +68,8 @@ final class MusicLibraryViewModel {
         if let v = await playlistTask { playlists = v }
         if let v = await artistTask { artists = v }
         if let v = await albumTask { albums = realAlbums(v) }
-        if let v = await recentTask { recentlyAdded = realAlbums(v) }
+        // Everything newly added, whatever length — the card says which is which.
+        if let v = await recentTask { recentlyAdded = v }
         if let v = await songTask { songs = v }
     }
 }
@@ -271,11 +276,20 @@ struct GridAlbumCard: View {
                     .lineLimit(1)
                 if album.isExplicit { ExplicitBadge(size: 12) }
             }
-            Text(album.artistText ?? " ")
+            Text(subtitle)
                 .font(.system(size: 14))
                 .foregroundStyle(UltrafinColors.secondaryText)
                 .lineLimit(1)
         }
+    }
+
+    /// Artist normally; "Single · Artist" or "EP · Artist" when the release is
+    /// too short to be a full record. Recently Added mixes all three, so the
+    /// card has to say which one you're looking at.
+    private var subtitle: String {
+        let base = album.artistText ?? album.productionYear.map(String.init)
+        guard let kind = album.releaseKind, !kind.isAlbum else { return base ?? " " }
+        return base.map { "\(kind.label) · \($0)" } ?? kind.label
     }
 
     private var artURL: URL? {
