@@ -30,8 +30,6 @@ struct MainTabView: View {
     /// persist across every tab).
     @State private var music = MusicPlayer.shared
     @State private var showNowPlaying = false
-    /// Drives the mini player's condensed state as pages scroll.
-    @State private var chrome = ChromeState.shared
 
     /// The switcher's tag. Selecting it flips modes instead of navigating.
     private static let switchTag = 90
@@ -106,9 +104,8 @@ struct MainTabView: View {
         TabView(selection: tabSelection) {
             if mode == .media { mediaTabs } else { musicTabs }
         }
-        // The now-playing bar rides above the tab bar; tap it (iOS) or focus it
-        // (tvOS) to expand into the full player. It belongs to Music mode — in
-        // Media mode the two experiences stay out of each other's way.
+        // The now-playing bar belongs to Music mode — in Media mode the two
+        // experiences stay out of each other's way.
         #if os(tvOS)
         // A bottom safe-area inset — NOT a floating overlay. An overlay sits
         // outside the focus engine's sweep, so the bar was visible but
@@ -130,14 +127,11 @@ struct MainTabView: View {
             showNowPlaying = true
         }
         #else
-        .overlay(alignment: miniPlayerAlignment) {
-            if showsMiniPlayer {
-                MiniPlayerBar(player: music, onExpand: { showNowPlaying = true },
-                              isCondensed: chrome.isCondensed)
-                    .padding(.horizontal, miniPlayerHPadding)
-                    .padding(.bottom, miniPlayerBottomPadding)
-            }
-        }
+        // The system tab bar is hidden per-tab; this is what stands in for it.
+        // A safe-area inset rather than an overlay, so every scroll view inside
+        // gets the right bottom inset for free — content still slides *behind*
+        // the glass, it just comes to rest above it.
+        .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
         #endif
         .animation(.smooth(duration: 0.35), value: music.hasQueue)
         #if os(tvOS)
@@ -175,23 +169,60 @@ struct MainTabView: View {
         mode == .music && music.hasQueue && !showNowPlaying
     }
 
+    #if os(iOS)
+    // MARK: - Bottom chrome
+
+    /// Everything that floats at the bottom of the phone: the now-playing bar,
+    /// then the tab pill with the mode switcher beside it.
+    private var bottomChrome: some View {
+        VStack(spacing: Spacing.sm) {
+            if showsMiniPlayer {
+                MiniPlayerBar(player: music) { showNowPlaying = true }
+            }
+            FloatingTabBar(items: tabItems,
+                           selection: tabSelection,
+                           switchTitle: mode.switchLabel,
+                           switchIcon: mode.switchImage,
+                           onSwitch: switchMode)
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.bottom, Spacing.xs)
+        .animation(.smooth(duration: 0.35), value: showsMiniPlayer)
+    }
+
+    /// The four tabs, per mode. Both modes carry the same shape so the bar
+    /// doesn't change form when you switch experiences.
+    private var tabItems: [FloatingTabBar.Item] {
+        [
+            .init(tag: 0, title: "Home", icon: "house"),
+            .init(tag: 1, title: "Library", icon: "square.stack"),
+            .init(tag: 2, title: "Search", icon: "magnifyingglass"),
+            .init(tag: 3, title: "Settings", icon: "gearshape")
+        ]
+    }
+    #endif
+
     // MARK: - Media tabs
 
     @ViewBuilder
     private var mediaTabs: some View {
         NavigationStack(path: $homePath) { HomeView() }
+            .hidesSystemTabBar()
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
 
         NavigationStack(path: $libraryPath) { LibraryRootView() }
+            .hidesSystemTabBar()
             .tabItem { Label("Library", systemImage: "square.stack.fill") }
             .tag(1)
 
         NavigationStack(path: $searchPath) { SearchView() }
+            .hidesSystemTabBar()
             .tabItem { Label("Search", systemImage: "magnifyingglass") }
             .tag(2)
 
         NavigationStack(path: $settingsPath) { SettingsView() }
+            .hidesSystemTabBar()
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             .tag(3)
 
@@ -213,18 +244,22 @@ struct MainTabView: View {
     @ViewBuilder
     private var musicTabs: some View {
         NavigationStack(path: $listenPath) { MusicHomeView() }
+            .hidesSystemTabBar()
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
 
         NavigationStack(path: $musicLibraryPath) { MusicLibraryView() }
+            .hidesSystemTabBar()
             .tabItem { Label("Library", systemImage: "square.stack.fill") }
             .tag(1)
 
         NavigationStack(path: $musicSearchPath) { MusicSearchView() }
+            .hidesSystemTabBar()
             .tabItem { Label("Search", systemImage: "magnifyingglass") }
             .tag(2)
 
         NavigationStack(path: $musicSettingsPath) { MusicSettingsRootView() }
+            .hidesSystemTabBar()
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             .tag(3)
 
@@ -237,15 +272,22 @@ struct MainTabView: View {
         switcherTab
     }
 
-    /// The mode switcher. On iOS a tap flips modes straight away. On tvOS the tab
-    /// shows a confirmation screen with a focusable button, because tab selection
-    /// there follows focus — acting on selection alone would switch the moment
-    /// the remote drifted onto it.
+    /// The mode switcher, tvOS only. Up there the tab shows a confirmation screen
+    /// with a focusable button, because tab selection follows focus — acting on
+    /// selection alone would switch the moment the remote drifted onto it.
+    ///
+    /// On iPhone it isn't a tab at all: it's the circle beside the tab pill, so
+    /// the control that swaps the whole app doesn't sit in the row of controls
+    /// that change one screen.
     @ViewBuilder
     private var switcherTab: some View {
+        #if os(tvOS)
         ModeSwitchScreen(target: mode.opposite) { switchMode() }
             .tabItem { Label(mode.switchLabel, systemImage: mode.switchImage) }
             .tag(Self.switchTag)
+        #else
+        EmptyView()
+        #endif
     }
 
     #if os(tvOS)
@@ -256,30 +298,26 @@ struct MainTabView: View {
     }
     #endif
 
-    // MARK: - Mini-player placement
+    // MARK: - Mini-player placement (tvOS)
 
-    private var miniPlayerAlignment: Alignment {
-        #if os(tvOS)
-        .bottomTrailing
-        #else
-        .bottom
-        #endif
-    }
-    private var miniPlayerHPadding: CGFloat {
-        #if os(tvOS)
-        60
-        #else
-        Spacing.md
-        #endif
-    }
-    private var miniPlayerBottomPadding: CGFloat {
-        #if os(tvOS)
-        40
-        #else
-        58 // clears the floating tab bar
-        #endif
+    private var miniPlayerHPadding: CGFloat { 60 }
+    private var miniPlayerBottomPadding: CGFloat { 40 }
+}
+
+#if os(iOS)
+private extension View {
+    /// Ultrafin draws its own bottom bar on iPhone, so the system one goes away.
+    /// Applied to the whole `NavigationStack` rather than its root, so pushing a
+    /// detail screen doesn't bring the system bar back underneath ours.
+    func hidesSystemTabBar() -> some View {
+        toolbar(.hidden, for: .tabBar)
     }
 }
+#else
+private extension View {
+    func hidesSystemTabBar() -> some View { self }
+}
+#endif
 
 /// The switcher tab's screen: a single, deliberate "Switch to …" button. On
 /// tvOS this is what actually performs the switch (selection follows focus up

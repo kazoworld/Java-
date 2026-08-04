@@ -1,75 +1,92 @@
 import SwiftUI
 
-/// The persistent now-playing bar: a floating Liquid Glass pill with the album
-/// art, title, and transport that rides above the tab bar while you browse —
-/// tap it to expand into the full player. The Apple Music pattern.
+/// The persistent now-playing bar: a floating glass pill carrying the album art,
+/// the song, and just enough transport to keep a hand free — it rides directly
+/// above the tab bar while you browse, and a tap opens the full player.
+///
+/// There is no stop button. The bar is a *status* first and a control second,
+/// and a ✕ next to Play invites the wrong tap; swipe the bar down to end the
+/// session instead, the same gesture that closes the full player.
 struct MiniPlayerBar: View {
-    @Environment(SettingsStore.self) private var settings
-
     @Bindable var player: MusicPlayer
     let onExpand: () -> Void
-    /// Shrunk to a compact pill while the user scrolls down a page.
-    var isCondensed: Bool = false
+
+    #if os(iOS)
+    /// Live downward drag while swiping the bar away.
+    @State private var dragOffset: CGFloat = 0
+    #endif
 
     var body: some View {
         if let track = player.currentTrack {
             HStack(spacing: Spacing.md) {
                 RemoteImage(url: player.artworkURL(for: track, maxWidth: 200))
                     .frame(width: artSide, height: artSide)
-                    .clipShape(RoundedRectangle(cornerRadius: isCondensed ? 6 : 8, style: .continuous))
-                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .shadow(color: .black.opacity(0.3), radius: 5, y: 2)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(track.name)
-                        .font(.system(size: titleSize, weight: .semibold, design: .rounded))
+                        .font(.system(size: titleSize, weight: .semibold))
                         .foregroundStyle(UltrafinColors.primaryText)
                         .lineLimit(1)
-                    // The artist line is the first thing to go when space tightens.
-                    if !isCondensed, let artist = track.artistText {
+                    if let artist = track.artistText, !artist.isEmpty {
                         Text(artist)
-                            .font(.system(size: titleSize * 0.78))
+                            .font(.system(size: titleSize * 0.86))
                             .foregroundStyle(UltrafinColors.secondaryText)
                             .lineLimit(1)
                     }
                 }
-                Spacer(minLength: Spacing.sm)
+                // Takes what's left and no more, so a long title can't widen the
+                // bar past its container.
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 barButton(player.isPlaying ? "pause.fill" : "play.fill", size: buttonSize) {
                     player.togglePlayPause()
                 }
-                if !isCondensed {
-                    barButton("forward.fill", size: buttonSize * 0.8) {
-                        player.next()
-                    }
+                .fixedSize()
+                barButton("forward.fill", size: buttonSize) {
+                    player.next()
                 }
-                #if os(iOS)
-                if !isCondensed {
-                    barButton("xmark", size: buttonSize * 0.62) {
-                        player.stop()
-                    }
-                }
-                #else
+                .fixedSize()
+
+                #if os(tvOS)
                 // tvOS: an explicit expand control (container taps don't mix
                 // with focusable children on the focus engine).
-                barButton("chevron.up", size: buttonSize * 0.8) {
-                    onExpand()
-                }
+                barButton("chevron.up", size: buttonSize * 0.85) { onExpand() }
                 #endif
             }
-            .padding(.horizontal, isCondensed ? Spacing.sm : Spacing.md)
-            .padding(.vertical, isCondensed ? Spacing.xs : Spacing.sm)
-            .frame(maxWidth: isCondensed ? condensedMaxWidth : barMaxWidth)
-            .liquidGlass(cornerRadius: cornerRadius)
-            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .padding(.leading, Spacing.sm)
+            .padding(.trailing, Spacing.sm)
+            .padding(.vertical, Spacing.sm)
+            .frame(maxWidth: barMaxWidth)
+            .glassCapsule(dim: 0.14)
+            .contentShape(Capsule())
             #if os(iOS)
+            .offset(y: max(0, dragOffset))
+            .gesture(dismissDrag)
             .onTapGesture { onExpand() }
             #endif
-            .animation(.smooth(duration: 0.3), value: isCondensed)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
-    private var cornerRadius: CGFloat { isCondensed ? 24 : 18 }
+    #if os(iOS)
+    /// Pull the bar down to end the session. It follows your finger and springs
+    /// back if you don't mean it.
+    private var dismissDrag: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                dragOffset = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                if value.translation.height > 44 || value.predictedEndTranslation.height > 120 {
+                    Haptics.play(.light)
+                    withAnimation(.smooth(duration: 0.3)) { player.stop() }
+                }
+                withAnimation(.spring(duration: 0.35, bounce: 0.2)) { dragOffset = 0 }
+            }
+    }
+    #endif
 
     private func barButton(_ icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
         Button {
@@ -77,9 +94,9 @@ struct MiniPlayerBar: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: size, weight: .bold))
+                .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(UltrafinColors.primaryText)
-                .frame(width: size * 2.2, height: size * 2.2)
+                .frame(width: size * 2, height: size * 2)
                 .contentShape(Circle())
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.15, lift: false))
@@ -89,21 +106,21 @@ struct MiniPlayerBar: View {
         #if os(tvOS)
         64
         #else
-        isCondensed ? 30 : 42
+        42
         #endif
     }
     private var titleSize: CGFloat {
         #if os(tvOS)
         22
         #else
-        14
+        15
         #endif
     }
     private var buttonSize: CGFloat {
         #if os(tvOS)
         24
         #else
-        17
+        18
         #endif
     }
     private var barMaxWidth: CGFloat {
@@ -111,14 +128,6 @@ struct MiniPlayerBar: View {
         700
         #else
         .infinity
-        #endif
-    }
-    /// Condensed, the bar pulls in from the edges into a floating pill.
-    private var condensedMaxWidth: CGFloat {
-        #if os(tvOS)
-        520
-        #else
-        290
         #endif
     }
 }

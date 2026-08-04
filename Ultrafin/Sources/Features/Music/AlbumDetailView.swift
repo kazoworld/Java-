@@ -40,11 +40,6 @@ struct AlbumDetailView: View {
             .padding(.vertical, Spacing.xl)
             .frame(maxWidth: contentMaxWidth)
             .frame(maxWidth: .infinity)
-            #if os(iOS)
-            // Clear the mini player and the floating tab bar — the last songs
-            // were sitting underneath both.
-            .padding(.bottom, 110)
-            #endif
         }
         .background(AlbumBackdrop(color: artColor))
         .environment(\.colorScheme, .dark)
