@@ -1062,15 +1062,20 @@ struct QueueRow: View {
     }
 }
 
+#if os(iOS)
 extension View {
     /// Strips a queue row back to bare content: no separators, no fill, no
     /// inset — the list has to read as part of the player, not as Settings.
+    ///
+    /// iOS only: the queue is a plain focusable stack on tvOS, and
+    /// `listRowSeparator` doesn't exist there at all.
     func queueRowChrome() -> some View {
         listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
     }
 }
+#endif
 
 #if os(iOS)
 /// The system AirPlay route picker, tinted for the dark player.
