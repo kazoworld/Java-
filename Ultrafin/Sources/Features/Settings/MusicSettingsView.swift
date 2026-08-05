@@ -76,7 +76,7 @@ struct MusicSettingsView: View {
         .musicCanvas()
         .navigationTitle("Music")
         .tvPopsOnMenu()
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 
     private var navidromeSubtitle: String {
@@ -101,7 +101,7 @@ struct MusicSettingsView: View {
                 Spacer()
                 if settings.musicSource == kind {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(settings.theme.accent.color)
+                        .foregroundStyle(settings.accent)
                 }
             }
         }

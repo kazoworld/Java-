@@ -367,7 +367,7 @@ struct SeriesDetailView: View {
         ZStack {
             UltrafinColors.background
             LinearGradient(stops: [
-                .init(color: (artColor?.color ?? settings.theme.accent.color).opacity(0.22), location: 0.0),
+                .init(color: (artColor?.color ?? settings.accent).opacity(0.22), location: 0.0),
                 .init(color: .clear, location: 0.55)
             ], startPoint: .top, endPoint: .bottom)
         }
@@ -593,7 +593,7 @@ struct EpisodeRow: View {
                             let barWidth = thumbWidth - Spacing.md * 2
                             ZStack(alignment: .leading) {
                                 Capsule().fill(Color.black.opacity(0.5))
-                                Capsule().fill(settings.theme.accent.color)
+                                Capsule().fill(settings.accent)
                                     .frame(width: max(0, barWidth * progress))
                             }
                             .frame(width: barWidth, height: 3)
@@ -611,7 +611,7 @@ struct EpisodeRow: View {
                         if let runtime = episode.runtimeText {
                             Text(runtime)
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(settings.theme.accent.color.opacity(0.9))
+                                .foregroundStyle(settings.accent.opacity(0.9))
                         }
                         if episode.isWatched {
                             Label("Watched", systemImage: "checkmark.circle.fill")
@@ -657,7 +657,7 @@ struct EpisodeRow: View {
                         let barWidth = thumbWidth - Spacing.md * 2
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.black.opacity(0.5))
-                            Capsule().fill(settings.theme.accent.color)
+                            Capsule().fill(settings.accent)
                                 .frame(width: max(0, barWidth * progress))
                         }
                         .frame(width: barWidth, height: 4)
@@ -666,7 +666,7 @@ struct EpisodeRow: View {
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                        .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
+                        .strokeBorder(isFocused ? settings.accent : UltrafinColors.separator,
                                       lineWidth: isFocused ? 3 : 1)
                 )
 
@@ -689,7 +689,7 @@ struct EpisodeRow: View {
                     if let runtime = episode.runtimeText {
                         Text(runtime)
                             .font(.system(size: metaSize, weight: .semibold, design: .rounded))
-                            .foregroundStyle(settings.theme.accent.color.opacity(0.9))
+                            .foregroundStyle(settings.accent.opacity(0.9))
                     }
                     if episode.isWatched {
                         Label("Watched", systemImage: "checkmark.circle.fill")

@@ -68,6 +68,6 @@ struct VideoPlaybackSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Video")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 }

@@ -28,6 +28,41 @@ enum MusicLibrarySection: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+/// Grid metrics for the music library.
+///
+/// Two flexible columns is right on a phone and catastrophic on a television:
+/// across 1920 points it made every cover roughly 900 points wide, so two
+/// records filled the screen and collided. A TV wants many small tiles, the way
+/// Apple lays out a shelf.
+enum MusicGrid {
+    static var columns: [GridItem] {
+        #if os(tvOS)
+        [GridItem(.adaptive(minimum: 220, maximum: 260), spacing: Spacing.xl)]
+        #else
+        [GridItem(.flexible(), spacing: Spacing.md),
+         GridItem(.flexible(), spacing: Spacing.md)]
+        #endif
+    }
+
+    static var spacing: CGFloat {
+        #if os(tvOS)
+        Spacing.xl
+        #else
+        Spacing.lg
+        #endif
+    }
+
+    /// A television needs its title-safe margin; 20 points from the bezel is a
+    /// phone measurement and it made the shelves feel crammed against the edge.
+    static var edgePadding: CGFloat {
+        #if os(tvOS)
+        80
+        #else
+        Spacing.lg
+        #endif
+    }
+}
+
 @Observable
 @MainActor
 final class MusicLibraryViewModel {
@@ -87,10 +122,7 @@ struct MusicLibraryView: View {
             : MusicLibrarySection.allCases.filter { $0 != .downloaded }
     }
 
-    private var gridColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: Spacing.md),
-         GridItem(.flexible(), spacing: Spacing.md)]
-    }
+    private var gridColumns: [GridItem] { MusicGrid.columns }
 
     var body: some View {
         ScrollView {
@@ -99,7 +131,7 @@ struct MusicLibraryView: View {
                     NavigationLink(value: section) {
                         sectionRow(section)
                     }
-                    .buttonStyle(.plain)
+                    .musicRowButtonStyle()
                     if section != sections.last {
                         Divider()
                             .overlay(UltrafinColors.separator)
@@ -114,12 +146,12 @@ struct MusicLibraryView: View {
                         .padding(.top, Spacing.xxl)
                         .padding(.bottom, Spacing.md)
 
-                    LazyVGrid(columns: gridColumns, spacing: Spacing.lg) {
+                    LazyVGrid(columns: gridColumns, spacing: MusicGrid.spacing) {
                         ForEach(model.recentlyAdded) { album in
                             NavigationLink(value: album) {
                                 GridAlbumCard(album: album)
                             }
-                            .buttonStyle(.plain)
+                            .musicCardButtonStyle()
                         }
                     }
                 }
@@ -130,7 +162,8 @@ struct MusicLibraryView: View {
                         .padding(.top, Spacing.xxl)
                 }
             }
-            .padding(.horizontal, Spacing.lg)
+            .padding(.horizontal, MusicGrid.edgePadding)
+            .padding(.top, listTopPadding)
             .padding(.bottom, Spacing.xxl * 2)
         }
         .musicCanvas()
@@ -157,19 +190,42 @@ struct MusicLibraryView: View {
     private func sectionRow(_ section: MusicLibrarySection) -> some View {
         HStack(spacing: Spacing.md) {
             Image(systemName: section.systemImage)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(settings.theme.accent.color)
-                .frame(width: 30)
+                .font(.system(size: rowTextSize, weight: .medium))
+                .foregroundStyle(settings.accent)
+                .frame(width: rowTextSize * 1.5)
             Text(section.title)
-                .font(.system(size: 20, weight: .regular))
+                .font(.system(size: rowTextSize, weight: .regular))
                 .foregroundStyle(UltrafinColors.primaryText)
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: rowTextSize * 0.7, weight: .semibold))
                 .foregroundStyle(UltrafinColors.tertiaryText)
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, rowVPadding)
         .contentShape(Rectangle())
+    }
+
+    private var rowTextSize: CGFloat {
+        #if os(tvOS)
+        30
+        #else
+        20
+        #endif
+    }
+    private var rowVPadding: CGFloat {
+        #if os(tvOS)
+        20
+        #else
+        14
+        #endif
+    }
+    /// tvOS has no large navigation title, so the page needs its own top margin.
+    private var listTopPadding: CGFloat {
+        #if os(tvOS)
+        48
+        #else
+        0
+        #endif
     }
 }
 
@@ -179,10 +235,7 @@ struct MusicSectionListView: View {
     let section: MusicLibrarySection
     @Bindable var model: MusicLibraryViewModel
 
-    private var gridColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: Spacing.md),
-         GridItem(.flexible(), spacing: Spacing.md)]
-    }
+    private var gridColumns: [GridItem] { MusicGrid.columns }
 
     var body: some View {
         Group {
@@ -213,25 +266,25 @@ struct MusicSectionListView: View {
 
     private func grid(_ items: [MediaItem]) -> some View {
         ScrollView {
-            LazyVGrid(columns: gridColumns, spacing: Spacing.lg) {
+            LazyVGrid(columns: gridColumns, spacing: MusicGrid.spacing) {
                 ForEach(items) { item in
                     NavigationLink(value: item) { GridAlbumCard(album: item) }
-                        .buttonStyle(.plain)
+                        .musicCardButtonStyle()
                 }
             }
-            .padding(Spacing.lg)
+            .padding(MusicGrid.edgePadding)
         }
     }
 
     private var artistGrid: some View {
         ScrollView {
-            LazyVGrid(columns: gridColumns, spacing: Spacing.lg) {
+            LazyVGrid(columns: gridColumns, spacing: MusicGrid.spacing) {
                 ForEach(model.artists) { artist in
                     NavigationLink(value: artist) { ArtistCard(artist: artist) }
-                        .buttonStyle(.plain)
+                        .musicCardButtonStyle()
                 }
             }
-            .padding(Spacing.lg)
+            .padding(MusicGrid.edgePadding)
         }
     }
 
@@ -251,7 +304,8 @@ struct MusicSectionListView: View {
                     .buttonStyle(UltrafinButtonStyle(focusScale: 1.01, lift: false))
                 }
             }
-            .padding(.horizontal, Spacing.lg)
+            .padding(.horizontal, MusicGrid.edgePadding)
+            .padding(.vertical, MusicGrid.edgePadding / 2)
         }
     }
 }
@@ -271,16 +325,26 @@ struct GridAlbumCard: View {
 
             HStack(spacing: 4) {
                 Text(album.name)
-                    .font(.system(size: 14))
+                    .font(.system(size: labelSize))
                     .foregroundStyle(UltrafinColors.primaryText)
                     .lineLimit(1)
-                if album.isExplicit { ExplicitBadge(size: 12) }
+                if album.isExplicit { ExplicitBadge(size: labelSize * 0.85) }
             }
             Text(subtitle)
-                .font(.system(size: 14))
+                .font(.system(size: labelSize))
                 .foregroundStyle(UltrafinColors.secondaryText)
                 .lineLimit(1)
         }
+    }
+
+    /// A television is read from across a room, so its labels can't be phone-
+    /// sized — but the tiles themselves are small, so this stays restrained.
+    private var labelSize: CGFloat {
+        #if os(tvOS)
+        18
+        #else
+        14
+        #endif
     }
 
     /// Artist normally; "Single · Artist" or "EP · Artist" when the release is

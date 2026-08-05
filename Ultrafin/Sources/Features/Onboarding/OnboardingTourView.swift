@@ -30,7 +30,7 @@ struct OnboardingTourView: View {
     private var pages: [TourPage] {
         [
             TourPage(icon: "sparkles",
-                     tint: settings.theme.accent.color,
+                     tint: settings.accent,
                      title: "Welcome to Ultrafin",
                      description: "A premium home for everything on your Jellyfin server. Here's a quick look around."),
             TourPage(icon: "house.fill",

@@ -27,7 +27,7 @@ struct FloatingTabBar: View {
     @Environment(SettingsStore.self) private var settings
     @Namespace private var highlight
 
-    private var accent: Color { settings.theme.accent.color }
+    private var accent: Color { settings.accent }
 
     var body: some View {
         HStack(spacing: Spacing.sm) {

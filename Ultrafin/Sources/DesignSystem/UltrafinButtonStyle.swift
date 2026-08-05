@@ -62,4 +62,27 @@ extension View {
     func mediaCardButtonStyle() -> some View {
         buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
     }
+
+    /// A music grid tile. On a television it has to answer the remote, so it
+    /// lifts under focus; on a phone there is no focus and a plain button keeps
+    /// the tap silent.
+    @ViewBuilder
+    func musicCardButtonStyle() -> some View {
+        #if os(tvOS)
+        buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
+        #else
+        buttonStyle(.plain)
+        #endif
+    }
+
+    /// A full-width music list row. Same reasoning as ``musicCardButtonStyle``,
+    /// but a row shouldn't grow much — it just needs to light up.
+    @ViewBuilder
+    func musicRowButtonStyle() -> some View {
+        #if os(tvOS)
+        buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: false))
+        #else
+        buttonStyle(.plain)
+        #endif
+    }
 }

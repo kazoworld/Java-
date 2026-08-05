@@ -49,7 +49,7 @@ struct HomeLayoutEditorView: View {
                         .foregroundStyle(UltrafinColors.secondaryText)
                 }
             }
-            .tint(settings.theme.accent.color)
+            .tint(settings.accent)
         }
         .padding(Spacing.md)
         .glassCard()
@@ -61,7 +61,7 @@ struct HomeLayoutEditorView: View {
         let lower = rows.first?.kind == .featured ? 1 : 0
         return HStack(spacing: Spacing.md) {
             Image(systemName: config.kind.systemImage)
-                .foregroundStyle(config.isEnabled ? settings.theme.accent.color : UltrafinColors.tertiaryText)
+                .foregroundStyle(config.isEnabled ? settings.accent : UltrafinColors.tertiaryText)
                 .frame(width: 32)
             Text(config.kind.title)
                 .font(.system(size: 18, weight: .medium, design: .rounded))

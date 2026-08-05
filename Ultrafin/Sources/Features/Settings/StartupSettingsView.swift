@@ -32,7 +32,7 @@ struct StartupSettingsView: View {
         .background(AmbientBackground())
         .navigationTitle("Startup")
         .tvPopsOnMenu()
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
         .animation(.smooth(duration: 0.25), value: preference)
     }
 
@@ -50,7 +50,7 @@ struct StartupSettingsView: View {
                 if preference == value {
                     Image(systemName: "checkmark")
                         .font(.system(size: checkSize, weight: .bold))
-                        .foregroundStyle(settings.theme.accent.color)
+                        .foregroundStyle(settings.accent)
                         .transition(.scale.combined(with: .opacity))
                 }
             }

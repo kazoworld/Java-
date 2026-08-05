@@ -46,6 +46,6 @@ struct DownloadSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Downloads")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 }

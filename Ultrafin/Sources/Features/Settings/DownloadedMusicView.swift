@@ -37,7 +37,7 @@ struct DownloadedMusicView: View {
         }
         .musicCanvas()
         .navigationTitle("Downloaded")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 
     private func row(_ album: MusicLibraryCache.AlbumSummary) -> some View {
@@ -74,10 +74,10 @@ struct DownloadedMusicView: View {
         let complete = album.isSingle || album.isComplete
         return Text(album.subtitle)
             .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(complete ? settings.theme.accent.color : .orange)
+            .foregroundStyle(complete ? settings.accent : .orange)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background((complete ? settings.theme.accent.color : .orange).opacity(0.16),
+            .background((complete ? settings.accent : .orange).opacity(0.16),
                         in: Capsule())
     }
 

@@ -21,7 +21,7 @@ struct IntroView: View {
     /// Glass droplets rising into place.
     @State private var orbsRisen = false
 
-    private var accent: Color { settings.theme.accent.color }
+    private var accent: Color { settings.accent }
 
     var body: some View {
         ZStack {

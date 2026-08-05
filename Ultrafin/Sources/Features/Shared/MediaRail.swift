@@ -27,7 +27,7 @@ struct MediaRail: View {
                     // A grip + up/down chevrons make it read as "I'm holding this".
                     Image(systemName: "arrow.up.arrow.down")
                         .font(sectionTitleFont)
-                        .foregroundStyle(settings.theme.accent.color)
+                        .foregroundStyle(settings.accent)
                         .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -51,7 +51,7 @@ struct MediaRail: View {
         // Lift the row being moved and glow it in the accent, like a card
         // peeled off the Home screen.
         .scaleEffect(isReordering ? 1.04 : 1)
-        .shadow(color: isReordering ? settings.theme.accent.color.opacity(0.5) : .clear,
+        .shadow(color: isReordering ? settings.accent.opacity(0.5) : .clear,
                 radius: isReordering ? 30 : 0, y: isReordering ? 10 : 0)
         .zIndex(isReordering ? 2 : 0)
         .animation(.smooth(duration: 0.3), value: isReordering)
@@ -182,7 +182,7 @@ struct MediaCard: View {
                         .font(.system(size: watchedIconSize, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(watchedIconSize * 0.45)
-                        .background(settings.theme.accent.color.opacity(0.92), in: Circle())
+                        .background(settings.accent.opacity(0.92), in: Circle())
                         .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
                         .padding(Spacing.sm)
                 }
@@ -200,11 +200,11 @@ struct MediaCard: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                    .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
+                    .strokeBorder(isFocused ? settings.accent : UltrafinColors.separator,
                                   lineWidth: isFocused ? 3 : 1)
             )
             // A soft accent glow when focused for a premium, lit feel.
-            .shadow(color: isFocused ? settings.theme.accent.color.opacity(0.55) : .clear,
+            .shadow(color: isFocused ? settings.accent.opacity(0.55) : .clear,
                     radius: isFocused ? 22 : 0, y: isFocused ? 6 : 0)
 
             Text(item.name)
@@ -253,7 +253,7 @@ struct MediaCard: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.black.opacity(0.4))
                     Capsule()
-                        .fill(settings.theme.accent.color)
+                        .fill(settings.accent)
                         .frame(width: geo.size.width * progress)
                 }
                 .frame(height: 4)
@@ -263,7 +263,7 @@ struct MediaCard: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.black.opacity(0.4))
                 Capsule()
-                    .fill(settings.theme.accent.color)
+                    .fill(settings.accent)
                     .frame(width: max(0, (width - Spacing.sm * 2) * progress))
             }
             .frame(height: 4)

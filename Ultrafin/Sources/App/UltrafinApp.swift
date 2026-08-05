@@ -28,7 +28,7 @@ struct UltrafinApp: App {
                 .environment(appState)
                 .environment(settings)
                 .preferredColorScheme(effectiveColorScheme)
-                .tint(settings.theme.accent.color)
+                .tint(settings.accent)
         }
     }
 

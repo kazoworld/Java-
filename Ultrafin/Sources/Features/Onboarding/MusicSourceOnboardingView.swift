@@ -61,7 +61,7 @@ struct MusicSourceOnboardingView: View {
             Image(systemName: "music.note.house.fill")
                 .font(.system(size: scale(40), weight: .semibold))
                 .foregroundStyle(.white)
-                .shadow(color: settings.theme.accent.color.opacity(0.5), radius: scale(18))
+                .shadow(color: settings.accent.opacity(0.5), radius: scale(18))
             Text("Where's your music?")
                 .font(.system(size: scale(30), weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)

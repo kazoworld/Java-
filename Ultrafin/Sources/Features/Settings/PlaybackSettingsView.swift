@@ -32,6 +32,6 @@ struct PlaybackSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Playback")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 }

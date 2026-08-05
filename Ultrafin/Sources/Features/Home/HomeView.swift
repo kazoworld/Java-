@@ -274,7 +274,7 @@ struct HomeView: View {
     private var reorderBanner: some View {
         HStack(spacing: Spacing.lg) {
             Label("Move Row", systemImage: "arrow.up.arrow.down")
-                .foregroundStyle(settings.theme.accent.color)
+                .foregroundStyle(settings.accent)
             Text("Select to save")
             Text("Menu to cancel")
                 .foregroundStyle(UltrafinColors.secondaryText)

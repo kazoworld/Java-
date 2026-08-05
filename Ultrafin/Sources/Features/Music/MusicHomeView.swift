@@ -406,10 +406,10 @@ struct SmartMixCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                        .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
+                        .strokeBorder(isFocused ? settings.accent : UltrafinColors.separator,
                                       lineWidth: isFocused ? 3 : 1)
                 )
-                .shadow(color: isFocused ? settings.theme.accent.color.opacity(0.5) : .clear,
+                .shadow(color: isFocused ? settings.accent.opacity(0.5) : .clear,
                         radius: isFocused ? 20 : 0, y: isFocused ? 6 : 0)
 
             Text(mix.title)
@@ -471,10 +471,10 @@ struct AlbumCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                        .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
+                        .strokeBorder(isFocused ? settings.accent : UltrafinColors.separator,
                                       lineWidth: isFocused ? 3 : 1)
                 )
-                .shadow(color: isFocused ? settings.theme.accent.color.opacity(0.5) : .clear,
+                .shadow(color: isFocused ? settings.accent.opacity(0.5) : .clear,
                         radius: isFocused ? 20 : 0, y: isFocused ? 6 : 0)
             Text(album.name)
                 .font(titleFont)
@@ -550,17 +550,17 @@ struct SongCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: Spacing.posterCornerRadius, style: .continuous)
-                            .strokeBorder(isFocused ? settings.theme.accent.color : UltrafinColors.separator,
+                            .strokeBorder(isFocused ? settings.accent : UltrafinColors.separator,
                                           lineWidth: isFocused ? 3 : 1)
                     )
-                    .shadow(color: isFocused ? settings.theme.accent.color.opacity(0.5) : .clear,
+                    .shadow(color: isFocused ? settings.accent.opacity(0.5) : .clear,
                             radius: isFocused ? 20 : 0, y: isFocused ? 6 : 0)
                 // A little filled heart marks these as hearted.
                 Image(systemName: "heart.fill")
                     .font(.system(size: heartSize, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(heartSize * 0.5)
-                    .background(settings.theme.accent.color.opacity(0.92), in: Circle())
+                    .background(settings.accent.opacity(0.92), in: Circle())
                     .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
                     .padding(Spacing.sm)
             }
@@ -632,9 +632,9 @@ struct ArtistCard: View {
                 .frame(width: side, height: side)
                 .clipShape(Circle())
                 .overlay(Circle().strokeBorder(
-                    isFocused ? settings.theme.accent.color : UltrafinColors.separator,
+                    isFocused ? settings.accent : UltrafinColors.separator,
                     lineWidth: isFocused ? 3 : 1))
-                .shadow(color: isFocused ? settings.theme.accent.color.opacity(0.5) : .clear,
+                .shadow(color: isFocused ? settings.accent.opacity(0.5) : .clear,
                         radius: isFocused ? 18 : 0, y: isFocused ? 5 : 0)
             Text(artist.name)
                 .font(nameFont)

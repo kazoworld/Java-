@@ -25,7 +25,7 @@ struct MusicThemeSettingsView: View {
         .musicCanvas()
         .navigationTitle("Theme")
         .tvPopsOnMenu()
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
         .animation(.smooth(duration: 0.3), value: settings.musicTheme)
     }
 
@@ -47,7 +47,7 @@ struct MusicThemeSettingsView: View {
                 if settings.musicTheme == theme {
                     Image(systemName: "checkmark")
                         .font(.system(size: checkSize, weight: .bold))
-                        .foregroundStyle(settings.theme.accent.color)
+                        .foregroundStyle(settings.accent)
                         .transition(.scale.combined(with: .opacity))
                 }
             }

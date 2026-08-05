@@ -98,7 +98,7 @@ struct PrimaryButton: View {
             .padding(.vertical, Spacing.md)
             .background {
                 let shape = RoundedRectangle(cornerRadius: Spacing.md, style: .continuous)
-                let accent = settings.theme.accent.color
+                let accent = settings.accent
                 shape
                     .fill(LinearGradient(colors: [accent, accent.opacity(0.82)],
                                          startPoint: .top, endPoint: .bottom))

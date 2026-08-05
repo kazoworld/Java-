@@ -161,7 +161,7 @@ struct MainTabView: View {
         // Read the accent through the observed environment store so an accent
         // change in Settings recolors the tab bar live (the static
         // SettingsStore.shared read didn't re-render).
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 
     /// The bar only belongs to Music mode, and never behind the full player.

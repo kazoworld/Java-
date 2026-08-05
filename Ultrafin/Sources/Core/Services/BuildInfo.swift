@@ -8,7 +8,7 @@ import Foundation
 /// device, and read it in Music → Settings.
 enum BuildInfo {
     /// Increment on each round of UI work worth verifying on hardware.
-    static let marker = "music-5 · recent all"
+    static let marker = "music-6 · tv focus"
 
     /// The bundle's own version/build, for completeness.
     static var bundleVersion: String {

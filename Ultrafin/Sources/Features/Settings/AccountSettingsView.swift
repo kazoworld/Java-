@@ -31,6 +31,6 @@ struct AccountSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Account")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 }

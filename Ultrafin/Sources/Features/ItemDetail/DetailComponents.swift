@@ -167,7 +167,7 @@ struct DetailActionButton: View {
     @Environment(SettingsStore.self) private var settings
 
     private var iconColor: Color {
-        if active { return settings.theme.accent.color }
+        if active { return settings.accent }
         return onDark ? .white : UltrafinColors.primaryText
     }
     private var labelColor: Color { onDark ? .white.opacity(0.85) : UltrafinColors.secondaryText }
@@ -260,7 +260,7 @@ struct DetailTabBar: View {
                             .font(.system(size: size, weight: .semibold, design: .rounded))
                             .foregroundStyle(idx == selection ? UltrafinColors.primaryText : UltrafinColors.tertiaryText)
                         Capsule()
-                            .fill(idx == selection ? settings.theme.accent.color : .clear)
+                            .fill(idx == selection ? settings.accent : .clear)
                             .frame(height: 3)
                     }
                     .fixedSize()

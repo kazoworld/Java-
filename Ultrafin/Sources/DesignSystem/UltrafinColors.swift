@@ -22,12 +22,18 @@ enum UltrafinColors {
     /// Hairline divider/stroke that stays subtle on either background.
     static var separator: Color { dynamicAlpha(light: (0x000000, 0.10), dark: (0xFFFFFF, 0.10)) }
 
-    /// Default accent; the live accent is resolved through `SettingsStore.theme`.
-    static var accent: Color { AccentColor.ultrafinRed.color }
+    /// Default accent; the live accent is resolved through `SettingsStore.accent`,
+    /// which also decides between the media palette and Music's red.
+    static var accent: Color { AccentColor.aurora.color }
+
+    /// Music's accent, and not a preference: Apple Music is red, and that side
+    /// of the app is built to feel like it. The media side keeps its own palette
+    /// so the two experiences stay visibly distinct.
+    static let musicAccent = Color(hex: 0xFA2D48)
 
     static var accentGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: 0xFA2D48), Color(hex: 0xFF5E6E)],
+            colors: [Color(hex: 0x6D8BFF), Color(hex: 0xB56DFF)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -78,23 +84,44 @@ enum UltrafinColors {
     #endif
 }
 
-/// User-selectable accent colors exposed in Settings.
-/// The app's single accent. Ultrafin follows Apple Music's look now, so the
-/// old multi-colour palette is gone — one red, everywhere.
+/// User-selectable accent colors exposed in the media side's Appearance
+/// settings. Music doesn't appear here — it's always Apple Music red, see
+/// ``UltrafinColors/musicAccent``.
 enum AccentColor: String, CaseIterable, Identifiable, Codable {
-    case ultrafinRed
+    case aurora, ocean, mint, orchid, rose, ember, gold
 
     var id: String { rawValue }
-    var displayName: String { "Ultrafin Red" }
 
-    /// Apple Music's red.
-    var color: Color { Color(hex: 0xFA2D48) }
+    var displayName: String {
+        switch self {
+        case .aurora: "Aurora"
+        case .ocean: "Ocean"
+        case .mint: "Mint"
+        case .orchid: "Orchid"
+        case .rose: "Rose"
+        case .ember: "Ember"
+        case .gold: "Gold"
+        }
+    }
 
-    /// Anything stored by an older build (aurora, ocean, …) resolves here
+    var color: Color {
+        switch self {
+        case .aurora: Color(hex: 0x6D8BFF)
+        case .ocean: Color(hex: 0x38BDF8)
+        case .mint: Color(hex: 0x3DD9A0)
+        case .orchid: Color(hex: 0xB56DFF) // matches the brand accent gradient
+        case .rose: Color(hex: 0xFF6DAE)
+        case .ember: Color(hex: 0xFF6D5A)
+        case .gold: Color(hex: 0xFFC857)
+        }
+    }
+
+    /// Anything unrecognised — including the "ultrafinRed" the single-accent
+    /// build wrote into everyone's stored theme — comes back as the default
     /// rather than failing to decode and resetting the whole theme group.
     init(from decoder: Decoder) throws {
-        _ = try? decoder.singleValueContainer().decode(String.self)
-        self = .ultrafinRed
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AccentColor(rawValue: raw) ?? .aurora
     }
 }
 

@@ -33,7 +33,7 @@ struct SettingsView: View {
                 // The app's settings motto.
                 Text("Your library, your way.")
                     .font(.system(size: sloganSize, weight: .semibold, design: .rounded))
-                    .foregroundStyle(settings.theme.accent.color)
+                    .foregroundStyle(settings.accent)
                     .textCase(nil)
             }
 
@@ -79,7 +79,7 @@ struct SettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Settings")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 
     /// Shows the launch default at a glance.

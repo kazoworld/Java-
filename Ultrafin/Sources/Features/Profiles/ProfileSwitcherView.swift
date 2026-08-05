@@ -96,7 +96,7 @@ struct ProfileSwitcherView: View {
         ZStack {
             ZStack {
                 UltrafinColors.background
-                LinearGradient(colors: [settings.theme.accent.color.opacity(0.18), .clear],
+                LinearGradient(colors: [settings.accent.opacity(0.18), .clear],
                                startPoint: .top, endPoint: .center)
             }
             .ignoresSafeArea()
@@ -177,7 +177,7 @@ struct ProfileSwitcherView: View {
                 ProfileAvatar(name: user.name, imageURL: avatarURL(user), size: avatarSize)
                     .overlay(
                         Circle().strokeBorder(
-                            isCurrent ? settings.theme.accent.color : .clear,
+                            isCurrent ? settings.accent : .clear,
                             lineWidth: 3)
                     )
                 HStack(spacing: 5) {
@@ -194,7 +194,7 @@ struct ProfileSwitcherView: View {
                 if isCurrent {
                     Text("Watching now")
                         .font(.system(size: nameSize * 0.66, weight: .medium))
-                        .foregroundStyle(settings.theme.accent.color)
+                        .foregroundStyle(settings.accent)
                 }
             }
             .frame(width: avatarSize + 40)
@@ -329,7 +329,7 @@ struct ProfileSwitcherView: View {
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
                     Button("Switch") { submitPassword(for: user) }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
-                        .foregroundStyle(settings.theme.accent.color)
+                        .foregroundStyle(settings.accent)
                 }
                 .font(.system(size: nameSize, weight: .semibold, design: .rounded))
             }

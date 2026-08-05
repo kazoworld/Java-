@@ -183,7 +183,7 @@ private struct DetailActionRowContent: View {
             if let progress {
                 ZStack(alignment: .leading) {
                     Capsule().fill(fg.opacity(0.25))
-                    Capsule().fill(settings.theme.accent.color)
+                    Capsule().fill(settings.accent)
                         .frame(width: barWidth * CGFloat(min(max(progress, 0), 1)))
                 }
                 .frame(width: barWidth, height: 5)

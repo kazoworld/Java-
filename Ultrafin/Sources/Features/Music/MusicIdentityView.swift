@@ -46,7 +46,7 @@ struct MusicIdentityView: View {
     // MARK: - Identity card
 
     private var identityCard: some View {
-        let tint = cardColor?.color ?? settings.theme.accent.color
+        let tint = cardColor?.color ?? settings.accent
         return VStack(alignment: .leading, spacing: Spacing.md) {
             Text("YOUR MUSIC IDENTITY")
                 .font(.system(size: kickerSize, weight: .heavy, design: .rounded))
@@ -115,7 +115,7 @@ struct MusicIdentityView: View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: statIcon, weight: .semibold))
-                .foregroundStyle(settings.theme.accent.color)
+                .foregroundStyle(settings.accent)
             Text(value)
                 .font(.system(size: statValue, weight: .bold))
                 .foregroundStyle(UltrafinColors.primaryText)
@@ -171,8 +171,8 @@ struct MusicIdentityView: View {
                     ZStack(alignment: .leading) {
                         Capsule().fill(UltrafinColors.primaryText.opacity(0.12))
                         Capsule()
-                            .fill(LinearGradient(colors: [settings.theme.accent.color,
-                                                          settings.theme.accent.color.opacity(0.5)],
+                            .fill(LinearGradient(colors: [settings.accent,
+                                                          settings.accent.opacity(0.5)],
                                                  startPoint: .leading, endPoint: .trailing))
                             .frame(width: max(6, geo.size.width * fraction))
                     }
@@ -194,7 +194,7 @@ struct MusicIdentityView: View {
                     ForEach(Array(insights.topArtists.enumerated()), id: \.element.id) { i, artist in
                         VStack(spacing: Spacing.sm) {
                             ZStack {
-                                Circle().fill(settings.theme.accent.color.opacity(0.18))
+                                Circle().fill(settings.accent.opacity(0.18))
                                 Text(initials(artist.name))
                                     .font(.system(size: avatarSide * 0.34, weight: .bold))
                                     .foregroundStyle(UltrafinColors.primaryText)
@@ -222,7 +222,7 @@ struct MusicIdentityView: View {
             .foregroundStyle(.white)
             .padding(avatarSide * 0.08)
             .frame(minWidth: avatarSide * 0.32)
-            .background(settings.theme.accent.color, in: Circle())
+            .background(settings.accent, in: Circle())
     }
 
     // MARK: - Top songs
@@ -241,7 +241,7 @@ struct MusicIdentityView: View {
                             Text("\(i + 1)")
                                 .font(.system(size: rowNumber, weight: .bold, design: .rounded))
                                 .monospacedDigit()
-                                .foregroundStyle(settings.theme.accent.color)
+                                .foregroundStyle(settings.accent)
                                 .frame(width: rowNumber * 1.6)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(song.name)

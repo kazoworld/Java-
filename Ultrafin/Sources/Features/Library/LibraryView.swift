@@ -245,7 +245,7 @@ struct LibraryContentsView: View {
             .padding(.vertical, Spacing.sm)
             .background {
                 if active {
-                    Capsule().fill(settings.theme.accent.color.gradient)
+                    Capsule().fill(settings.accent.gradient)
                     Capsule().fill(LiquidGlass.sheen)
                 } else {
                     Color.clear.glassEffect(.regular, in: .capsule)

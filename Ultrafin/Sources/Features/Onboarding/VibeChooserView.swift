@@ -151,7 +151,7 @@ struct VibeChooserView: View {
             HStack(spacing: scale(10)) {
                 Image(systemName: setAsDefault ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: scale(19), weight: .semibold))
-                    .foregroundStyle(setAsDefault ? settings.theme.accent.color : .white.opacity(0.5))
+                    .foregroundStyle(setAsDefault ? settings.accent : .white.opacity(0.5))
                     .contentTransition(.symbolEffect(.replace))
                 Text("Start here every time")
                     .font(.system(size: scale(15), weight: .semibold, design: .rounded))

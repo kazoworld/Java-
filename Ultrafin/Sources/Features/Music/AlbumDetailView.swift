@@ -31,16 +31,7 @@ struct AlbumDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
-                header
-                trackList
-            }
-            .padding(.horizontal, edgePadding)
-            .padding(.vertical, Spacing.xl)
-            .frame(maxWidth: contentMaxWidth)
-            .frame(maxWidth: .infinity)
-        }
+        content
         .background(AlbumBackdrop(color: artColor))
         .environment(\.colorScheme, .dark)
         #if os(iOS)
@@ -67,16 +58,100 @@ struct AlbumDetailView: View {
         }
     }
 
-    // MARK: - Header
-
     @ViewBuilder
-    private var header: some View {
+    private var content: some View {
         #if os(tvOS)
-        tvHeader
+        tvContent
         #else
-        phoneHeader
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                phoneHeader
+                trackList
+            }
+            .padding(.horizontal, edgePadding)
+            .padding(.vertical, Spacing.xl)
+            .frame(maxWidth: .infinity)
+        }
         #endif
     }
+
+    #if os(tvOS)
+    /// Apple TV's album page: the record and its actions stand still on the
+    /// left while the songs scroll on the right.
+    ///
+    /// The old layout stacked the two in a single 1200pt column on a 1920pt
+    /// screen, which is why it read like a phone taped to a television — one
+    /// narrow strip of content with a third of the screen empty either side.
+    /// Two columns use the whole canvas and give the track list somewhere to
+    /// actually scroll.
+    private var tvContent: some View {
+        HStack(alignment: .top, spacing: 72) {
+            tvSidebar
+                .frame(width: 560)
+
+            ScrollView {
+                trackList
+                    .padding(.bottom, 80)
+            }
+            .frame(maxWidth: .infinity)
+            .focusSection()
+        }
+        .padding(.horizontal, 80)
+        .padding(.top, 60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// The left column: cover, title, credits, and the two things you came to
+    /// press. Deliberately not scrollable — it's the page's anchor.
+    private var tvSidebar: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            RemoteImage(url: artURL)
+                .frame(width: artSide, height: artSide)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .specularRim(cornerRadius: 12, intensity: 0.7)
+                .shadow(color: .black.opacity(0.5), radius: 36, y: 20)
+
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: 10) {
+                    Text(container.name)
+                        .font(.system(size: titleSize, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    if container.isExplicit { ExplicitBadge(size: titleSize * 0.44) }
+                }
+                Text(subtitleLine)
+                    .font(.system(size: titleSize * 0.52, weight: .medium))
+                    .foregroundStyle(artColor?.shade(brightness: 1.2, saturation: 0.85)
+                                     ?? settings.accent)
+                    .lineLimit(1)
+                if let detail = tvDetailLine {
+                    Text(detail)
+                        .font(.system(size: titleSize * 0.38, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(2)
+                }
+            }
+
+            HStack(spacing: Spacing.md) {
+                actionPill("Play", icon: "play.fill", fill: false) { start(shuffled: false) }
+                actionPill("Shuffle", icon: "shuffle", fill: false) { start(shuffled: true) }
+            }
+            .padding(.top, Spacing.sm)
+            .focusSection()
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// "Album · Hip Hop · 2017 · FLAC · 13 songs · 46 min" — the TV has the room
+    /// for the full line, so it carries the count and length the phone drops.
+    private var tvDetailLine: String? {
+        var parts: [String] = []
+        if let detail = detailLine { parts.append(detail) }
+        if let meta = metaLine { parts.append(meta) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+    #endif
 
     #if os(iOS)
     /// iPhone: cover in a white frame, then title, artist and a quiet
@@ -275,43 +350,6 @@ struct AlbumDetailView: View {
     }
     #endif
 
-    /// tvOS keeps the wide art-left / info-right hero (plenty of room there).
-    private var tvHeader: some View {
-        HStack(alignment: .bottom, spacing: Spacing.xl) {
-            RemoteImage(url: artURL)
-                .frame(width: artSide, height: artSide)
-                .clipShape(RoundedRectangle(cornerRadius: Spacing.cornerRadius, style: .continuous))
-                .specularRim(cornerRadius: Spacing.cornerRadius, intensity: 0.7)
-                .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
-
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: 8) {
-                    if container.isExplicit { ExplicitBadge(size: titleSize * 0.5) }
-                    Text(container.name)
-                        .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                        .foregroundStyle(UltrafinColors.primaryText)
-                        .lineLimit(2)
-                }
-                Text(subtitleLine)
-                    .font(.system(size: titleSize * 0.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(artColor?.color ?? settings.theme.accent.color)
-                    .lineLimit(1)
-                if let meta = metaLine {
-                    Text(meta)
-                        .font(.system(size: titleSize * 0.38, weight: .medium))
-                        .foregroundStyle(UltrafinColors.secondaryText)
-                }
-
-                HStack(spacing: Spacing.md) {
-                    actionPill("Play", icon: "play.fill", fill: false) { start(shuffled: false) }
-                    actionPill("Shuffle", icon: "shuffle", fill: false) { start(shuffled: true) }
-                }
-                .padding(.top, Spacing.sm)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
     private func actionPill(_ title: String, icon: String, fill: Bool, action: @escaping () -> Void) -> some View {
         Button {
             Haptics.play(.medium)
@@ -325,7 +363,7 @@ struct AlbumDetailView: View {
                 .frame(maxWidth: fill ? .infinity : nil)
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.sm + 3)
-                .tintedGlassCapsule(artColor?.color ?? settings.theme.accent.color, strength: 0.65)
+                .tintedGlassCapsule(artColor?.color ?? settings.accent, strength: 0.65)
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: true))
         .disabled(tracks.isEmpty)
@@ -369,16 +407,14 @@ struct AlbumDetailView: View {
                         trackMenu(for: track, at: position)
                         #endif
                     }
-                    #if os(iOS)
                     // Hairline separators between songs, inset to where the title
                     // starts and running out to the edge — the Apple Music rhythm.
                     if position < tracks.count - 1 {
                         Rectangle()
                             .fill(.white.opacity(0.12))
-                            .frame(height: 0.5)
-                            .padding(.leading, AlbumTrackRow.titleInset)
+                            .frame(height: separatorHeight)
+                            .padding(.leading, separatorInset)
                     }
-                    #endif
                 }
             }
         }
@@ -518,9 +554,25 @@ struct AlbumDetailView: View {
 
     // MARK: - Metrics
 
+    private var separatorHeight: CGFloat {
+        #if os(tvOS)
+        1
+        #else
+        0.5
+        #endif
+    }
+    /// Separators start where the title does, so the number column stays clear.
+    private var separatorInset: CGFloat {
+        #if os(tvOS)
+        76
+        #else
+        AlbumTrackRow.titleInset
+        #endif
+    }
+
     private var artSide: CGFloat {
         #if os(tvOS)
-        340
+        460
         #else
         260
         #endif
@@ -551,13 +603,6 @@ struct AlbumDetailView: View {
         60
         #else
         20
-        #endif
-    }
-    private var contentMaxWidth: CGFloat {
-        #if os(tvOS)
-        1200
-        #else
-        .infinity
         #endif
     }
 }
@@ -616,7 +661,7 @@ struct AlbumTrackRow: View {
         } else if isCurrent {
             Image(systemName: "waveform")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(settings.theme.accent.color)
+                .foregroundStyle(settings.accent)
         } else {
             Text("\(position)")
                 .font(.system(size: 16))
@@ -648,7 +693,7 @@ struct TrackRow: View {
             } else if isCurrent {
                 Image(systemName: "waveform")
                     .font(.system(size: numberSize, weight: .semibold))
-                    .foregroundStyle(settings.theme.accent.color)
+                    .foregroundStyle(settings.accent)
                     .frame(width: numberSize * 1.6)
             } else {
                 Text("\(position)")
@@ -662,7 +707,7 @@ struct TrackRow: View {
                 HStack(spacing: 5) {
                     Text(track.name)
                         .font(.system(size: titleSize, weight: .semibold, design: .rounded))
-                        .foregroundStyle(isCurrent ? settings.theme.accent.color : UltrafinColors.primaryText)
+                        .foregroundStyle(isCurrent ? settings.accent : UltrafinColors.primaryText)
                         .lineLimit(1)
                     if track.isExplicit { ExplicitBadge(size: titleSize * 0.82) }
                 }
@@ -680,11 +725,11 @@ struct TrackRow: View {
                     .foregroundStyle(UltrafinColors.tertiaryText)
             }
         }
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.sm + 2)
+        .padding(.horizontal, rowHPadding)
+        .padding(.vertical, rowVPadding)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.white.opacity(isFocused ? 0.12 : (isCurrent ? 0.06 : 0)))
+                .fill(.white.opacity(isFocused ? 0.14 : (isCurrent ? 0.06 : 0)))
         )
         .contentShape(Rectangle())
     }
@@ -695,23 +740,38 @@ struct TrackRow: View {
 
     private var numberSize: CGFloat {
         #if os(tvOS)
-        24
+        22
         #else
         15
         #endif
     }
     private var titleSize: CGFloat {
         #if os(tvOS)
-        26
+        25
         #else
         16
         #endif
     }
     private var artSide: CGFloat {
         #if os(tvOS)
-        64
+        56
         #else
         44
+        #endif
+    }
+    private var rowHPadding: CGFloat {
+        #if os(tvOS)
+        Spacing.lg
+        #else
+        Spacing.md
+        #endif
+    }
+    /// A TV is watched from across a room; rows need room to separate.
+    private var rowVPadding: CGFloat {
+        #if os(tvOS)
+        16
+        #else
+        Spacing.sm + 2
         #endif
     }
 }

@@ -31,7 +31,7 @@ struct PlayerControlsView: View {
     @State private var scrubVelocity: Int = 1
     @State private var lastScrubAt: Date = .distantPast
 
-    private var accent: Color { settings.theme.accent.color }
+    private var accent: Color { settings.accent }
 
     var body: some View {
         ZStack {
@@ -631,7 +631,7 @@ struct ProgressTrack: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.2))
                 Capsule().fill(Color.white.opacity(0.3)).frame(width: width * buffered.clamped01())
-                Capsule().fill(settings.theme.accent.color).frame(width: width * progress.clamped01())
+                Capsule().fill(settings.accent).frame(width: width * progress.clamped01())
             }
             .frame(height: height)
             .frame(maxHeight: .infinity, alignment: .center)
@@ -663,7 +663,7 @@ private struct Scrubber: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.2))
                 Capsule().fill(Color.white.opacity(0.3)).frame(width: width * buffered.clamped01())
-                Capsule().fill(settings.theme.accent.color).frame(width: width * progress.clamped01())
+                Capsule().fill(settings.accent).frame(width: width * progress.clamped01())
                 Circle().fill(.white).frame(width: 18, height: 18)
                     .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
                     .offset(x: width * progress.clamped01() - 9)

@@ -35,7 +35,7 @@ struct FeaturedLibraryPickerView: View {
                                 Spacer()
                                 if settings.featured.sourceLibraryIDs.contains(library.id) {
                                     Image(systemName: "checkmark")
-                                        .foregroundStyle(settings.theme.accent.color)
+                                        .foregroundStyle(settings.accent)
                                         .font(.system(size: 16, weight: .bold))
                                 }
                             }
@@ -52,7 +52,7 @@ struct FeaturedLibraryPickerView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Libraries")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
         .task { await loadLibraries() }
     }
 

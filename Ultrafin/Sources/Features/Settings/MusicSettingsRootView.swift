@@ -29,7 +29,7 @@ struct MusicSettingsRootView: View {
             } header: {
                 Text("Your library, your way.")
                     .font(.system(size: sloganSize, weight: .semibold, design: .rounded))
-                    .foregroundStyle(settings.theme.accent.color)
+                    .foregroundStyle(settings.accent)
                     .textCase(nil)
             }
 
@@ -79,7 +79,7 @@ struct MusicSettingsRootView: View {
         #endif
         .musicCanvas()
         .navigationTitle("Music Settings")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 
     private var sourceSubtitle: String {

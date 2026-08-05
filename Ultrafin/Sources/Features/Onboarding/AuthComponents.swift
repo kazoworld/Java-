@@ -20,7 +20,7 @@ struct AuthCard<Content: View>: View {
                     .strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.35), radius: 40, y: 20)
-            .shadow(color: settings.theme.accent.color.opacity(0.18), radius: 34, y: 8)
+            .shadow(color: settings.accent.opacity(0.18), radius: 34, y: 8)
     }
 }
 
@@ -44,7 +44,7 @@ struct AuthBrand: View {
                     .glassEffect(.regular, in: RoundedRectangle(cornerRadius: chipSize * 0.28, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: chipSize * 0.28, style: .continuous)
                         .strokeBorder(LiquidGlass.rim(0.7), lineWidth: 1))
-                    .shadow(color: settings.theme.accent.color.opacity(0.35), radius: 16, y: 6)
+                    .shadow(color: settings.accent.opacity(0.35), radius: 16, y: 6)
             } else {
                 UltrafinMark(size: markSize)
             }

@@ -65,7 +65,7 @@ struct LegalView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Legal")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 
     @ViewBuilder
@@ -75,7 +75,7 @@ struct LegalView: View {
         HStack(spacing: Spacing.md) {
             Image(systemName: systemImage)
                 .font(.system(size: iconSize))
-                .foregroundStyle(settings.theme.accent.color)
+                .foregroundStyle(settings.accent)
                 .frame(width: iconSize + 10)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -86,7 +86,7 @@ struct LegalView: View {
                     .foregroundStyle(UltrafinColors.secondaryText)
                 Text(url.absoluteString.replacingOccurrences(of: "https://", with: ""))
                     .font(.system(size: rowTitleSize * 0.7, weight: .medium, design: .monospaced))
-                    .foregroundStyle(settings.theme.accent.color)
+                    .foregroundStyle(settings.accent)
             }
             Spacer()
         }
@@ -97,7 +97,7 @@ struct LegalView: View {
             HStack(spacing: Spacing.md) {
                 Image(systemName: systemImage)
                     .font(.system(size: iconSize))
-                    .foregroundStyle(settings.theme.accent.color)
+                    .foregroundStyle(settings.accent)
                     .frame(width: iconSize + 10)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)

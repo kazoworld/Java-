@@ -83,7 +83,7 @@ struct ServerPluginsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Server Plugins")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
         .task {
             plugins = await appState.client?.installedPlugins()
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending } ?? []
@@ -96,7 +96,7 @@ struct ServerPluginsView: View {
         return HStack(spacing: Spacing.md) {
             Image(systemName: "puzzlepiece.extension.fill")
                 .font(.system(size: iconSize))
-                .foregroundStyle(benefit != nil ? settings.theme.accent.color : UltrafinColors.tertiaryText)
+                .foregroundStyle(benefit != nil ? settings.accent : UltrafinColors.tertiaryText)
                 .frame(width: iconSize + 10)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -105,7 +105,7 @@ struct ServerPluginsView: View {
                     .foregroundStyle(UltrafinColors.primaryText)
                 Text(subtitle(for: plugin, benefit: benefit))
                     .font(.system(size: nameSize * 0.72))
-                    .foregroundStyle(benefit != nil ? settings.theme.accent.color.opacity(0.9)
+                    .foregroundStyle(benefit != nil ? settings.accent.opacity(0.9)
                                                     : UltrafinColors.tertiaryText)
                     .lineLimit(2)
             }
@@ -115,7 +115,7 @@ struct ServerPluginsView: View {
                     .font(.system(size: nameSize * 0.6, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
-                    .background(settings.theme.accent.color.opacity(0.9), in: Capsule())
+                    .background(settings.accent.opacity(0.9), in: Capsule())
             }
         }
         .padding(.vertical, 2)
@@ -133,7 +133,7 @@ struct ServerPluginsView: View {
         HStack(spacing: Spacing.md) {
             Image(systemName: icon)
                 .font(.system(size: iconSize))
-                .foregroundStyle(settings.theme.accent.color)
+                .foregroundStyle(settings.accent)
                 .frame(width: iconSize + 10)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)

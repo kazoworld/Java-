@@ -94,7 +94,7 @@ struct SmartMixDetailView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.sm + 3)
-                .background(settings.theme.accent.color, in: Capsule())
+                .background(settings.accent, in: Capsule())
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.05, lift: false))
         .disabled(tracks.isEmpty)

@@ -59,7 +59,7 @@ struct SubtitleSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Subtitles")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
         .animation(.smooth(duration: 0.25), value: settings.subtitles.textColor)
         .animation(.smooth(duration: 0.25), value: settings.subtitles.font)
         .animation(.smooth(duration: 0.25), value: settings.subtitles.boldText)
@@ -110,7 +110,7 @@ struct SubtitleSettingsView: View {
                         .overlay(
                             Circle().strokeBorder(
                                 settings.subtitles.textColor == option
-                                    ? settings.theme.accent.color : .white.opacity(0.15),
+                                    ? settings.accent : .white.opacity(0.15),
                                 lineWidth: settings.subtitles.textColor == option ? 3 : 1)
                         )
                         .scaleEffect(settings.subtitles.textColor == option ? 1.12 : 1)

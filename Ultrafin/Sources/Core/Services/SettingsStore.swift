@@ -12,6 +12,17 @@ final class SettingsStore {
     var theme: ThemePreferences {
         didSet { persist(theme, key: Keys.theme) }
     }
+
+    /// The accent for whichever experience is on screen.
+    ///
+    /// Music is Apple Music's red and doesn't ask — that colour is the point of
+    /// how that side looks. Media keeps the palette the user picked in
+    /// Appearance, so restyling the record player never repainted their movies.
+    /// Both `AppModeState` and this store are observable, so a view reading this
+    /// re-renders on a mode switch *and* on an accent change.
+    var accent: Color {
+        AppModeState.shared.current == .music ? UltrafinColors.musicAccent : theme.accent.color
+    }
     var appearance: AppearancePreferences {
         didSet { persist(appearance, key: Keys.appearance) }
     }
@@ -224,7 +235,7 @@ final class SettingsStore {
 // MARK: - Preference groups
 
 struct ThemePreferences: Codable {
-    var accent: AccentColor = .ultrafinRed
+    var accent: AccentColor = .aurora
 
     init() {}
 
@@ -237,7 +248,7 @@ struct ThemePreferences: Codable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        accent = (try? c.decodeIfPresent(AccentColor.self, forKey: .accent)) ?? .ultrafinRed
+        accent = (try? c.decodeIfPresent(AccentColor.self, forKey: .accent)) ?? .aurora
     }
 }
 

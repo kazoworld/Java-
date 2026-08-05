@@ -46,7 +46,7 @@ struct MusicStorageSettingsView: View {
                             .font(.system(size: 15, weight: .semibold, design: .rounded))
                             .foregroundStyle(UltrafinColors.primaryText)
                         ProgressView(value: store.jobProgress)
-                            .tint(settings.theme.accent.color)
+                            .tint(settings.accent)
                     }
                     Button("Stop", role: .destructive) {
                         job?.cancel()
@@ -107,7 +107,7 @@ struct MusicStorageSettingsView: View {
         .scrollContentBackground(.hidden)
         .musicCanvas()
         .navigationTitle("Downloads & Storage")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
         .task { refreshArtworkSize() }
         .onDisappear { job?.cancel() }
         .confirmationDialog("Clear cached songs and album art?",

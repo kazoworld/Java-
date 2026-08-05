@@ -36,7 +36,7 @@ struct SeasonEpisodeBrowser: View {
     /// The one-time landing of focus on the current episode has happened.
     @State private var didAutoFocus = false
 
-    private var accent: Color { settings.theme.accent.color }
+    private var accent: Color { settings.accent }
     private var multiSeason: Bool { seasons.count > 1 }
 
     /// Two columns when there's room (tvOS, iPad, landscape); a dropdown + list

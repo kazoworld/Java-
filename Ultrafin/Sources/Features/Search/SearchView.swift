@@ -158,7 +158,7 @@ struct SearchView: View {
                             .padding(.vertical, Spacing.sm)
                             .background {
                                 if active {
-                                    Capsule().fill(settings.theme.accent.color.gradient)
+                                    Capsule().fill(settings.accent.gradient)
                                     Capsule().fill(LiquidGlass.sheen)
                                 } else {
                                     Color.clear.glassEffect(.regular, in: .capsule)
@@ -189,7 +189,7 @@ struct SearchView: View {
                     Spacer()
                     Button("Clear") { withAnimation(.smooth(duration: 0.25)) { model.clearRecents() } }
                         .font(.system(size: pillFont, weight: .semibold, design: .rounded))
-                        .foregroundStyle(settings.theme.accent.color)
+                        .foregroundStyle(settings.accent)
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: false))
                 }
 

@@ -15,7 +15,7 @@ struct AmbientBackground: View {
 
     @Environment(SettingsStore.self) private var settings
 
-    private var accent: Color { settings.theme.accent.color }
+    private var accent: Color { settings.accent }
     /// The dominant wash color — the content tint when present, else the accent.
     private var primary: Color { tint ?? accent }
 

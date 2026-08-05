@@ -66,7 +66,7 @@ struct FeaturedSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Media Bar")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 
     private var librarySummary: String {

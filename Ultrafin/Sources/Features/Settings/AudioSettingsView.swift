@@ -40,6 +40,6 @@ struct AudioSettingsView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Audio")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
     }
 }

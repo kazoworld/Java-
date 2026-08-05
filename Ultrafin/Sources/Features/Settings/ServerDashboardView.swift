@@ -28,7 +28,7 @@ struct ServerDashboardView: View {
         #endif
         .background(AmbientBackground())
         .navigationTitle("Server")
-        .tint(settings.theme.accent.color)
+        .tint(settings.accent)
         .toast($toast)
         .task {
             await loadOnce()
@@ -101,7 +101,7 @@ struct ServerDashboardView: View {
                         ProgressView()
                     } else {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundStyle(settings.theme.accent.color)
+                            .foregroundStyle(settings.accent)
                     }
                     Text(isScanning ? "Scan requested…" : "Scan All Libraries")
                         .foregroundStyle(UltrafinColors.primaryText)
@@ -162,7 +162,7 @@ struct ServerDashboardView: View {
             Image(systemName: session.playState?.isPaused == true ? "pause.circle.fill" : "play.circle.fill")
                 .font(.system(size: rowIconSize))
                 .foregroundStyle(session.playState?.isPaused == true
-                                 ? UltrafinColors.tertiaryText : settings.theme.accent.color)
+                                 ? UltrafinColors.tertiaryText : settings.accent)
             VStack(alignment: .leading, spacing: 2) {
                 Text(nowPlayingTitle(session))
                     .font(.system(size: rowTextSize, weight: .semibold, design: .rounded))

@@ -37,6 +37,17 @@ struct NowPlayingMusicView: View {
     /// Local heart state so the tap lands instantly; cleared on track change.
     @State private var favoriteOverride: Bool?
 
+    #if os(tvOS)
+    /// Which control the remote is on.
+    ///
+    /// These are real focus targets. The player used to be one big
+    /// `.focusable()` container, which meant it swallowed focus so no button
+    /// inside could ever be reached, and its move handler ate up and down as
+    /// well — the screen you could only look at.
+    enum TVControl: Hashable { case art, scrub, playPause }
+    @FocusState private var tvFocus: TVControl?
+    #endif
+
     /// True on an iPhone held in landscape — the carousel becomes the stage.
     private var isLandscapePhone: Bool {
         #if os(iOS)
@@ -137,31 +148,81 @@ struct NowPlayingMusicView: View {
         // area and the block below the stage both scale with the screen. Give
         // the carousel at most half the height — the card is 1.45× its art once
         // the reflection is counted — and cap it on width so it never crowds.
-        let stageHeight = size.height * 0.50
-        let side = max(200, min(size.width * 0.24, stageHeight / 1.45))
+        let stageHeight = size.height * 0.46
+        let side = max(200, min(size.width * 0.22, stageHeight / 1.45))
         return VStack(spacing: size.height * 0.022) {
-            carouselStage(side: side)
-                .frame(height: side * 1.45)
-                .frame(maxWidth: .infinity)
-            trackInfo
-            scrubber
-            transport
-            bottomBar
+            Group {
+                if stage == .art {
+                    carouselStage(side: side)
+                        .frame(height: side * 1.45)
+                        // Focusable in its own right, so left/right steps through
+                        // the queue without hunting for the transport buttons.
+                        .focusable()
+                        .focused($tvFocus, equals: .art)
+                        .onMoveCommand { direction in
+                            switch direction {
+                            case .left: player.previous()
+                            case .right: player.next()
+                            // Handled explicitly rather than left to the focus
+                            // engine: onMoveCommand consumes the event, so
+                            // without this the art would trap the remote.
+                            case .down: tvFocus = .scrub
+                            default: break
+                            }
+                        }
+                } else {
+                    // Lyrics and the queue take the stage when their chip is on.
+                    centerStage(maxSide: side)
+                        .frame(maxHeight: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            if stage == .art { trackInfo }
+            tvScrubber
+            transport.focusSection()
+            bottomBar.focusSection()
         }
         // Stay inside the TV's title-safe area, proportionally.
         .padding(.horizontal, size.width * 0.08)
         .padding(.vertical, size.height * 0.04)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Left/right on the remote moves through the queue, so the carousel is
-        // steerable without hunting for the transport buttons.
-        .focusable()
-        .onMoveCommand { direction in
-            switch direction {
-            case .left: player.previous()
-            case .right: player.next()
-            default: break
+        // Something must own focus the moment the player appears, or Menu has
+        // nothing to bubble out of and the whole screen goes inert.
+        .defaultFocus($tvFocus, .playPause)
+        .onExitCommand { dismiss() }
+    }
+
+    /// The scrub bar as a real focus target: left and right move the playhead,
+    /// up and down hand off to the neighbouring row.
+    private var tvScrubber: some View {
+        scrubber
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.white.opacity(tvFocus == .scrub ? 0.16 : 0))
+            )
+            .scaleEffect(tvFocus == .scrub ? 1.015 : 1)
+            .animation(.smooth(duration: 0.2), value: tvFocus)
+            .focusable()
+            .focused($tvFocus, equals: .scrub)
+            .onMoveCommand { direction in
+                switch direction {
+                case .left: nudge(by: -10)
+                case .right: nudge(by: 10)
+                case .up: tvFocus = stage == .art ? .art : .scrub
+                case .down: tvFocus = .playPause
+                default: break
+                }
             }
-        }
+    }
+
+    /// Move the playhead by a few seconds — left/right while the bar has focus.
+    private func nudge(by seconds: Double) {
+        guard player.duration > 0 else { return }
+        let target = min(max(0, player.currentTime + seconds), player.duration)
+        player.seek(toProgress: target / player.duration)
     }
     #endif
 
@@ -791,7 +852,7 @@ struct NowPlayingMusicView: View {
             }
             Text(artistLine)
                 .font(.system(size: titleSize * 0.68, weight: .semibold, design: .rounded))
-                .foregroundStyle(artColor?.shade(brightness: 1.15, saturation: 0.9) ?? settings.theme.accent.color)
+                .foregroundStyle(artColor?.shade(brightness: 1.15, saturation: 0.9) ?? settings.accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
@@ -858,12 +919,25 @@ struct NowPlayingMusicView: View {
     private var transport: some View {
         HStack(spacing: transportSpacing) {
             transportButton("backward.fill", size: sideButtonSize) { player.previous() }
-            transportButton(player.isPlaying ? "pause.fill" : "play.fill", size: playButtonSize) {
-                player.togglePlayPause()
-            }
+            playPauseButton
             transportButton("forward.fill", size: sideButtonSize) { player.next() }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Split out because on tvOS this is where focus lands when the player
+    /// opens — the rest of the remote's navigation works outward from here.
+    @ViewBuilder
+    private var playPauseButton: some View {
+        let button = transportButton(player.isPlaying ? "pause.fill" : "play.fill",
+                                     size: playButtonSize) {
+            player.togglePlayPause()
+        }
+        #if os(tvOS)
+        button.focused($tvFocus, equals: .playPause)
+        #else
+        button
+        #endif
     }
 
     private func transportButton(_ icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
