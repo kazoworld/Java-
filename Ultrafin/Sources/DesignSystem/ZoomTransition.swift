@@ -9,28 +9,78 @@ import SwiftUI
 /// gesture the whole way, so dragging back tracks your thumb and releasing
 /// hands off to a spring from wherever you let go.
 ///
+/// **Both ends are required.** A destination that declares a zoom with no
+/// matching source on screen still runs the transition machinery and comes up
+/// empty-handed, which costs a beat of dead input at the end of the gesture. A
+/// `navigationDestination` is registered once at the root of a stack but is
+/// reached from many screens, so the namespace travels in the environment
+/// rather than living in whichever view happened to declare it — that way a
+/// card three pushes deep marks itself with the same namespace the destination
+/// is looking in.
+///
 /// tvOS has no interactive back gesture and no matched-transition support, so
-/// both of these are no-ops there.
-extension View {
-    /// Marks the tappable card a push should zoom out of. `id` must match the
-    /// `zoomedFrom` id on the destination; when it doesn't, the system quietly
-    /// falls back to the standard push rather than misbehaving.
-    @ViewBuilder
-    func zoomSource(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
+/// all of this is inert there.
+private struct CardZoomNamespaceKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
+extension EnvironmentValues {
+    /// The namespace paired zoom transitions resolve against, app-wide.
+    var cardZoomNamespace: Namespace.ID? {
+        get { self[CardZoomNamespaceKey.self] }
+        set { self[CardZoomNamespaceKey.self] = newValue }
+    }
+}
+
+/// Marks a tappable card as the thing a push should zoom out of.
+private struct CardZoomSource: ViewModifier {
+    let id: String
+    @Environment(\.cardZoomNamespace) private var namespace
+
+    func body(content: Content) -> some View {
         #if os(iOS)
-        matchedTransitionSource(id: id, in: namespace)
+        if let namespace {
+            content.matchedTransitionSource(id: id, in: namespace)
+        } else {
+            content
+        }
         #else
-        self
+        content
         #endif
     }
+}
 
-    /// Marks the destination page as the far end of that zoom.
-    @ViewBuilder
-    func zoomedFrom(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
+/// Marks a destination page as the far end of that zoom.
+private struct CardZoomDestination: ViewModifier {
+    let id: String
+    @Environment(\.cardZoomNamespace) private var namespace
+
+    func body(content: Content) -> some View {
         #if os(iOS)
-        navigationTransition(.zoom(sourceID: id, in: namespace))
+        if let namespace {
+            content.navigationTransition(.zoom(sourceID: id, in: namespace))
+        } else {
+            content
+        }
         #else
-        self
+        content
         #endif
+    }
+}
+
+extension View {
+    /// Publishes the namespace every paired zoom in this subtree resolves in.
+    func cardZoomNamespace(_ namespace: Namespace.ID) -> some View {
+        environment(\.cardZoomNamespace, namespace)
+    }
+
+    /// The card the push zooms out of. `id` must match ``cardZoomDestination``.
+    func cardZoomSource(_ id: String) -> some View {
+        modifier(CardZoomSource(id: id))
+    }
+
+    /// The page that push arrives at.
+    func cardZoomDestination(_ id: String) -> some View {
+        modifier(CardZoomDestination(id: id))
     }
 }

@@ -30,6 +30,11 @@ struct MainTabView: View {
     /// persist across every tab).
     @State private var music = MusicPlayer.shared
     @State private var showNowPlaying = false
+    /// Measured height of the floating bottom chrome. Pages reserve exactly
+    /// this much so their last row clears the glass.
+    @State private var chromeHeight: CGFloat = 0
+    /// One namespace for every paired zoom transition in the app.
+    @Namespace private var cardZoom
 
     /// The switcher's tag. Selecting it flips modes instead of navigating.
     private static let switchTag = 90
@@ -124,11 +129,19 @@ struct MainTabView: View {
             showNowPlaying = true
         }
         #else
-        // The system tab bar is hidden per-tab; this is what stands in for it.
-        // A safe-area inset rather than an overlay, so every scroll view inside
-        // gets the right bottom inset for free — content still slides *behind*
-        // the glass, it just comes to rest above it.
-        .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
+        // The chrome is DRAWN as an overlay and its space is RESERVED per tab
+        // (see `reservesChromeSpace`). A `safeAreaInset` here looked like the
+        // tidy way to do both at once, but the inset it creates does not reach
+        // the scroll views inside each tab's NavigationStack — which is why the
+        // last row of every page sat under the glass and couldn't be scrolled
+        // clear of it. Splitting drawing from layout makes each stack reserve
+        // its own space, and that always propagates.
+        .overlay(alignment: .bottom) {
+            bottomChrome
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    chromeHeight = height
+                }
+        }
         #endif
         #if os(tvOS)
         .animation(.smooth(duration: 0.35), value: music.hasQueue)
@@ -161,6 +174,7 @@ struct MainTabView: View {
         // change in Settings recolors the tab bar live (the static
         // SettingsStore.shared read didn't re-render).
         .tint(settings.accent)
+        .cardZoomNamespace(cardZoom)
     }
 
     /// The bar only belongs to Music mode, and never behind the full player.
@@ -212,21 +226,25 @@ struct MainTabView: View {
     private var mediaTabs: some View {
         NavigationStack(path: $homePath) { HomeView() }
             .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
 
         NavigationStack(path: $libraryPath) { LibraryRootView() }
             .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Library", systemImage: "square.stack.fill") }
             .tag(1)
 
         NavigationStack(path: $searchPath) { SearchView() }
             .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Search", systemImage: "magnifyingglass") }
             .tag(2)
 
         NavigationStack(path: $settingsPath) { SettingsView() }
             .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             .tag(3)
 
@@ -249,21 +267,25 @@ struct MainTabView: View {
     private var musicTabs: some View {
         NavigationStack(path: $listenPath) { MusicHomeView() }
             .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
 
         NavigationStack(path: $musicLibraryPath) { MusicLibraryView() }
             .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Library", systemImage: "square.stack.fill") }
             .tag(1)
 
         NavigationStack(path: $musicSearchPath) { MusicSearchView() }
             .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Search", systemImage: "magnifyingglass") }
             .tag(2)
 
         NavigationStack(path: $musicSettingsPath) { MusicSettingsRootView() }
             .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             .tag(3)
 
@@ -316,10 +338,22 @@ private extension View {
     func hidesSystemTabBar() -> some View {
         toolbar(.hidden, for: .tabBar)
     }
+
+    /// Reserve room at the bottom of this tab for the floating chrome drawn
+    /// over it. Applied per `NavigationStack`, because that's the level whose
+    /// safe area actually reaches the scroll views inside — including pushed
+    /// ones. Clear, so content still scrolls *behind* the glass and simply
+    /// comes to rest above it.
+    func reservesChromeSpace(_ height: CGFloat) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: height)
+        }
+    }
 }
 #else
 private extension View {
     func hidesSystemTabBar() -> some View { self }
+    func reservesChromeSpace(_ height: CGFloat) -> some View { self }
 }
 #endif
 

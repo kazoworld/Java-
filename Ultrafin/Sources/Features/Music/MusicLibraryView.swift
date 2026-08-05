@@ -115,9 +115,6 @@ struct MusicLibraryView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
     @State private var model = MusicLibraryViewModel()
-    /// See `MusicHomeView.cardZoom` — the push zooms out of the tapped tile and
-    /// the swipe back follows your finger.
-    @Namespace private var cardZoom
 
     private var sections: [MusicLibrarySection] {
         MusicLibraryCache.isSupported
@@ -155,7 +152,7 @@ struct MusicLibraryView: View {
                                 GridAlbumCard(album: album)
                             }
                             .musicCardButtonStyle()
-                            .zoomSource(album.id, in: cardZoom)
+                            .cardZoomSource(album.id)
                         }
                     }
                 }
@@ -168,7 +165,9 @@ struct MusicLibraryView: View {
             }
             .padding(.horizontal, MusicGrid.edgePadding)
             .padding(.top, listTopPadding)
-            .padding(.bottom, Spacing.xxl * 2)
+            // The bottom chrome reserves its own space now; a second helping
+            // here just left a hole under the last row.
+            .padding(.bottom, Spacing.lg)
         }
         .musicCanvas()
         .navigationTitle("Library")
@@ -185,7 +184,7 @@ struct MusicLibraryView: View {
                 default: AlbumDetailView(container: item)
                 }
             }
-            .zoomedFrom(item.id, in: cardZoom)
+            .cardZoomDestination(item.id)
         }
         .task(id: settings.musicSource) {
             guard let source = appState.musicSource else { return }
@@ -276,6 +275,7 @@ struct MusicSectionListView: View {
                 ForEach(items) { item in
                     NavigationLink(value: item) { GridAlbumCard(album: item) }
                         .musicCardButtonStyle()
+                        .cardZoomSource(item.id)
                 }
             }
             .padding(MusicGrid.edgePadding)
@@ -288,6 +288,7 @@ struct MusicSectionListView: View {
                 ForEach(model.artists) { artist in
                     NavigationLink(value: artist) { ArtistCard(artist: artist) }
                         .musicCardButtonStyle()
+                        .cardZoomSource(artist.id)
                 }
             }
             .padding(MusicGrid.edgePadding)

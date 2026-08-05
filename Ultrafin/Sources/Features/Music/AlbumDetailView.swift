@@ -824,6 +824,7 @@ struct ArtistDetailView: View {
                                 AlbumCard(album: album)
                             }
                             .mediaCardButtonStyle()
+                            .cardZoomSource(album.id)
                         }
                     }
                 }
