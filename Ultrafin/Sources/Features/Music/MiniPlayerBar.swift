@@ -59,14 +59,20 @@ struct MiniPlayerBar: View {
             .padding(.trailing, Spacing.sm)
             .padding(.vertical, Spacing.sm)
             .frame(maxWidth: barMaxWidth)
-            .glassCapsule(dim: 0.14)
+            // A heavier dim than the tab pill below it. Glass samples what's
+            // behind it, and over a true-black music canvas a light dim left the
+            // bar as black-on-black — present, but impossible to see.
+            .glassCapsule(dim: 0.3)
             .contentShape(Capsule())
             #if os(iOS)
             .offset(y: max(0, dragOffset))
             .gesture(dismissDrag)
             .onTapGesture { onExpand() }
             #endif
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            // Scale and fade, NOT a move. This lives inside a safe-area inset
+            // whose own height animates as the bar appears; a move transition
+            // races that and can leave the bar parked below the visible area.
+            .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottom)))
         }
     }
 

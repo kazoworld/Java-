@@ -43,7 +43,6 @@ struct AlbumDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { albumMenu } }
-        .adaptsChromeOnScroll()
         #endif
         .tvPopsOnMenu()
         .task {

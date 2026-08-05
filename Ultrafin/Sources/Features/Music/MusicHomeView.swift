@@ -93,6 +93,10 @@ struct MusicHomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
     @State private var model = MusicHomeViewModel()
+    /// Ties a card to the page it opens, so the push is a zoom out of the
+    /// artwork you tapped — and, more to the point, so the swipe back is
+    /// interactive and tracks your finger instead of playing a fixed slide.
+    @Namespace private var cardZoom
 
     var body: some View {
         ScrollView {
@@ -138,18 +142,19 @@ struct MusicHomeView: View {
         #if os(iOS)
         .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.large)
-        // The mini player condenses as this page scrolls down.
-        .adaptsChromeOnScroll()
         #endif
         .navigationDestination(for: MediaItem.self) { item in
-            switch item.type {
-            case .musicAlbum, .playlist: AlbumDetailView(container: item)
-            case .musicArtist: ArtistDetailView(artist: item)
-            default: AlbumDetailView(container: item)
+            Group {
+                switch item.type {
+                case .musicArtist: ArtistDetailView(artist: item)
+                default: AlbumDetailView(container: item)
+                }
             }
+            .zoomedFrom(item.id, in: cardZoom)
         }
         .navigationDestination(for: SmartMix.self) { mix in
             SmartMixDetailView(mix: mix)
+                .zoomedFrom(mix.id, in: cardZoom)
         }
         // Re-runs when the user switches source in Settings, so the tab swaps
         // to the other server's library without an app restart.
@@ -182,6 +187,7 @@ struct MusicHomeView: View {
                                          covers: model.mixCovers[mix.id] ?? [])
                         }
                         .mediaCardButtonStyle()
+                        .zoomSource(mix.id, in: cardZoom)
                     }
                 }
                 .padding(.horizontal, edgePadding)
@@ -252,6 +258,7 @@ struct MusicHomeView: View {
                             AlbumCard(album: album)
                         }
                         .mediaCardButtonStyle()
+                        .zoomSource(album.id, in: cardZoom)
                     }
                 }
                 .padding(.horizontal, edgePadding)
@@ -271,6 +278,7 @@ struct MusicHomeView: View {
                             ArtistCard(artist: artist)
                         }
                         .buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
+                        .zoomSource(artist.id, in: cardZoom)
                     }
                 }
                 .padding(.horizontal, edgePadding)

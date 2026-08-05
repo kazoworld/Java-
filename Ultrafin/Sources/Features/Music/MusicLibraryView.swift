@@ -115,6 +115,9 @@ struct MusicLibraryView: View {
     @Environment(AppState.self) private var appState
     @Environment(SettingsStore.self) private var settings
     @State private var model = MusicLibraryViewModel()
+    /// See `MusicHomeView.cardZoom` — the push zooms out of the tapped tile and
+    /// the swipe back follows your finger.
+    @Namespace private var cardZoom
 
     private var sections: [MusicLibrarySection] {
         MusicLibraryCache.isSupported
@@ -152,6 +155,7 @@ struct MusicLibraryView: View {
                                 GridAlbumCard(album: album)
                             }
                             .musicCardButtonStyle()
+                            .zoomSource(album.id, in: cardZoom)
                         }
                     }
                 }
@@ -170,16 +174,18 @@ struct MusicLibraryView: View {
         .navigationTitle("Library")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
-        .adaptsChromeOnScroll()
         #endif
         .navigationDestination(for: MusicLibrarySection.self) { section in
             MusicSectionListView(section: section, model: model)
         }
         .navigationDestination(for: MediaItem.self) { item in
-            switch item.type {
-            case .musicArtist: ArtistDetailView(artist: item)
-            default: AlbumDetailView(container: item)
+            Group {
+                switch item.type {
+                case .musicArtist: ArtistDetailView(artist: item)
+                default: AlbumDetailView(container: item)
+                }
             }
+            .zoomedFrom(item.id, in: cardZoom)
         }
         .task(id: settings.musicSource) {
             guard let source = appState.musicSource else { return }

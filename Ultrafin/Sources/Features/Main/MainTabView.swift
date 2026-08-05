@@ -53,8 +53,6 @@ struct MainTabView: View {
                 // switcher must never act here — merely moving focus onto it
                 // would flip modes. Its tab shows a screen with a real button.
                 resetPath(for: newValue)
-                // A fresh tab starts at the top, so the chrome starts expanded.
-                ChromeState.shared.reset()
                 selection = newValue
             }
         )
@@ -63,7 +61,6 @@ struct MainTabView: View {
     /// Flip to the other experience, landing on its first tab with clean stacks.
     private func switchMode() {
         Haptics.play(.success)
-        ChromeState.shared.reset()
         resetAllPaths()
         withAnimation(.smooth(duration: 0.35)) {
             mode = mode.opposite
@@ -133,7 +130,9 @@ struct MainTabView: View {
         // the glass, it just comes to rest above it.
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomChrome }
         #endif
+        #if os(tvOS)
         .animation(.smooth(duration: 0.35), value: music.hasQueue)
+        #endif
         #if os(tvOS)
         // On the TV a new session opens the full-screen carousel: it's the
         // default look there, and it saves the focus engine from having to
@@ -174,6 +173,11 @@ struct MainTabView: View {
 
     /// Everything that floats at the bottom of the phone: the now-playing bar,
     /// then the tab pill with the mode switcher beside it.
+    ///
+    /// One animation drives the whole inset. Two — one here and one on the
+    /// TabView keyed to `hasQueue` — were animating the same appearance against
+    /// each other, which is the kind of fight that ends with a view settling
+    /// somewhere it shouldn't.
     private var bottomChrome: some View {
         VStack(spacing: Spacing.sm) {
             if showsMiniPlayer {
@@ -187,7 +191,7 @@ struct MainTabView: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.xs)
-        .animation(.smooth(duration: 0.35), value: showsMiniPlayer)
+        .animation(.snappy(duration: 0.3, extraBounce: 0.05), value: showsMiniPlayer)
     }
 
     /// The four tabs, per mode. Both modes carry the same shape so the bar

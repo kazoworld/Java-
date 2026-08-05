@@ -213,7 +213,6 @@ struct HomeView: View {
         #if os(iOS)
         .navigationTitle("Ultrafin")
         .navigationBarTitleDisplayMode(.large)
-        .adaptsChromeOnScroll()
         // Pull to refresh — the natural way to pick up newly-added media without
         // relaunching (Home otherwise only loads once per session).
         .refreshable {
