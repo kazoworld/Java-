@@ -6,9 +6,6 @@ import SwiftUI
 /// like a hard cut. Each branch owns its own navigation stack.
 struct RootView: View {
     @Environment(AppState.self) private var appState
-    /// Cold-launch intro overlay; shown once, fades out after its animation
-    /// (which also covers the first frames of content loading underneath).
-    @State private var showIntro = true
     /// One-time welcome tour: shown over the app after the very first sign-in
     /// (the intro overlay fades out above it, revealing page one).
     @State private var tourComplete = UserDefaults.standard.bool(forKey: "onboarding.tourComplete")
@@ -92,14 +89,6 @@ struct RootView: View {
                 .transition(.opacity)
                 .zIndex(5)
             }
-
-            if showIntro {
-                IntroView {
-                    withAnimation(.easeInOut(duration: 0.55)) { showIntro = false }
-                }
-                .transition(.opacity)
-                .zIndex(10)
-            }
         }
         .animation(.smooth(duration: 0.35), value: appState.phase)
         // A new sign-in / profile switch re-asks "What's the vibe?" (the user
@@ -125,27 +114,37 @@ struct RootView: View {
     }
 }
 
-/// The splash shown while the saved session is validated — WWDC-grade: a live
-/// mesh gradient breathing through deep aurora colors, a Liquid Glass monogram
-/// floating at center with the wordmark beneath, and a quiet pulsing status.
+/// The one screen shown while the saved session is validated.
+///
+/// There used to be two: a cold-launch intro overlay stacked on top of this,
+/// each with its own aurora. They played over each other on every launch, and
+/// the deep blue-violet mesh underneath read as another server's app rather
+/// than as ours. One screen now, built out of the app icon itself — the mark
+/// you tapped on the Home Screen is the mark you land on.
 struct LaunchView: View {
-    @Environment(SettingsStore.self) private var settings
     @State private var appeared = false
 
     var body: some View {
         ZStack {
-            meshBackdrop
+            backdrop
 
-            VStack(spacing: monogramSize * 0.22) {
-                monogram
-                    .scaleEffect(appeared ? 1 : 0.9)
+            VStack(spacing: markSize * 0.26) {
+                // The icon art, at the icon's own corner radius. Continuing the
+                // thing you tapped is worth more than any bespoke splash.
+                Image("LaunchMark")
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: markSize, height: markSize)
+                    .clipShape(RoundedRectangle(cornerRadius: markSize * 0.225, style: .continuous))
+                    .shadow(color: .black.opacity(0.5), radius: markSize * 0.16, y: markSize * 0.07)
+                    .scaleEffect(appeared ? 1 : 0.88)
                     .opacity(appeared ? 1 : 0)
 
-                VStack(spacing: Spacing.md) {
+                VStack(spacing: Spacing.sm) {
                     Text("ULTRAFIN")
                         .font(.system(size: wordSize, weight: .light))
                         .tracking(wordSize * 0.34)
-                        .padding(.leading, wordSize * 0.34) // re-center for trailing track
+                        .padding(.leading, wordSize * 0.34) // re-centre for trailing track
                         .foregroundStyle(LinearGradient(colors: [.white, .white.opacity(0.7)],
                                                         startPoint: .top, endPoint: .bottom))
                     Text("Your library, your way.")
@@ -153,55 +152,31 @@ struct LaunchView: View {
                         .foregroundStyle(.white.opacity(0.45))
                 }
                 .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 12)
+                .offset(y: appeared ? 0 : 10)
 
                 loadingDots
-                    .padding(.top, Spacing.sm)
                     .opacity(appeared ? 1 : 0)
             }
         }
         .onAppear {
-            withAnimation(.spring(duration: 0.9, bounce: 0.2)) { appeared = true }
+            withAnimation(.spring(duration: 0.8, bounce: 0.22)) { appeared = true }
         }
     }
 
-    /// A living mesh: nine control points drifting on out-of-phase sine orbits
-    /// through deep blue → violet → black — the WWDC "hello" energy, but ours.
-    private var meshBackdrop: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            let drift = { (p: Double, a: Double) in Float(sin(t * p) * a) }
-            MeshGradient(
-                width: 3, height: 3,
-                points: [
-                    [0, 0], [0.5 + drift(0.23, 0.10), 0], [1, 0],
-                    [0, 0.5 + drift(0.17, 0.12)],
-                    [0.5 + drift(0.31, 0.16), 0.5 + drift(0.27, 0.16)],
-                    [1, 0.5 + drift(0.21, 0.12)],
-                    [0, 1], [0.5 + drift(0.19, 0.10), 1], [1, 1]
-                ],
-                colors: [
-                    Color(hex: 0x0A0B0F), Color(hex: 0x141B38), Color(hex: 0x0A0B0F),
-                    Color(hex: 0x1B2340), Color(hex: 0x33418C), Color(hex: 0x2A1B4E),
-                    Color(hex: 0x0A0B0F), Color(hex: 0x121B33), Color(hex: 0x0A0B0F)
-                ]
-            )
+    /// Near-black, lit from behind the mark by the icon's own colours. Dark on
+    /// purpose: the app is dark, and a pastel splash would flash white before
+    /// dropping into it.
+    private var backdrop: some View {
+        ZStack {
+            Color(hex: 0x06070A)
+            RadialGradient(colors: [Color(hex: 0x8AD8F4).opacity(0.22), .clear],
+                           center: UnitPoint(x: 0.32, y: 0.60), startRadius: 0, endRadius: glowRadius)
+            RadialGradient(colors: [Color(hex: 0xD4BBF5).opacity(0.20), .clear],
+                           center: UnitPoint(x: 0.66, y: 0.36), startRadius: 0, endRadius: glowRadius)
+            RadialGradient(colors: [Color(hex: 0xF9CCC8).opacity(0.14), .clear],
+                           center: UnitPoint(x: 0.70, y: 0.66), startRadius: 0, endRadius: glowRadius * 0.8)
         }
         .ignoresSafeArea()
-    }
-
-    /// The glass "U" tile — the app icon rendered live in system Liquid Glass.
-    private var monogram: some View {
-        Text("U")
-            .font(.system(size: monogramSize * 0.52, weight: .thin))
-            .foregroundStyle(LinearGradient(colors: [.white, Color(hex: 0xBFD0FF)],
-                                            startPoint: .top, endPoint: .bottom))
-            .shadow(color: Color(hex: 0x6D8BFF).opacity(0.8), radius: 18)
-            .frame(width: monogramSize, height: monogramSize)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: monogramSize * 0.24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: monogramSize * 0.24, style: .continuous)
-                .strokeBorder(LiquidGlass.rim(), lineWidth: 1))
-            .shadow(color: .black.opacity(0.4), radius: 30, y: 16)
     }
 
     /// Three dots breathing in sequence — quieter than a spinner.
@@ -221,11 +196,11 @@ struct LaunchView: View {
 
     // MARK: - Metrics
 
-    private var monogramSize: CGFloat {
+    private var markSize: CGFloat {
         #if os(tvOS)
-        190
+        260
         #else
-        110
+        132
         #endif
     }
     private var wordSize: CGFloat {
@@ -240,6 +215,13 @@ struct LaunchView: View {
         9
         #else
         6
+        #endif
+    }
+    private var glowRadius: CGFloat {
+        #if os(tvOS)
+        900
+        #else
+        460
         #endif
     }
 }

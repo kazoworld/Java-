@@ -46,7 +46,11 @@ targets:
       path: Ultrafin/Resources/Info-iOS.plist
       properties:
         CFBundleDisplayName: Ultrafin
-        UILaunchScreen: {}
+        # The system paints this before any of our code runs. Left empty it
+        # defaults to white, which flashed once on the way into a black app —
+        # matching LaunchView's own ground makes the handoff invisible.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
