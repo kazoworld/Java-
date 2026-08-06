@@ -95,6 +95,7 @@ struct NowPlayingMusicView: View {
         #if os(tvOS)
         .onExitCommand { dismiss() }
         .onPlayPauseCommand { player.togglePlayPause() }
+        .musicScreensaver(player: player, eligible: true)
         #endif
     }
 

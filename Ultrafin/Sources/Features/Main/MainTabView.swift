@@ -181,6 +181,12 @@ struct MainTabView: View {
                 listenPath.append(destination)
             }
         }
+        #if os(tvOS)
+        // Left alone with a record playing, the screen gives way to the drifting
+        // now-playing card. Applied to the player too, since that's what's
+        // covering this while music plays.
+        .musicScreensaver(player: music, eligible: mode == .music)
+        #endif
         // Read the accent through the observed environment store so an accent
         // change in Settings recolors the tab bar live (the static
         // SettingsStore.shared read didn't re-render).

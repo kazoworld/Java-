@@ -8,7 +8,7 @@ import Foundation
 /// device, and read it in Music → Settings.
 enum BuildInfo {
     /// Increment on each round of UI work worth verifying on hardware.
-    static let marker = "guide-1"
+    static let marker = "oled-idle"
 
     /// The bundle's own version/build, for completeness.
     static var bundleVersion: String {
