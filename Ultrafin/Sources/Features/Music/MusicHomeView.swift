@@ -97,7 +97,10 @@ struct MusicHomeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.xl) {
                 if model.isLoading {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, Spacing.xxl)
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, Spacing.xxl)
+                        .transition(.opacity)
                 } else if model.isEmpty {
                     emptyState
                 } else {
@@ -132,6 +135,9 @@ struct MusicHomeView: View {
                 }
             }
             .padding(.vertical, Spacing.lg)
+            // Cross-fade in rather than cutting: the shelves arrive together and
+            // settle, instead of the spinner vanishing and content snapping in.
+            .animation(.smooth(duration: 0.45), value: model.isLoading)
         }
         .musicCanvas()
         #if os(iOS)

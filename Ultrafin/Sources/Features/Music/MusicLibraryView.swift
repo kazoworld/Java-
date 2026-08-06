@@ -161,6 +161,7 @@ struct MusicLibraryView: View {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .padding(.top, Spacing.xxl)
+                        .transition(.opacity)
                 }
             }
             .padding(.horizontal, MusicGrid.edgePadding)
@@ -168,6 +169,7 @@ struct MusicLibraryView: View {
             // The bottom chrome reserves its own space now; a second helping
             // here just left a hole under the last row.
             .padding(.bottom, Spacing.lg)
+            .animation(.smooth(duration: 0.45), value: model.isLoading)
         }
         .musicCanvas()
         .navigationTitle("Library")

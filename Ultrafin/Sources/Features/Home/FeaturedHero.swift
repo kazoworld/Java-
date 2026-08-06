@@ -360,7 +360,12 @@ struct FeaturedHero: View {
 
     // MARK: - Platform metrics
 
-    private var heroHeight: CGFloat {
+    private var heroHeight: CGFloat { Self.height }
+
+    /// Exposed so Home's loading skeleton can reserve exactly this much. A
+    /// skeleton that doesn't match the shape of what replaces it is what makes
+    /// a page appear to jump when it finishes loading.
+    static var height: CGFloat {
         #if os(tvOS)
         720
         #else

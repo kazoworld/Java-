@@ -148,6 +148,7 @@ struct HomeView: View {
             LazyVStack(alignment: .leading, spacing: Spacing.xl) {
                 if model.isLoading {
                     loadingRows
+                        .transition(.opacity)
                 } else {
                     // Rows render in the user's configured order, skipping any
                     // they've disabled or that have no content. They settle in
@@ -157,9 +158,12 @@ struct HomeView: View {
                         if config.isEnabled {
                             row(for: config.kind)
                                 .id(config.kind)
+                                // A fade, with no rise. The rows used to slide up
+                                // 18 points as they appeared, which on top of the
+                                // skeleton's own mismatch read as the whole page
+                                // lurching upward.
                                 .opacity(revealed ? 1 : 0)
-                                .offset(y: revealed ? 0 : 18)
-                                .animation(.smooth(duration: 0.5).delay(Double(idx) * 0.07), value: revealed)
+                                .animation(.smooth(duration: 0.5).delay(Double(idx) * 0.06), value: revealed)
                                 // Dim every row except the one being rearranged.
                                 .opacity(editingRow == nil || editingRow == config.kind ? 1 : 0.28)
                                 .animation(.smooth(duration: 0.3), value: editingRow)
@@ -175,6 +179,7 @@ struct HomeView: View {
                 }
             }
             .padding(.bottom, Spacing.lg)
+            .animation(.smooth(duration: 0.45), value: model.isLoading)
         }
         // Full-bleed so the hero media bar reaches every edge; rails self-pad
         // to stay within the tvOS title-safe area.
@@ -443,25 +448,52 @@ struct HomeView: View {
         }
     }
 
+    /// The loading state, shaped like the page it stands in for: the hero's
+    /// full-bleed block first, then rails.
+    ///
+    /// It used to be two bare rails starting at the very top of the screen. The
+    /// page is full-bleed so the hero can reach the edges, which meant the
+    /// skeleton's first row sat under the status bar and behind the large title
+    /// — and then everything appeared to leap downwards as the real hero claimed
+    /// its space. Reserving the hero's exact height is what removes the jump.
     private var loadingRows: some View {
-        ForEach(0..<2, id: \.self) { _ in
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(UltrafinColors.elevatedSurface)
-                    .frame(width: 180, height: 22)
-                    .shimmer()
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Spacing.md) {
-                        ForEach(0..<5, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: Spacing.posterCornerRadius)
-                                .fill(UltrafinColors.elevatedSurface)
-                                .frame(width: 130, height: 195)
-                                .shimmer()
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            RoundedRectangle(cornerRadius: 0)
+                .fill(UltrafinColors.elevatedSurface)
+                .frame(height: FeaturedHero.height)
+                .shimmer()
+
+            ForEach(0..<2, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(UltrafinColors.elevatedSurface)
+                        .frame(width: 180, height: 22)
+                        .shimmer()
+                        // Line the heading up with the rails' own inset instead
+                        // of letting it sit flush against the screen edge.
+                        .padding(.leading, Spacing.lg)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Spacing.md) {
+                            ForEach(0..<5, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: Spacing.posterCornerRadius)
+                                    .fill(UltrafinColors.elevatedSurface)
+                                    .frame(width: posterSkeleton.width, height: posterSkeleton.height)
+                                    .shimmer()
+                            }
                         }
+                        .padding(.horizontal, Spacing.lg)
                     }
-                    .padding(.horizontal, Spacing.lg)
+                    .scrollDisabled(true)
                 }
             }
         }
+    }
+
+    private var posterSkeleton: CGSize {
+        #if os(tvOS)
+        CGSize(width: 240, height: 360)
+        #else
+        CGSize(width: 130, height: 195)
+        #endif
     }
 }
