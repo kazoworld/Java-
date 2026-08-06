@@ -317,6 +317,22 @@ actor JellyfinClient {
         ]).items
     }
 
+    /// Everything the guide can schedule: movies and series across every
+    /// library, with the genres and runtimes the listing is built from.
+    ///
+    /// Sorted by name rather than randomly on purpose — the guide does its own
+    /// stable shuffle, and a server-side random order would reshuffle the whole
+    /// schedule on every fetch.
+    func guideLibrary(userID: String, limit: Int = 500) async throws -> [MediaItem] {
+        try await get(ItemsResponse.self, path: "/Users/\(userID)/Items", query: [
+            .init(name: "recursive", value: "true"),
+            .init(name: "includeItemTypes", value: "Movie,Series"),
+            .init(name: "sortBy", value: "SortName"),
+            .init(name: "limit", value: String(limit)),
+            .init(name: "fields", value: "Overview,Genres,CriticRating")
+        ]).items
+    }
+
     /// A fresh random spread of movies/shows from across the whole library, with
     /// backdrops — used to shuffle the media bar each launch.
     func randomItems(userID: String) async throws -> [MediaItem] {

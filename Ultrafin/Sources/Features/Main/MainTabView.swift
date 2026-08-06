@@ -20,6 +20,11 @@ struct MainTabView: View {
     @State private var libraryPath = NavigationPath()
     @State private var searchPath = NavigationPath()
     @State private var settingsPath = NavigationPath()
+    #if os(tvOS)
+    /// The Guide's own stack — tvOS only, where a remote makes a grid worth
+    /// navigating.
+    @State private var guidePath = NavigationPath()
+    #endif
     // Music mode's own stacks — kept separate so the two experiences never
     // inherit each other's navigation.
     @State private var listenPath = NavigationPath()
@@ -82,6 +87,9 @@ struct MainTabView: View {
             case 1: libraryPath = NavigationPath()
             case 2: searchPath = NavigationPath()
             case 3: settingsPath = NavigationPath()
+            #if os(tvOS)
+            case 5: guidePath = NavigationPath()
+            #endif
             default: break
             }
         case .music:
@@ -98,6 +106,9 @@ struct MainTabView: View {
     private func resetAllPaths() {
         homePath = NavigationPath(); libraryPath = NavigationPath()
         searchPath = NavigationPath(); settingsPath = NavigationPath()
+        #if os(tvOS)
+        guidePath = NavigationPath()
+        #endif
         listenPath = NavigationPath(); musicLibraryPath = NavigationPath()
         musicSearchPath = NavigationPath(); musicSettingsPath = NavigationPath()
     }
@@ -229,6 +240,13 @@ struct MainTabView: View {
             .reservesChromeSpace(chromeHeight)
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
+
+        #if os(tvOS)
+        // The Guide sits second, right where a set-top box puts it.
+        GuideTabView(path: $guidePath)
+            .tabItem { Label("Guide", systemImage: "tv.badge.wifi") }
+            .tag(5)
+        #endif
 
         NavigationStack(path: $libraryPath) { LibraryRootView() }
             .hidesSystemTabBar()
