@@ -354,15 +354,13 @@ struct LiveGuideView: View {
             guard !Task.isCancelled,
                   let url = await client.previewStreamURL(itemID: program.item.id),
                   !Task.isCancelled else { return }
-            theater.startVideo(url: url, startAt: highlightOffset(for: program.item))
+            theater.startVideo(url: url, startAt: Self.previewOffset, window: 240)
         }
     }
 
-    /// Where the highlight starts: past the studio logos, well before spoilers.
-    private func highlightOffset(for item: MediaItem) -> Double {
-        guard let ticks = item.runTimeTicks, ticks > 0 else { return 120 }
-        return min(max(Double(ticks) / 10_000_000 * 0.15, 60), 480)
-    }
+    /// Two minutes in: past the studio logos and titles, so the window looks
+    /// like a channel already running rather than a film about to start.
+    private static let previewOffset: Double = 120
 
     /// Clicking a block does the obvious thing for what's in it: a film starts,
     /// a series opens — there's no single episode a series block could play.

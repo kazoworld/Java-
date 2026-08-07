@@ -47,7 +47,28 @@ struct MusicBackground: View {
     @Environment(\.colorScheme) private var systemScheme
 
     var body: some View {
-        surface.ignoresSafeArea()
+        ZStack {
+            surface.ignoresSafeArea()
+            #if os(tvOS)
+            // A television is furniture — it's in the room whether or not
+            // anyone's watching — so a record playing gets a scene behind it
+            // rather than a flat field. Held right back so it never competes
+            // with a cover or a line of text, and only over the dark surface;
+            // on white it would read as grime rather than atmosphere.
+            if isDarkSurface {
+                MusicSceneBackdrop(strength: 0.55)
+            }
+            #endif
+        }
+    }
+
+    /// True when the canvas is the black one, whether chosen or inherited.
+    private var isDarkSurface: Bool {
+        switch settings.musicTheme {
+        case .black: true
+        case .white: false
+        case .system: systemScheme == .dark
+        }
     }
 
     private var surface: Color {

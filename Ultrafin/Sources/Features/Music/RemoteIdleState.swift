@@ -72,15 +72,22 @@ final class RemoteIdleState {
 /// A recognizer that never recognizes. It exists only to see input go past —
 /// failing immediately means it can't swallow a press or delay a touch, so
 /// nothing downstream can tell it's there.
+///
+/// Both overrides call super, and that is not a formality: without it the press
+/// is never handed on, which is what made the Menu button stop dismissing the
+/// player while the idle screen was up. A watcher that eats the input it was
+/// only supposed to observe is worse than no watcher at all.
 private final class PassiveInputRecognizer: UIGestureRecognizer {
     var onInput: (() -> Void)?
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesBegan(touches, with: event)
         onInput?()
         state = .failed
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent) {
+        super.pressesBegan(presses, with: event)
         onInput?()
         state = .failed
     }
