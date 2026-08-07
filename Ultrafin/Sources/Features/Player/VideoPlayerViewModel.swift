@@ -221,6 +221,11 @@ final class VideoPlayerViewModel {
 
     func start() async {
         stopped = false
+        // Clear and register as one step. The command centre and the Now Playing
+        // dictionary are shared process-wide, so whatever music left behind has
+        // to go before video's handlers land — doing it here, rather than from
+        // the music side as the view appears, is what makes the order certain.
+        nowPlaying.clear()
         nowPlaying.configure(
             onPlay: { [weak self] in self?.engine?.play() },
             onPause: { [weak self] in self?.engine?.pause() },
@@ -288,6 +293,10 @@ final class VideoPlayerViewModel {
             revision += 1
             engine.load(url: resolution.streamURL, startAt: seconds)
             engine.play()
+            // Publish immediately rather than waiting for the first play/pause
+            // change. Without this the title only ever reached the system if the
+            // status happened to flip after the engine was bound.
+            updateNowPlaying()
             // Register the play session so progress/stop reports stick.
             Task {
                 await client.reportPlaybackStarted(itemID: item.id,

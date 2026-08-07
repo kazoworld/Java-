@@ -169,13 +169,17 @@ final class MusicPlayer {
         pushNowPlaying()
     }
 
-    /// Video is starting: pause AND release the shared remote command center so
-    /// video's transport handlers don't stack on top of music's (a stacked
-    /// registration made a remote Play fire both — music blaring behind the
-    /// movie).
+    /// Video is starting: stand down, but leave the shared Now Playing state
+    /// alone.
+    ///
+    /// This used to clear it here, and that was a race. The video view yields on
+    /// appear while its model starts up alongside, so the wipe landed *after*
+    /// video had published its title and registered its transport — leaving the
+    /// system, and anything reading it over the network, believing nothing was
+    /// playing for the whole film. Video clears and re-registers as one step at
+    /// its own start instead, which is the only place the ordering is knowable.
     func yieldToVideo() {
         pause()
-        nowPlaying.clear()
     }
 
     /// Video finished (its teardown wipes every target on the SHARED command
