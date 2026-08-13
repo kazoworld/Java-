@@ -32,8 +32,6 @@ struct NowPlayingMusicView: View {
     @State private var breathing = false
     /// The color sampled from the current record — drives the Apple Music wash.
     @State private var artColor: ArtworkColor?
-    /// Live vertical drag while swiping the player down to dismiss.
-    @State private var dragOffset: CGFloat = 0
     /// Local heart state so the tap lands instantly; cleared on track change.
     @State private var favoriteOverride: Bool?
 
@@ -69,15 +67,7 @@ struct NowPlayingMusicView: View {
                 .clipped()
         }
         .background(backdrop)
-        // Swipe the whole player down to dismiss — the sheet follows your finger
-        // and springs back if you don't pull far enough. Swipe the art
-        // horizontally to change track.
-        .offset(y: max(0, dragOffset))
-        #if os(iOS)
-        .gesture(playerDrag)
-        #endif
         .environment(\.colorScheme, .dark)
-        .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.85), value: dragOffset)
         .animation(.smooth(duration: 0.35), value: stage)
         .task(id: player.currentTrack?.id) {
             favoriteOverride = nil // the new song has its own heart state
@@ -100,29 +90,21 @@ struct NowPlayingMusicView: View {
     }
 
     #if os(iOS)
-    /// One gesture for the whole player: a downward pull dismisses it (the sheet
-    /// tracks your finger), a horizontal flick on the art changes track. The
-    /// scrubber and the lyrics/queue scroll views are children, so they claim
-    /// their own touches first and this never fights them.
-    private var playerDrag: some Gesture {
-        DragGesture(minimumDistance: 20)
-            .onChanged { value in
-                if value.translation.height > 0,
-                   value.translation.height > abs(value.translation.width) {
-                    dragOffset = value.translation.height
-                }
-            }
+    /// A horizontal flick to change track, attached to the ARTWORK only.
+    ///
+    /// This used to cover the whole player and also handle a downward pull to
+    /// dismiss. Now that the player is a sheet, the system owns the downward
+    /// pull — and a gesture spanning the whole view would capture the touch
+    /// before the sheet ever saw it, which is exactly the kind of fight that
+    /// makes a dismissal feel like it's sticking. Only acts on a clearly
+    /// sideways drag, so a vertical swipe starting on the cover still dismisses.
+    private var artworkSwipe: some Gesture {
+        DragGesture(minimumDistance: 24)
             .onEnded { value in
                 let dx = value.translation.width, dy = value.translation.height
-                if abs(dx) > abs(dy), abs(dx) > 60, stage == .art {
-                    Haptics.play(.light)
-                    if dx < 0 { player.next() } else { player.previous() }
-                    dragOffset = 0
-                } else if dy > 140 || value.predictedEndTranslation.height > 320 {
-                    dismiss()
-                } else {
-                    dragOffset = 0
-                }
+                guard abs(dx) > abs(dy) * 1.6, abs(dx) > 50 else { return }
+                Haptics.play(.light)
+                if dx < 0 { player.next() } else { player.previous() }
             }
     }
     #endif
@@ -391,6 +373,11 @@ struct NowPlayingMusicView: View {
             .scaleEffect(player.isPlaying ? 1 : 0.85)
             .animation(.spring(duration: 0.5, bounce: 0.25), value: player.isPlaying)
             .frame(maxWidth: .infinity)
+            #if os(iOS)
+            // Sideways on the cover changes track; everything else the sheet
+            // hears, so a downward pull from here still dismisses.
+            .simultaneousGesture(artworkSwipe)
+            #endif
     }
 
     /// A living coverflow of the queue. The current record stands front and

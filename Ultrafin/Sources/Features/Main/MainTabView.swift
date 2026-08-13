@@ -169,18 +169,30 @@ struct MainTabView: View {
             if stamp > 0 { showNowPlaying = true }
         }
         #endif
-        .fullScreenCoverCompat(isPresented: $showNowPlaying) {
-            NowPlayingMusicView(player: music) { destination in
-                // Tapping the album/artist in the player opens that page in the
-                // Music tab, switching modes if we're browsing Media.
-                if mode != .music {
-                    mode = .music
-                    mode.remember()
-                }
-                selection = 0
-                listenPath.append(destination)
-            }
+        // A SHEET on iPhone, not a full-screen cover.
+        //
+        // A cover has nothing behind it and no interactive dismissal, so pulling
+        // it down revealed a black void and the drag had to be hand-rolled —
+        // which is what made it feel clunky. A large-detent sheet is the same
+        // presentation Apple Music uses: it tracks your thumb, rubber-bands,
+        // hands off to velocity, rounds its own corners, and shows the library
+        // easing back behind it. The TV keeps the cover; sheets aren't a tvOS
+        // idiom and there's no thumb to track.
+        #if os(iOS)
+        .sheet(isPresented: $showNowPlaying) {
+            nowPlayingPlayer
+                .presentationDetents([.large])
+                // We draw our own grabber, which doubles as a tap target.
+                .presentationDragIndicator(.hidden)
+                // The player owns its background — the record's colour has to
+                // reach the sheet's own corners, not sit inside a system fill.
+                .presentationBackground(.clear)
         }
+        #else
+        .fullScreenCoverCompat(isPresented: $showNowPlaying) {
+            nowPlayingPlayer
+        }
+        #endif
         #if os(tvOS)
         // Left alone with a record playing, the screen gives way to the drifting
         // now-playing card. Applied to the player too, since that's what's
@@ -192,6 +204,20 @@ struct MainTabView: View {
         // SettingsStore.shared read didn't re-render).
         .tint(settings.accent)
         .cardZoomNamespace(cardZoom)
+    }
+
+    /// The full player, shared by both presentations.
+    private var nowPlayingPlayer: some View {
+        NowPlayingMusicView(player: music) { destination in
+            // Tapping the album/artist in the player opens that page in the
+            // Music tab, switching modes if we're browsing Media.
+            if mode != .music {
+                mode = .music
+                mode.remember()
+            }
+            selection = 0
+            listenPath.append(destination)
+        }
     }
 
     /// The bar only belongs to Music mode, and never behind the full player.
