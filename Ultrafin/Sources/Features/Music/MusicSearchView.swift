@@ -152,7 +152,7 @@ struct MusicSearchView: View {
                 .font(.system(size: 44))
                 .foregroundStyle(UltrafinColors.tertiaryText)
             Text(model.query.isEmpty ? "Search your music" : "Nothing found")
-                .font(Typography.sectionTitle)
+                .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(UltrafinColors.primaryText)
             Text(model.query.isEmpty
                  ? "Find albums, artists and songs across your library."
@@ -170,9 +170,9 @@ struct MusicSearchView: View {
 
     private var sectionFont: Font {
         #if os(tvOS)
-        .system(size: 30, weight: .bold, design: .rounded)
+        .system(size: 30, weight: .bold)
         #else
-        Typography.sectionTitle
+        .system(size: 22, weight: .bold)
         #endif
     }
     private var edgePadding: CGFloat {

@@ -355,7 +355,7 @@ struct AlbumDetailView: View {
             action()
         } label: {
             Label(title, systemImage: icon)
-                .font(.system(size: pillFont, weight: .bold, design: .rounded))
+                .font(.system(size: pillFont, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .fixedSize(horizontal: !fill, vertical: true)
@@ -696,7 +696,7 @@ struct TrackRow: View {
                     .frame(width: numberSize * 1.6)
             } else {
                 Text("\(position)")
-                    .font(.system(size: numberSize, weight: .medium, design: .rounded))
+                    .font(.system(size: numberSize, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(UltrafinColors.tertiaryText)
                     .frame(width: numberSize * 1.6)
@@ -705,7 +705,7 @@ struct TrackRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(track.name)
-                        .font(.system(size: titleSize, weight: .semibold, design: .rounded))
+                        .font(.system(size: titleSize, weight: .semibold))
                         .foregroundStyle(isCurrent ? settings.accent : UltrafinColors.primaryText)
                         .lineLimit(1)
                     if track.isExplicit { ExplicitBadge(size: titleSize * 0.82) }
@@ -804,7 +804,7 @@ struct ArtistDetailView: View {
                         .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(artist.name)
-                            .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                            .font(.system(size: titleSize, weight: .bold))
                             .foregroundStyle(UltrafinColors.primaryText)
                         if !albums.isEmpty {
                             Text("\(albums.count) album\(albums.count == 1 ? "" : "s")")

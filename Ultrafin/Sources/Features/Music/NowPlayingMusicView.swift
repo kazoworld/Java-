@@ -649,7 +649,7 @@ struct NowPlayingMusicView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(player.currentTrack?.name ?? "—")
-                        .font(.system(size: 19, weight: .bold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -716,8 +716,10 @@ struct NowPlayingMusicView: View {
             open(track?.artistDestination)
         } label: {
             Text(track?.artistText ?? " ")
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(.white.opacity(0.62))
+                // Same size as the title; only the weight and the dimming
+                // separate them, which is how Apple stacks the two lines.
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(.white.opacity(0.55))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -833,13 +835,13 @@ struct NowPlayingMusicView: View {
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 Text(player.currentTrack?.name ?? "—")
-                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                    .font(.system(size: titleSize, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
             Text(artistLine)
-                .font(.system(size: titleSize * 0.68, weight: .semibold, design: .rounded))
+                .font(.system(size: titleSize * 0.68, weight: .semibold))
                 .foregroundStyle(artColor?.shade(brightness: 1.15, saturation: 0.9) ?? settings.accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -899,7 +901,9 @@ struct NowPlayingMusicView: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            // Monospaced digits, NOT the monospaced typeface — the latter is a
+            // visibly different font and only the numbers need to stop jittering.
+            .font(.system(size: 13, weight: .medium).monospacedDigit())
             .foregroundStyle(.white.opacity(0.55))
         }
     }
@@ -934,9 +938,12 @@ struct NowPlayingMusicView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: size, weight: .heavy))
+                // Regular, not heavy. These are already solid shapes — adding
+                // weight on top thickens the silhouette and is a good part of
+                // why the transport read as clunky next to Apple Music's.
+                .font(.system(size: size, weight: .regular))
                 .foregroundStyle(.white)
-                .frame(width: size * 2, height: size * 2)
+                .frame(width: size * 1.7, height: size * 1.7)
                 .contentShape(Circle())
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.2, lift: false))
@@ -1041,28 +1048,30 @@ struct NowPlayingMusicView: View {
         #if os(tvOS)
         44
         #else
-        isLandscapePhone ? 26 : 33
+        isLandscapePhone ? 28 : 40
         #endif
     }
     private var sideButtonSize: CGFloat {
         #if os(tvOS)
         30
         #else
-        isLandscapePhone ? 19 : 26
+        isLandscapePhone ? 21 : 31
         #endif
     }
+    /// Apple's transport sits far apart — the three controls span most of the
+    /// width rather than huddling in the middle.
     private var transportSpacing: CGFloat {
         #if os(tvOS)
         Spacing.xxl
         #else
-        isLandscapePhone ? Spacing.md : Spacing.xl
+        isLandscapePhone ? Spacing.md : 40
         #endif
     }
     private var chipSize: CGFloat {
         #if os(tvOS)
         24
         #else
-        isLandscapePhone ? 14 : 15
+        isLandscapePhone ? 15 : 18
         #endif
     }
     private var edgePadding: CGFloat {

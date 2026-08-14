@@ -49,16 +49,16 @@ struct MusicIdentityView: View {
         let tint = cardColor?.color ?? settings.accent
         return VStack(alignment: .leading, spacing: Spacing.md) {
             Text("YOUR MUSIC IDENTITY")
-                .font(.system(size: kickerSize, weight: .heavy, design: .rounded))
+                .font(.system(size: kickerSize, weight: .heavy))
                 .foregroundStyle(.white.opacity(0.75))
                 .tracking(2)
             Text(insights.personality)
-                .font(.system(size: titleSize, weight: .heavy, design: .rounded))
+                .font(.system(size: titleSize, weight: .heavy))
                 .foregroundStyle(.white)
                 .minimumScaleFactor(0.6)
                 .lineLimit(2)
             Text(insights.tagline)
-                .font(.system(size: taglineSize, weight: .semibold, design: .rounded))
+                .font(.system(size: taglineSize, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
                 .lineLimit(2)
 
@@ -67,7 +67,7 @@ struct MusicIdentityView: View {
                     Image(systemName: "waveform")
                     Text(focusPhrase)
                 }
-                .font(.system(size: taglineSize * 0.82, weight: .medium, design: .rounded))
+                .font(.system(size: taglineSize * 0.82, weight: .medium))
                 .foregroundStyle(.white.opacity(0.7))
                 .padding(.top, Spacing.xs)
             }
@@ -158,7 +158,7 @@ struct MusicIdentityView: View {
     private func genreBar(rank: Int, genre: MusicInsights.Ranked, fraction: Double) -> some View {
         HStack(spacing: Spacing.md) {
             Text("\(rank)")
-                .font(.system(size: rowNumber, weight: .bold, design: .rounded))
+                .font(.system(size: rowNumber, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(UltrafinColors.tertiaryText)
                 .frame(width: rowNumber * 1.6, alignment: .leading)
@@ -218,7 +218,7 @@ struct MusicIdentityView: View {
 
     private func rankBadge(_ rank: Int) -> some View {
         Text("\(rank)")
-            .font(.system(size: avatarSide * 0.2, weight: .heavy, design: .rounded))
+            .font(.system(size: avatarSide * 0.2, weight: .heavy))
             .foregroundStyle(.white)
             .padding(avatarSide * 0.08)
             .frame(minWidth: avatarSide * 0.32)
@@ -239,7 +239,7 @@ struct MusicIdentityView: View {
                     } label: {
                         HStack(spacing: Spacing.md) {
                             Text("\(i + 1)")
-                                .font(.system(size: rowNumber, weight: .bold, design: .rounded))
+                                .font(.system(size: rowNumber, weight: .bold))
                                 .monospacedDigit()
                                 .foregroundStyle(settings.accent)
                                 .frame(width: rowNumber * 1.6)

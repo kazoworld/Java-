@@ -222,7 +222,7 @@ struct MusicHomeView: View {
                     .foregroundStyle(.white)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Your Music Identity")
-                        .font(.system(size: shuffleFont, weight: .bold, design: .rounded))
+                        .font(.system(size: shuffleFont, weight: .bold))
                         .foregroundStyle(.white)
                     Text("See how you listen")
                         .font(.system(size: shuffleFont * 0.72, weight: .medium))
@@ -320,7 +320,7 @@ struct MusicHomeView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(UltrafinColors.tertiaryText)
             Text("No music on this server")
-                .font(Typography.sectionTitle)
+                .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(UltrafinColors.primaryText)
             Text(settings.musicSource == .navidrome
                  ? "Your Navidrome server has no music yet — or check its link in Settings → Music."
