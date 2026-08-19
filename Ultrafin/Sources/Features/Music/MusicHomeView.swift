@@ -349,11 +349,13 @@ struct MusicHomeView: View {
         15
         #endif
     }
+    /// Apple Music sets its phone margins at 16, not 20 — a small difference
+    /// that shows up as noticeably more shelf visible per screen.
     private var edgePadding: CGFloat {
         #if os(tvOS)
         56
         #else
-        Spacing.lg
+        16
         #endif
     }
     private var railSpacing: CGFloat {
@@ -381,7 +383,7 @@ struct MusicHomeView: View {
         #if os(tvOS)
         300
         #else
-        170
+        158
         #endif
     }
     private var identityIcon: CGFloat {
@@ -469,7 +471,7 @@ struct AlbumCard: View {
         #if os(tvOS)
         260
         #else
-        150
+        138
         #endif
     }
 
@@ -547,7 +549,7 @@ struct SongCard: View {
         #if os(tvOS)
         220
         #else
-        130
+        120
         #endif
     }
 
@@ -631,7 +633,7 @@ struct ArtistCard: View {
         #if os(tvOS)
         200
         #else
-        110
+        102
         #endif
     }
 

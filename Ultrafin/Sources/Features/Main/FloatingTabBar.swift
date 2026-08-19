@@ -30,14 +30,19 @@ struct FloatingTabBar: View {
     private var accent: Color { settings.accent }
 
     var body: some View {
-        HStack(spacing: Spacing.sm) {
-            HStack(spacing: 0) {
-                ForEach(items) { item in tab(item) }
-            }
-            .padding(railPadding)
-            .glassCapsule(dim: 0.14)
+        // One container for both pieces so the system treats them as a single
+        // sheet of glass — they sample and light coherently instead of being two
+        // unrelated blurs that happen to sit next to each other.
+        GlassEffectContainer(spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                HStack(spacing: 0) {
+                    ForEach(items) { item in tab(item) }
+                }
+                .padding(railPadding)
+                .barGlass(shape: Capsule())
 
-            switcher
+                switcher
+            }
         }
     }
 
@@ -53,10 +58,10 @@ struct FloatingTabBar: View {
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: item.icon)
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: 21, weight: .semibold))
                     .symbolVariant(isSelected ? .fill : .none)
                 Text(item.title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
@@ -67,8 +72,14 @@ struct FloatingTabBar: View {
                 if isSelected {
                     // One capsule that slides between tabs rather than four that
                     // fade — the movement is what says "you went there".
+                    //
+                    // Neutral and light rather than a wash of accent: on glass
+                    // the selected slot reads as a brighter pane with the tint
+                    // left to the glyph, which is how it looks on the reference.
+                    // A dim accent fill just made a slightly-less-black hole.
                     Capsule()
-                        .fill(accent.opacity(0.16))
+                        .fill(UltrafinColors.primaryText.opacity(0.14))
+                        .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.5), lineWidth: 0.5))
                         .matchedGeometryEffect(id: "selectedTab", in: highlight)
                 }
             }
@@ -93,14 +104,14 @@ struct FloatingTabBar: View {
             }
             .foregroundStyle(accent)
             .frame(width: switcherSide, height: switcherSide)
-            .glassCircle(dim: 0.14)
+            .barGlass(shape: Circle())
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Switch to \(switchTitle)")
     }
 
-    private var railPadding: CGFloat { 5 }
+    private var railPadding: CGFloat { 6 }
     /// Matched to the tab pill's height so the two read as one row.
     private var switcherSide: CGFloat { 58 }
 }

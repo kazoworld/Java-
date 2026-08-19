@@ -27,8 +27,19 @@ struct RootView: View {
 
             switch appState.phase {
             case .launching:
-                LaunchView()
-                    .transition(.opacity)
+                // Opening straight into Music skips the brand splash entirely.
+                // Apple Music doesn't show you a logo before your library, and a
+                // launcher that's been told to go somewhere specific shouldn't
+                // stop to introduce itself. The canvas underneath is the one the
+                // library lands on, so the cold start is a single surface rather
+                // than a splash dissolving into a different screen.
+                if mode == .music {
+                    MusicBackground()
+                        .transition(.opacity)
+                } else {
+                    LaunchView()
+                        .transition(.opacity)
+                }
             case .serverConnect:
                 ServerConnectView()
                     .transition(.opacity)

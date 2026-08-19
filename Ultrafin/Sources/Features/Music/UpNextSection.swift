@@ -38,7 +38,7 @@ struct UpNextSection: View {
             .scrollTargetLayout()
         }
         .scrollTargetBehavior(.viewAligned)
-        .contentMargins(.horizontal, Spacing.lg, for: .scrollContent)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
     }
 
     private func row(_ song: MediaItem) -> some View {

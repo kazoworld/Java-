@@ -82,6 +82,26 @@ extension View {
             .overlay(Circle().strokeBorder(LiquidGlass.rim(0.85), lineWidth: 1))
     }
 
+    /// Floating chrome glass — the bottom bar and its switcher.
+    ///
+    /// Deliberately **untinted**. The other glass helpers darken the material to
+    /// keep white text legible over bright artwork, but the bottom bar spends
+    /// most of its life over a true-black music canvas, where darkening glass
+    /// only ever produces a blacker hole. Clear material plus a real specular
+    /// edge is what makes it read as glass in both cases: over artwork it
+    /// refracts, and over black the lit rim is what draws the shape.
+    ///
+    /// `interactive()` lets the material flex under a press, which is most of
+    /// what separates Liquid Glass from a blurred rectangle.
+    func barGlass(shape: some Shape & InsettableShape) -> some View {
+        glassEffect(.regular.interactive(), in: shape)
+            .overlay(shape.strokeBorder(LiquidGlass.rim(1.0), lineWidth: 1))
+            // A second hairline just inside the first: the doubled edge is what
+            // gives real glass its thickness rather than looking like a sticker.
+            .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: 0.5).padding(1))
+            .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
+    }
+
     /// Accent-tinted interactive glass — the "colored glass" treatment for
     /// primary pills (hero Play, tour Continue): the system material drinks the
     /// color and reacts to presses.
