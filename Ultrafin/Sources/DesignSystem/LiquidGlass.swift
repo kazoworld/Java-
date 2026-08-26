@@ -40,13 +40,46 @@ struct LiquidGlassSurface: ViewModifier {
     var tint: Color? = nil
     var shadow: Bool = true
 
+    /// Reduce Transparency asks for surfaces you can read without decoding what
+    /// is behind them. Glass is the app's whole visual language, so honouring it
+    /// means swapping the material for a solid one — not merely blurring harder.
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        content
-            .glassEffect(tint.map { Glass.regular.tint($0.opacity(0.35)) } ?? .regular, in: shape)
-            .overlay(shape.strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1))
-            .shadow(color: shadow ? .black.opacity(0.28) : .clear,
-                    radius: shadow ? 18 : 0, y: shadow ? 12 : 0)
+        Group {
+            if reduceTransparency {
+                content.background(UltrafinColors.elevatedSurface, in: shape)
+            } else {
+                content.glassEffect(tint.map { Glass.regular.tint($0.opacity(0.35)) } ?? .regular, in: shape)
+            }
+        }
+        .overlay(shape.strokeBorder(LiquidGlass.rim(0.8), lineWidth: 1))
+        .shadow(color: shadow ? .black.opacity(0.28) : .clear,
+                radius: shadow ? 18 : 0, y: shadow ? 12 : 0)
+    }
+}
+
+/// The floating chrome's own material — see ``SwiftUI/View/barGlass(shape:)``.
+struct BarGlass<S: Shape & InsettableShape>: ViewModifier {
+    let shape: S
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        Group {
+            if reduceTransparency {
+                // Opaque, and a shade lifted off the canvas so the bar still
+                // reads as a separate surface rather than a hole.
+                content.background(UltrafinColors.elevatedSurface, in: shape)
+            } else {
+                content.glassEffect(.regular.interactive(), in: shape)
+            }
+        }
+        .overlay(shape.strokeBorder(LiquidGlass.rim(1.0), lineWidth: 1))
+        // A second hairline just inside the first: the doubled edge is what
+        // gives real glass its thickness rather than looking like a sticker.
+        .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: 0.5).padding(1))
+        .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
     }
 }
 
@@ -93,13 +126,8 @@ extension View {
     ///
     /// `interactive()` lets the material flex under a press, which is most of
     /// what separates Liquid Glass from a blurred rectangle.
-    func barGlass(shape: some Shape & InsettableShape) -> some View {
-        glassEffect(.regular.interactive(), in: shape)
-            .overlay(shape.strokeBorder(LiquidGlass.rim(1.0), lineWidth: 1))
-            // A second hairline just inside the first: the doubled edge is what
-            // gives real glass its thickness rather than looking like a sticker.
-            .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: 0.5).padding(1))
-            .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
+    func barGlass<S: Shape & InsettableShape>(shape: S) -> some View {
+        modifier(BarGlass(shape: shape))
     }
 
     /// Accent-tinted interactive glass — the "colored glass" treatment for

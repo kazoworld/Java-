@@ -147,6 +147,7 @@ struct TheaterVolumeButton: View {
                 .foregroundStyle(.white)
                 .frame(width: diameter, height: diameter)
                 .glassCircle(dim: 0.2)
+                .minimumHitTarget()
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.12, lift: false))
         .accessibilityLabel(controller.muted ? "Unmute preview" : "Mute preview")

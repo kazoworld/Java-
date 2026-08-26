@@ -73,6 +73,7 @@ struct UpNextSection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
 
             songMenu(song)
         }
@@ -101,8 +102,9 @@ struct UpNextSection: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(UltrafinColors.secondaryText)
-                .frame(width: 34, height: 44)
+                .frame(width: A11y.minimumTarget, height: A11y.minimumTarget)
                 .contentShape(Rectangle())
         }
+        .accessibilityLabel("More options for \(song.name)")
     }
 }

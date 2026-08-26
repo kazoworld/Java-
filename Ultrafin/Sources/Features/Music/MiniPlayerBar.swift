@@ -20,6 +20,7 @@ struct MiniPlayerBar: View {
         if let track = player.currentTrack {
             HStack(spacing: Spacing.md) {
                 RemoteImage(url: player.artworkURL(for: track, maxWidth: 200))
+                    .accessibilityHidden(true)
                     .frame(width: artSide, height: artSide)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .shadow(color: .black.opacity(0.3), radius: 5, y: 2)
@@ -64,6 +65,10 @@ struct MiniPlayerBar: View {
             // bar as black-on-black — present, but impossible to see.
             .glassCapsule(dim: 0.3)
             .contentShape(Capsule())
+            // One element: "Song, Artist. Now playing." beats four stray strings.
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Opens the full player")
             #if os(iOS)
             .offset(y: max(0, dragOffset))
             .gesture(dismissDrag)
@@ -103,7 +108,8 @@ struct MiniPlayerBar: View {
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(UltrafinColors.primaryText)
                 .frame(width: size * 2, height: size * 2)
-                .contentShape(Circle())
+                .minimumHitTarget()
+                .contentShape(Rectangle())
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.15, lift: false))
     }

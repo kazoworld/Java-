@@ -272,6 +272,10 @@ final class ImageLoader: @unchecked Sendable {
 struct RemoteImage: View {
     let url: URL?
     var contentMode: ContentMode = .fill
+    /// What VoiceOver should call this. Artwork is almost always decorative —
+    /// the title sits right beside it — so the default is to stay silent rather
+    /// than announce "image" over and over down a list.
+    var accessibilityLabel: String? = nil
 
     @State private var image: UIImage?
     @State private var didFail = false
@@ -289,6 +293,8 @@ struct RemoteImage: View {
             }
         }
         .task(id: url) { await load() }
+        .accessibilityLabel(accessibilityLabel ?? "")
+        .accessibilityHidden(accessibilityLabel == nil)
     }
 
     private func load() async {
@@ -318,6 +324,9 @@ struct RemoteImage: View {
 
 private struct Shimmer: ViewModifier {
     @State private var phase: CGFloat = -1
+    /// A placeholder pulsing forever is ambient motion by definition — under
+    /// Reduce Motion the surface simply sits there until content arrives.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content.overlay(
@@ -334,6 +343,7 @@ private struct Shimmer: ViewModifier {
             .clipped()
         )
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
                 phase = 1.2
             }

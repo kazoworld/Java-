@@ -36,10 +36,11 @@ extension EnvironmentValues {
 private struct CardZoomSource: ViewModifier {
     let id: String
     @Environment(\.cardZoomNamespace) private var namespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         #if os(iOS)
-        if let namespace {
+        if let namespace, !reduceMotion {
             content.matchedTransitionSource(id: id, in: namespace)
         } else {
             content
@@ -54,10 +55,14 @@ private struct CardZoomSource: ViewModifier {
 private struct CardZoomDestination: ViewModifier {
     let id: String
     @Environment(\.cardZoomNamespace) private var namespace
+    /// A zoom is a large scale animation across the whole screen — precisely
+    /// what Reduce Motion is asking not to see. The standard push remains, and
+    /// the system cross-fades it instead.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         #if os(iOS)
-        if let namespace {
+        if let namespace, !reduceMotion {
             content.navigationTransition(.zoom(sourceID: id, in: namespace))
         } else {
             content

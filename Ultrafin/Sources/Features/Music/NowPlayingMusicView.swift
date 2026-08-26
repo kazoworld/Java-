@@ -34,6 +34,7 @@ struct NowPlayingMusicView: View {
     @State private var artColor: ArtworkColor?
     /// Local heart state so the tap lands instantly; cleared on track change.
     @State private var favoriteOverride: Bool?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     #if os(tvOS)
     /// Which control the remote is on.
@@ -333,7 +334,7 @@ struct NowPlayingMusicView: View {
             Capsule()
                 .fill(.white.opacity(0.35))
                 .frame(width: 38, height: 5)
-                .frame(width: 90, height: 26) // generous tap target
+                .frame(width: 90, height: A11y.minimumTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -364,6 +365,7 @@ struct NowPlayingMusicView: View {
 
     private func artStage(side: CGFloat) -> some View {
         RemoteImage(url: player.currentTrack.flatMap { player.artworkURL(for: $0) })
+            .accessibilityHidden(true)
             .frame(width: side, height: side)
             .clipShape(RoundedRectangle(cornerRadius: side * 0.06, style: .continuous))
             .specularRim(cornerRadius: side * 0.06, intensity: 0.8)
@@ -407,8 +409,12 @@ struct NowPlayingMusicView: View {
         .frame(width: stageWidth ?? side * 2.5, height: side * 1.45)
         .clipped()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.spring(duration: 0.75, bounce: 0.16), value: player.index)
+        .calmAnimation(.spring(duration: 0.75, bounce: 0.16), value: player.index)
         .onAppear {
+            // Reduce Motion: the cards still glide between positions when the
+            // track changes, but the endless in-and-out breath stops. Continuous
+            // ambient movement is the thing that setting is really about.
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 4.2).repeatForever(autoreverses: true)) {
                 breathing = true
             }
@@ -664,6 +670,7 @@ struct NowPlayingMusicView: View {
             // Take what's left after the buttons, and no more — without this the
             // text column reports its full ideal width and widens the whole row.
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
 
             // The buttons keep their size; only the text gives way.
             roundControl(isFavorite ? "heart.fill" : "heart",
@@ -719,7 +726,7 @@ struct NowPlayingMusicView: View {
                 // Same size as the title; only the weight and the dimming
                 // separate them, which is how Apple stacks the two lines.
                 .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.white.opacity(0.68))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -754,7 +761,9 @@ struct NowPlayingMusicView: View {
                 .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
                 .background(.white.opacity(0.16), in: Circle())
+                .minimumHitTarget()
         }
+        .accessibilityLabel("More options")
     }
 
     private var repeatLabel: String {
@@ -777,6 +786,7 @@ struct NowPlayingMusicView: View {
                 .frame(width: 34, height: 34)
                 .background(.white.opacity(0.16), in: Circle())
                 .contentTransition(.symbolEffect(.replace))
+                .minimumHitTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -891,6 +901,19 @@ struct NowPlayingMusicView: View {
             }
             .frame(height: 24)
             .animation(.smooth(duration: 0.18), value: isScrubbing)
+            // A hand-drawn bar is invisible to VoiceOver unless it says what it
+            // is. As one adjustable element it reads its position aloud and
+            // moves on a swipe, which is the only way to scrub without sight.
+            .accessibilityElement()
+            .accessibilityLabel("Playback position")
+            .accessibilityValue(scrubberSpokenValue)
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: nudgePlayhead(15)
+                case .decrement: nudgePlayhead(-15)
+                @unknown default: break
+                }
+            }
 
             HStack {
                 Text(timeText(isScrubbing ? scrubValue * player.duration : player.currentTime))
@@ -901,11 +924,28 @@ struct NowPlayingMusicView: View {
                     .lineLimit(1)
                     .fixedSize()
             }
+            .accessibilityHidden(true) // the bar above speaks both times
             // Monospaced digits, NOT the monospaced typeface — the latter is a
             // visibly different font and only the numbers need to stop jittering.
             .font(.system(size: 13, weight: .medium).monospacedDigit())
-            .foregroundStyle(.white.opacity(0.55))
+            .foregroundStyle(.white.opacity(0.7))
         }
+    }
+
+    /// "1 minute 21 seconds of 2 minutes 53 seconds" — spoken, not "1:21".
+    private var scrubberSpokenValue: String {
+        let elapsed = Duration.seconds(Int(player.currentTime))
+        let total = Duration.seconds(Int(player.duration))
+        let style = Duration.UnitsFormatStyle(allowedUnits: [.minutes, .seconds],
+                                              width: .wide)
+        return "\(elapsed.formatted(style)) of \(total.formatted(style))"
+    }
+
+    /// Nudge the playhead — the adjustable action VoiceOver drives with a swipe.
+    private func nudgePlayhead(_ seconds: Double) {
+        guard player.duration > 0 else { return }
+        let target = min(max(0, player.currentTime + seconds), player.duration)
+        player.seek(toProgress: target / player.duration)
     }
 
     private var transport: some View {
@@ -972,6 +1012,7 @@ struct NowPlayingMusicView: View {
             #if os(iOS)
             AirPlayButton()
                 .frame(width: chipSize * 2.2, height: chipSize * 2.2)
+                .minimumHitTarget()
                 .fixedSize()
             Spacer(minLength: 0)
             #endif
@@ -1010,7 +1051,8 @@ struct NowPlayingMusicView: View {
                 .background {
                     if active { Circle().fill(.white.opacity(0.92)) }
                 }
-                .contentShape(Circle())
+                .minimumHitTarget()
+                .contentShape(Rectangle())
         }
         .buttonStyle(UltrafinButtonStyle(focusScale: 1.15, lift: false))
     }

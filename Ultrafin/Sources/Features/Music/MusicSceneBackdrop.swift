@@ -21,9 +21,13 @@ struct MusicSceneBackdrop: View {
     /// Where the water meets the land.
     private let horizon: CGFloat = 0.56
 
+    /// Under Reduce Motion the scene holds one frame. It's still the same
+    /// picture — it simply stops drifting, which is the part being objected to.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
+        TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: reduceMotion)) { context in
+            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
                 let size = geo.size
                 ZStack {

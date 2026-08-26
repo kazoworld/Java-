@@ -180,7 +180,7 @@ struct AlbumDetailView: View {
                 if let detail = detailLine {
                     Text(detail)
                         .font(.system(size: titleSize * 0.58, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .padding(.top, 2)
@@ -665,7 +665,7 @@ struct AlbumTrackRow: View {
             Text("\(position)")
                 .font(.system(size: 16))
                 .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.6))
         }
     }
 }
