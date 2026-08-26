@@ -670,7 +670,8 @@ struct NowPlayingMusicView: View {
             // Take what's left after the buttons, and no more — without this the
             // text column reports its full ideal width and widens the whole row.
             .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
+            // Deliberately NOT combined: the artist line is a link to their
+            // page, and merging the column would make it unreachable.
 
             // The buttons keep their size; only the text gives way.
             roundControl(isFavorite ? "heart.fill" : "heart",

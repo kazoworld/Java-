@@ -40,6 +40,12 @@ struct MiniPlayerBar: View {
                 // Takes what's left and no more, so a long title can't widen the
                 // bar past its container.
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Combine the CREDIT only. Combining the whole bar would swallow
+                // the play and next buttons into one element and leave VoiceOver
+                // no way to reach them.
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Opens the full player")
 
                 barButton(player.isPlaying ? "pause.fill" : "play.fill", size: buttonSize) {
                     player.togglePlayPause()
@@ -65,10 +71,6 @@ struct MiniPlayerBar: View {
             // bar as black-on-black — present, but impossible to see.
             .glassCapsule(dim: 0.3)
             .contentShape(Capsule())
-            // One element: "Song, Artist. Now playing." beats four stray strings.
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Opens the full player")
             #if os(iOS)
             .offset(y: max(0, dragOffset))
             .gesture(dismissDrag)

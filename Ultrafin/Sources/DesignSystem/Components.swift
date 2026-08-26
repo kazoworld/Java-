@@ -275,7 +275,7 @@ struct RemoteImage: View {
     /// What VoiceOver should call this. Artwork is almost always decorative —
     /// the title sits right beside it — so the default is to stay silent rather
     /// than announce "image" over and over down a list.
-    var accessibilityLabel: String? = nil
+    var voiceOverLabel: String? = nil
 
     @State private var image: UIImage?
     @State private var didFail = false
@@ -293,8 +293,8 @@ struct RemoteImage: View {
             }
         }
         .task(id: url) { await load() }
-        .accessibilityLabel(accessibilityLabel ?? "")
-        .accessibilityHidden(accessibilityLabel == nil)
+        .accessibilityLabel(voiceOverLabel ?? "")
+        .accessibilityHidden(voiceOverLabel == nil)
     }
 
     private func load() async {
