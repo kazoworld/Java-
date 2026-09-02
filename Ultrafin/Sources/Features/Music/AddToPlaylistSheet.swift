@@ -120,9 +120,9 @@ struct AddToPlaylistSheet: View {
             // Seeded at creation rather than created-then-filled: one round trip,
             // and no window where a half-made playlist exists if the second call
             // fails.
-            let id = await source.createPlaylist(named: name, songIDs: songs.map(\.id))
+            let created = await source.createPlaylist(named: name, songIDs: songs.map(\.id))
             working = false
-            if id != nil {
+            if created {
                 Haptics.play(.success)
                 dismiss()
             } else {

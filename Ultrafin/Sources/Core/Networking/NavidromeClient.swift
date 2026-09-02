@@ -405,19 +405,19 @@ actor NavidromeClient {
 
     // MARK: - Playlists (writing)
 
-    /// Subsonic's createPlaylist. Returns the new playlist's id when the server
-    /// reports one.
+    /// Subsonic's createPlaylist.
+    ///
+    /// Reports whether the call succeeded rather than handing back an id: the
+    /// spec allows a bare OK with no playlist body, and several servers send
+    /// exactly that. Reading success from the id would call a created playlist
+    /// a failure.
     @discardableResult
-    func createPlaylist(named name: String, songIDs: [String] = []) async -> String? {
-        struct Wrapper: Decodable {
-            struct Playlist: Decodable { let id: String? }
-            let playlist: Playlist?
-        }
+    func createPlaylist(named name: String, songIDs: [String] = []) async -> Bool {
+        struct Body: Decodable {}
         var query: [URLQueryItem] = [.init(name: "name", value: name)]
         // Subsonic repeats the parameter rather than comma-joining.
         query += songIDs.map { URLQueryItem(name: "songId", value: $0) }
-        let result = try? await get(Wrapper.self, "createPlaylist", query: query)
-        return result?.playlist?.id
+        return (try? await get(Body.self, "createPlaylist", query: query)) != nil
     }
 
     /// Subsonic's updatePlaylist, used here only to append.

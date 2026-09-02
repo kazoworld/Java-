@@ -47,10 +47,12 @@ protocol MusicSource: Sendable {
 
     // MARK: - Playlist editing
 
-    /// Create a playlist, optionally seeded. Returns its id where the server
-    /// gives one — Subsonic doesn't always.
+    /// Create a playlist, optionally seeded. Reports whether it worked, not the
+    /// new id: Jellyfin returns one and Subsonic often doesn't, and treating a
+    /// missing id as failure would tell a Navidrome user their playlist wasn't
+    /// created when it was — leading them to make it twice.
     @discardableResult
-    func createPlaylist(named name: String, songIDs: [String]) async -> String?
+    func createPlaylist(named name: String, songIDs: [String]) async -> Bool
 
     /// Append songs to a playlist.
     @discardableResult
@@ -117,8 +119,8 @@ struct JellyfinMusicSource: MusicSource {
     }
 
     @discardableResult
-    func createPlaylist(named name: String, songIDs: [String]) async -> String? {
-        await client.createPlaylist(named: name, songIDs: songIDs, userID: userID)
+    func createPlaylist(named name: String, songIDs: [String]) async -> Bool {
+        await client.createPlaylist(named: name, songIDs: songIDs, userID: userID) != nil
     }
 
     @discardableResult
@@ -180,7 +182,7 @@ struct NavidromeMusicSource: MusicSource {
     }
 
     @discardableResult
-    func createPlaylist(named name: String, songIDs: [String]) async -> String? {
+    func createPlaylist(named name: String, songIDs: [String]) async -> Bool {
         await client.createPlaylist(named: name, songIDs: songIDs)
     }
 
