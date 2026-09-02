@@ -72,7 +72,16 @@ struct BarGlass<S: Shape & InsettableShape>: ViewModifier {
                 // reads as a separate surface rather than a hole.
                 content.background(UltrafinColors.elevatedSurface, in: shape)
             } else {
-                content.glassEffect(.regular.interactive(), in: shape)
+                // Tinted WHITE, not left plain and certainly not darkened.
+                //
+                // Glass takes its character from what it's given: a black tint
+                // (which the other helpers use, to keep white text legible over
+                // bright artwork) makes the bar swallow the content behind it,
+                // and untinted over a black canvas is barely better. A white
+                // tint makes it *lift* — artwork passing underneath frosts
+                // brighter rather than muddier, which is the whole difference
+                // between glass and a smoked panel.
+                content.glassEffect(.regular.tint(.white.opacity(0.14)).interactive(), in: shape)
             }
         }
         .overlay(shape.strokeBorder(LiquidGlass.rim(1.0), lineWidth: 1))
@@ -115,17 +124,11 @@ extension View {
             .overlay(Circle().strokeBorder(LiquidGlass.rim(0.85), lineWidth: 1))
     }
 
-    /// Floating chrome glass — the bottom bar and its switcher.
+    /// Floating chrome glass — the bottom bar, its switcher, and the mini
+    /// player. All three share it deliberately: they sit in the same band of the
+    /// screen, and any difference in material reads as one of them being wrong.
     ///
-    /// Deliberately **untinted**. The other glass helpers darken the material to
-    /// keep white text legible over bright artwork, but the bottom bar spends
-    /// most of its life over a true-black music canvas, where darkening glass
-    /// only ever produces a blacker hole. Clear material plus a real specular
-    /// edge is what makes it read as glass in both cases: over artwork it
-    /// refracts, and over black the lit rim is what draws the shape.
-    ///
-    /// `interactive()` lets the material flex under a press, which is most of
-    /// what separates Liquid Glass from a blurred rectangle.
+    /// See ``BarGlass`` for why it's tinted white rather than darkened.
     func barGlass<S: Shape & InsettableShape>(shape: S) -> some View {
         modifier(BarGlass(shape: shape))
     }

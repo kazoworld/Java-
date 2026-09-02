@@ -66,10 +66,10 @@ struct MiniPlayerBar: View {
             .padding(.trailing, Spacing.sm)
             .padding(.vertical, Spacing.sm)
             .frame(maxWidth: barMaxWidth)
-            // A heavier dim than the tab pill below it. Glass samples what's
-            // behind it, and over a true-black music canvas a light dim left the
-            // bar as black-on-black — present, but impossible to see.
-            .glassCapsule(dim: 0.3)
+            // Exactly the tab bar's material. These two capsules sit a few
+            // points apart; giving the upper one a heavier tint made it read as
+            // a different, darker component rather than the same sheet of glass.
+            .barGlass(shape: Capsule())
             .contentShape(Capsule())
             #if os(iOS)
             .offset(y: max(0, dragOffset))

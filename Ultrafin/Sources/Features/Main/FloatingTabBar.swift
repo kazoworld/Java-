@@ -58,16 +58,16 @@ struct FloatingTabBar: View {
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: item.icon)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: 24, weight: .regular))
                     .symbolVariant(isSelected ? .fill : .none)
                 Text(item.title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
             .foregroundStyle(isSelected ? accent : UltrafinColors.secondaryText)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .background {
                 if isSelected {
                     // One capsule that slides between tabs rather than four that
@@ -78,7 +78,7 @@ struct FloatingTabBar: View {
                     // left to the glyph, which is how it looks on the reference.
                     // A dim accent fill just made a slightly-less-black hole.
                     Capsule()
-                        .fill(UltrafinColors.primaryText.opacity(0.14))
+                        .fill(UltrafinColors.primaryText.opacity(0.22))
                         .overlay(Capsule().strokeBorder(LiquidGlass.rim(0.5), lineWidth: 0.5))
                         .matchedGeometryEffect(id: "selectedTab", in: highlight)
                 }
@@ -94,15 +94,12 @@ struct FloatingTabBar: View {
         Button {
             onSwitch()
         } label: {
-            VStack(spacing: 2) {
-                Image(systemName: switchIcon)
-                    .font(.system(size: 17, weight: .semibold))
-                Text(switchTitle)
-                    .font(.system(size: 9, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(accent)
+            // Glyph only. The reference's companion circle carries no caption,
+            // and a 9-point word crammed under an icon was the busiest thing in
+            // the bar. VoiceOver still gets the full label below.
+            Image(systemName: switchIcon)
+                .font(.system(size: 23, weight: .regular))
+                .foregroundStyle(accent)
             .frame(width: switcherSide, height: switcherSide)
             .barGlass(shape: Circle())
             .contentShape(Circle())
