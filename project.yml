@@ -57,6 +57,18 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIBackgroundModes:
           - audio
+        # CarPlay connects as its own scene with its own delegate. Declaring the
+        # role is inert until Apple grants the carplay-audio entitlement, which
+        # is requested per-app — and which must NOT be added to the target before
+        # it's granted, because an entitlement with no matching profile breaks
+        # device signing. See CarPlaySceneDelegate.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneClassName: CPTemplateApplicationScene
+                UISceneConfigurationName: Ultrafin-CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true # self-hosted servers are frequently HTTP/LAN
         NSLocalNetworkUsageDescription: Ultrafin discovers Jellyfin servers on your local network.

@@ -34,8 +34,16 @@ final class AppState {
 
     let sessionStore: SessionStore
 
+    /// The live instance, for code that runs outside the SwiftUI environment.
+    ///
+    /// CarPlay connects on its own scene with its own delegate — it never sees
+    /// the app's view hierarchy, so it can't reach `@Environment`. Weak, because
+    /// the app owns this and the reference must not keep a dead one alive.
+    private(set) static weak var shared: AppState?
+
     init(sessionStore: SessionStore = .shared) {
         self.sessionStore = sessionStore
+        AppState.shared = self
     }
 
     /// Attempts to restore the last session; otherwise routes to onboarding.
