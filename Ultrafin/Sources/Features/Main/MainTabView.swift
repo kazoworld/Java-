@@ -1,0 +1,537 @@
+import SwiftUI
+
+/// Root of the authenticated experience. Uses a tab layout that adapts to the
+/// platform: a bottom tab bar on iOS and the top tab bar on tvOS.
+///
+/// The tab set belongs to the current ``AppMode`` — Media and Music are separate
+/// experiences with their own tabs and their own settings. The last tab is a
+/// switcher that flips between them rather than opening a screen of its own.
+///
+/// Switching tabs resets that tab to its root screen (rather than restoring the
+/// last drill-down), so every tab always opens at the top.
+struct MainTabView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(SettingsStore.self) private var settings
+
+    @Binding var mode: AppMode
+
+    @State private var selection = 0
+    @State private var homePath = NavigationPath()
+    @State private var libraryPath = NavigationPath()
+    @State private var searchPath = NavigationPath()
+    @State private var settingsPath = NavigationPath()
+    #if os(tvOS)
+    /// The Guide's own stack — tvOS only, where a remote makes a grid worth
+    /// navigating.
+    @State private var guidePath = NavigationPath()
+    #endif
+    // Music mode's own stacks — kept separate so the two experiences never
+    // inherit each other's navigation.
+    @State private var listenPath = NavigationPath()
+    @State private var musicLibraryPath = NavigationPath()
+    @State private var musicSearchPath = NavigationPath()
+    @State private var musicSettingsPath = NavigationPath()
+    /// The app-wide music session (mini-player + full player live here so they
+    /// persist across every tab).
+    @State private var music = MusicPlayer.shared
+    @State private var showNowPlaying = false
+    /// Measured height of the floating bottom chrome. Pages reserve exactly
+    /// this much so their last row clears the glass.
+    @State private var chromeHeight: CGFloat = 0
+    /// One namespace for every paired zoom transition in the app.
+    @Namespace private var cardZoom
+    /// Whether the bottom chrome has pulled itself in as a page scrolls.
+    @State private var chrome = ChromeState.shared
+
+    /// The switcher's tag. Selecting it flips modes instead of navigating.
+    private static let switchTag = 90
+
+    /// Selecting a tab — INCLUDING re-selecting the one you're already on —
+    /// always returns that tab to its root screen. A custom binding is the only
+    /// way to see the re-selection: `onChange` never fires for an equal value,
+    /// which left "press Settings to get back to the top of Settings" dead.
+    private var tabSelection: Binding<Int> {
+        Binding(
+            get: { selection },
+            set: { newValue in
+                #if os(iOS)
+                // A tap on the switcher tab is an explicit action, so act on it.
+                guard newValue != Self.switchTag else {
+                    switchMode()
+                    return
+                }
+                #endif
+                // On tvOS selection follows FOCUS along the top tab row, so the
+                // switcher must never act here — merely moving focus onto it
+                // would flip modes. Its tab shows a screen with a real button.
+                resetPath(for: newValue)
+                // A fresh tab starts at the top, so the chrome starts expanded.
+                ChromeState.shared.reset()
+                selection = newValue
+            }
+        )
+    }
+
+    /// Flip to the other experience, landing on its first tab with clean stacks.
+    private func switchMode() {
+        Haptics.play(.success)
+        ChromeState.shared.reset()
+        resetAllPaths()
+        withAnimation(.smooth(duration: 0.35)) {
+            mode = mode.opposite
+            selection = 0
+        }
+        mode.remember()
+    }
+
+    private func resetPath(for tab: Int) {
+        switch mode {
+        case .media:
+            switch tab {
+            case 0: homePath = NavigationPath()
+            case 1: libraryPath = NavigationPath()
+            case 2: searchPath = NavigationPath()
+            case 3: settingsPath = NavigationPath()
+            #if os(tvOS)
+            case 5: guidePath = NavigationPath()
+            #endif
+            default: break
+            }
+        case .music:
+            switch tab {
+            case 0: listenPath = NavigationPath()
+            case 1: musicLibraryPath = NavigationPath()
+            case 2: musicSearchPath = NavigationPath()
+            case 3: musicSettingsPath = NavigationPath()
+            default: break
+            }
+        }
+    }
+
+    private func resetAllPaths() {
+        homePath = NavigationPath(); libraryPath = NavigationPath()
+        searchPath = NavigationPath(); settingsPath = NavigationPath()
+        #if os(tvOS)
+        guidePath = NavigationPath()
+        #endif
+        listenPath = NavigationPath(); musicLibraryPath = NavigationPath()
+        musicSearchPath = NavigationPath(); musicSettingsPath = NavigationPath()
+    }
+
+    var body: some View {
+        TabView(selection: tabSelection) {
+            if mode == .media { mediaTabs } else { musicTabs }
+        }
+        // The now-playing bar belongs to Music mode — in Media mode the two
+        // experiences stay out of each other's way.
+        #if os(tvOS)
+        // A bottom safe-area inset — NOT a floating overlay. An overlay sits
+        // outside the focus engine's sweep, so the bar was visible but
+        // unreachable; an inset is a real sibling below the tab content that the
+        // engine can move focus down into.
+        .safeAreaInset(edge: .bottom) {
+            if showsMiniPlayer {
+                MiniPlayerBar(player: music) { showNowPlaying = true }
+                    .padding(.horizontal, miniPlayerHPadding)
+                    .padding(.bottom, miniPlayerBottomPadding)
+                    .focusSection()
+            }
+        }
+        // Holding Select anywhere in Music reopens the full player. The mini bar
+        // is easy to miss with the remote, so this is the reliable way back into
+        // the carousel without hunting for it.
+        .onLongPressGesture(minimumDuration: 0.7) {
+            guard music.hasQueue, !showNowPlaying else { return }
+            showNowPlaying = true
+        }
+        #else
+        // The chrome is DRAWN as an overlay and its space is RESERVED per tab
+        // (see `reservesChromeSpace`). A `safeAreaInset` here looked like the
+        // tidy way to do both at once, but the inset it creates does not reach
+        // the scroll views inside each tab's NavigationStack — which is why the
+        // last row of every page sat under the glass and couldn't be scrolled
+        // clear of it. Splitting drawing from layout makes each stack reserve
+        // its own space, and that always propagates.
+        .overlay(alignment: .bottom) {
+            bottomChrome
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    chromeHeight = height
+                }
+        }
+        #endif
+        #if os(tvOS)
+        .animation(.smooth(duration: 0.35), value: music.hasQueue)
+        #endif
+        #if os(tvOS)
+        // On the TV a new session opens the full-screen carousel: it's the
+        // default look there, and it saves the focus engine from having to
+        // reach the mini bar before you can control anything.
+        //
+        // On the phone it deliberately does NOT. Tapping a song should leave you
+        // where you were, browsing, with the mini player picking up at the
+        // bottom — the player opens when you ask for it.
+        .onChange(of: music.sessionStamp) { _, stamp in
+            if stamp > 0 { showNowPlaying = true }
+        }
+        #endif
+        // A SHEET on iPhone, not a full-screen cover.
+        //
+        // A cover has nothing behind it and no interactive dismissal, so pulling
+        // it down revealed a black void and the drag had to be hand-rolled —
+        // which is what made it feel clunky. A large-detent sheet is the same
+        // presentation Apple Music uses: it tracks your thumb, rubber-bands,
+        // hands off to velocity, rounds its own corners, and shows the library
+        // easing back behind it. The TV keeps the cover; sheets aren't a tvOS
+        // idiom and there's no thumb to track.
+        #if os(iOS)
+        .sheet(isPresented: $showNowPlaying) {
+            nowPlayingPlayer
+                .presentationDetents([.large])
+                // We draw our own grabber, which doubles as a tap target.
+                .presentationDragIndicator(.hidden)
+                // The player owns its background — the record's colour has to
+                // reach the sheet's own corners, not sit inside a system fill.
+                .presentationBackground(.clear)
+        }
+        #else
+        // Bring back whatever was playing when the app was last killed. Waits
+        // for a source, because a queue with nothing to stream from is just a
+        // list. Runs once — `restoreSession` is idempotent.
+        .task(id: settings.musicSource) {
+            guard let source = appState.musicSource else { return }
+            music.restoreSession(source: source)
+        }
+        .fullScreenCoverCompat(isPresented: $showNowPlaying) {
+            nowPlayingPlayer
+        }
+        #endif
+        #if os(tvOS)
+        // Left alone with a record playing, the screen gives way to the drifting
+        // now-playing card. Applied to the player too, since that's what's
+        // covering this while music plays.
+        .musicScreensaver(player: music, eligible: mode == .music)
+        #endif
+        // Read the accent through the observed environment store so an accent
+        // change in Settings recolors the tab bar live (the static
+        // SettingsStore.shared read didn't re-render).
+        .tint(settings.accent)
+        .cardZoomNamespace(cardZoom)
+    }
+
+    /// The full player, shared by both presentations.
+    private var nowPlayingPlayer: some View {
+        NowPlayingMusicView(player: music) { destination in
+            // Tapping the album/artist in the player opens that page in the
+            // Music tab, switching modes if we're browsing Media.
+            if mode != .music {
+                mode = .music
+                mode.remember()
+            }
+            selection = 0
+            listenPath.append(destination)
+        }
+    }
+
+    /// The bar only belongs to Music mode, and never behind the full player.
+    private var showsMiniPlayer: Bool {
+        mode == .music && music.hasQueue && !showNowPlaying
+    }
+
+    #if os(iOS)
+    // MARK: - Bottom chrome
+
+    /// Everything that floats at the bottom of the phone.
+    ///
+    /// Two shapes. At rest the now-playing bar sits full width above the tab
+    /// pill and its switcher. Scroll down a page and the four tabs stand down to
+    /// a single circle showing where you are, letting the now-playing bar take
+    /// the width — the row goes from two lines to one without the switcher or
+    /// the music ever leaving.
+    ///
+    /// One animation drives the whole inset. Two — one here and one on the
+    /// TabView keyed to `hasQueue` — were animating the same appearance against
+    /// each other, which is the kind of fight that ends with a view settling
+    /// somewhere it shouldn't.
+    private var bottomChrome: some View {
+        Group {
+            if isChromeCondensed {
+                HStack(spacing: Spacing.sm) {
+                    FloatingTabBar.Collapsed(items: tabItems, selection: selection) {
+                        chrome.reset()
+                    }
+                    MiniPlayerBar(player: music, onExpand: { showNowPlaying = true },
+                                  isCompact: true)
+                    switcherButton
+                }
+            } else {
+                VStack(spacing: Spacing.sm) {
+                    if showsMiniPlayer {
+                        MiniPlayerBar(player: music) { showNowPlaying = true }
+                    }
+                    FloatingTabBar(items: tabItems,
+                                   selection: tabSelection,
+                                   switchTitle: mode.switchLabel,
+                                   switchIcon: mode.switchImage,
+                                   onSwitch: switchMode)
+                }
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.bottom, Spacing.xs)
+        .animation(ChromeState.transition, value: isChromeCondensed)
+        .animation(.snappy(duration: 0.3, extraBounce: 0.05), value: showsMiniPlayer)
+    }
+
+    /// Collapse only while something is playing.
+    ///
+    /// Without a now-playing bar there'd be nothing to hand the width to, and a
+    /// lone circle would leave no way to reach Library or Search until you
+    /// scrolled back up — a bar that hides the navigation and gives nothing back.
+    private var isChromeCondensed: Bool {
+        chrome.isCondensed && showsMiniPlayer
+    }
+
+    /// The switcher on its own, for the condensed row (the full bar draws its
+    /// own).
+    private var switcherButton: some View {
+        Button(action: switchMode) {
+            Image(systemName: mode.switchImage)
+                .font(.system(size: 23, weight: .regular))
+                .foregroundStyle(settings.accent)
+                .frame(width: 58, height: 58)
+                .barGlass(shape: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Switch to \(mode.switchLabel)")
+    }
+
+    /// The four tabs, per mode. Both modes carry the same shape so the bar
+    /// doesn't change form when you switch experiences.
+    private var tabItems: [FloatingTabBar.Item] {
+        [
+            .init(tag: 0, title: "Home", icon: "house"),
+            .init(tag: 1, title: "Library", icon: "square.stack"),
+            .init(tag: 2, title: "Search", icon: "magnifyingglass"),
+            .init(tag: 3, title: "Settings", icon: "gearshape")
+        ]
+    }
+    #endif
+
+    // MARK: - Media tabs
+
+    @ViewBuilder
+    private var mediaTabs: some View {
+        NavigationStack(path: $homePath) { HomeView() }
+            .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
+            .tabItem { Label("Home", systemImage: "house.fill") }
+            .tag(0)
+
+        #if os(tvOS)
+        // The Guide sits second, right where a set-top box puts it.
+        GuideTabView(path: $guidePath)
+            .tabItem { Label("Guide", systemImage: "tv.badge.wifi") }
+            .tag(5)
+        #endif
+
+        NavigationStack(path: $libraryPath) { LibraryRootView() }
+            .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
+            .tabItem { Label("Library", systemImage: "square.stack.fill") }
+            .tag(1)
+
+        NavigationStack(path: $searchPath) { SearchView() }
+            .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
+            .tabItem { Label("Search", systemImage: "magnifyingglass") }
+            .tag(2)
+
+        NavigationStack(path: $settingsPath) { SettingsView() }
+            .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
+            .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+            .tag(3)
+
+        #if os(tvOS)
+        // The profile switcher lives in the tab row itself — a floating overlay
+        // button was unreachable for the tvOS focus engine, and a tab is also
+        // presentation-safe: switching rebuilds the tab tree with no cover to
+        // tear down.
+        ProfileSwitcherView(isTab: true, onDone: { selection = 0 })
+            .tabItem { Label(profileTabTitle, systemImage: "person.crop.circle.fill") }
+            .tag(4)
+        #endif
+
+        switcherTab
+    }
+
+    // MARK: - Music tabs
+
+    @ViewBuilder
+    private var musicTabs: some View {
+        NavigationStack(path: $listenPath) { MusicHomeView() }
+            .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
+            .tabItem { Label("Home", systemImage: "house.fill") }
+            .tag(0)
+
+        NavigationStack(path: $musicLibraryPath) { MusicLibraryView() }
+            .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
+            .tabItem { Label("Library", systemImage: "square.stack.fill") }
+            .tag(1)
+
+        NavigationStack(path: $musicSearchPath) { MusicSearchView() }
+            .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
+            .tabItem { Label("Search", systemImage: "magnifyingglass") }
+            .tag(2)
+
+        NavigationStack(path: $musicSettingsPath) { MusicSettingsRootView() }
+            .hidesSystemTabBar()
+            .reservesChromeSpace(chromeHeight)
+            .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+            .tag(3)
+
+        #if os(tvOS)
+        ProfileSwitcherView(isTab: true, onDone: { selection = 0 })
+            .tabItem { Label(profileTabTitle, systemImage: "person.crop.circle.fill") }
+            .tag(4)
+        #endif
+
+        switcherTab
+    }
+
+    /// The mode switcher, tvOS only. Up there the tab shows a confirmation screen
+    /// with a focusable button, because tab selection follows focus — acting on
+    /// selection alone would switch the moment the remote drifted onto it.
+    ///
+    /// On iPhone it isn't a tab at all: it's the circle beside the tab pill, so
+    /// the control that swaps the whole app doesn't sit in the row of controls
+    /// that change one screen.
+    @ViewBuilder
+    private var switcherTab: some View {
+        #if os(tvOS)
+        ModeSwitchScreen(target: mode.opposite) { switchMode() }
+            .tabItem { Label(mode.switchLabel, systemImage: mode.switchImage) }
+            .tag(Self.switchTag)
+        #else
+        EmptyView()
+        #endif
+    }
+
+    #if os(tvOS)
+    /// The signed-in name labels the profile tab, like a Netflix profile chip.
+    private var profileTabTitle: String {
+        if case .authenticated(let session) = appState.phase { return session.username }
+        return "Profile"
+    }
+    #endif
+
+    // MARK: - Mini-player placement (tvOS)
+
+    private var miniPlayerHPadding: CGFloat { 60 }
+    private var miniPlayerBottomPadding: CGFloat { 40 }
+}
+
+#if os(iOS)
+private extension View {
+    /// Ultrafin draws its own bottom bar on iPhone, so the system one goes away.
+    /// Applied to the whole `NavigationStack` rather than its root, so pushing a
+    /// detail screen doesn't bring the system bar back underneath ours.
+    func hidesSystemTabBar() -> some View {
+        toolbar(.hidden, for: .tabBar)
+    }
+
+    /// Reserve room at the bottom of this tab for the floating chrome drawn
+    /// over it. Applied per `NavigationStack`, because that's the level whose
+    /// safe area actually reaches the scroll views inside — including pushed
+    /// ones. Clear, so content still scrolls *behind* the glass and simply
+    /// comes to rest above it.
+    func reservesChromeSpace(_ height: CGFloat) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: height)
+        }
+    }
+}
+#else
+private extension View {
+    func hidesSystemTabBar() -> some View { self }
+    func reservesChromeSpace(_ height: CGFloat) -> some View { self }
+}
+#endif
+
+/// The switcher tab's screen: a single, deliberate "Switch to …" button. On
+/// tvOS this is what actually performs the switch (selection follows focus up
+/// there, so it can't be done on selection); on iOS the tap already switched and
+/// this is only a brief hand-off.
+private struct ModeSwitchScreen: View {
+    let target: AppMode
+    let onSwitch: () -> Void
+
+    @State private var appeared = false
+
+    var body: some View {
+        ZStack {
+            AmbientBackground()
+            VStack(spacing: Spacing.xl) {
+                Image(systemName: target.systemImage)
+                    .font(.system(size: glyph, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 18, y: 8)
+
+                VStack(spacing: Spacing.sm) {
+                    Text("Switch to \(target.label)")
+                        .font(.system(size: title, weight: .heavy, design: .rounded))
+                        .foregroundStyle(UltrafinColors.primaryText)
+                    Text(target == .music
+                         ? "Albums, playlists and your listening."
+                         : "Movies, shows and your library.")
+                        .font(.system(size: subtitle, weight: .medium, design: .rounded))
+                        .foregroundStyle(UltrafinColors.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+
+                #if os(tvOS)
+                Button(action: onSwitch) {
+                    Label("Switch to \(target.label)", systemImage: target.systemImage)
+                        .font(.system(size: subtitle, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, Spacing.xxl)
+                        .padding(.vertical, Spacing.lg)
+                        .glassCapsule(dim: 0.12)
+                }
+                .buttonStyle(UltrafinButtonStyle(focusScale: 1.06, lift: true))
+                .padding(.top, Spacing.md)
+                #endif
+            }
+            .opacity(appeared ? 1 : 0)
+            .scaleEffect(appeared ? 1 : 0.96)
+            .padding(Spacing.xxl)
+        }
+        .onAppear { withAnimation(.spring(duration: 0.5, bounce: 0.2)) { appeared = true } }
+    }
+
+    private var glyph: CGFloat {
+        #if os(tvOS)
+        90
+        #else
+        48
+        #endif
+    }
+    private var title: CGFloat {
+        #if os(tvOS)
+        46
+        #else
+        26
+        #endif
+    }
+    private var subtitle: CGFloat {
+        #if os(tvOS)
+        26
+        #else
+        16
+        #endif
+    }
+}

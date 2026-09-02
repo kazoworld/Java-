@@ -1,0 +1,146 @@
+import SwiftUI
+import Observation
+
+/// Top-level navigation phase for the application.
+enum AppPhase: Equatable {
+    case launching
+    case serverConnect
+    case login(server: ServerConnection)
+    case authenticated(session: UserSession)
+    /// Saved session exists but the server is unreachable (offline / IP changed).
+    case connectionLost(session: UserSession)
+}
+
+/// Owns authentication state and the active Jellyfin client.
+///
+/// `AppState` is intentionally the only object that knows how to move between
+/// phases; views observe it and render the matching flow. Restoring a saved
+/// session happens once on launch so returning users land straight on Home.
+@Observable
+@MainActor
+final class AppState {
+    private(set) var phase: AppPhase = .launching
+
+    /// The live API client for the authenticated session, or `nil` when signed out.
+    private(set) var client: JellyfinClient?
+
+    /// The signed-in user's server record (avatar tag, admin flag) — fetched
+    /// after auth; nil until it arrives.
+    private(set) var currentUser: ServerUser?
+
+    /// True when the signed-in user is a server administrator (drives the
+    /// profile switcher's ability to see every account).
+    var isAdmin: Bool { currentUser?.isAdministrator ?? false }
+
+    let sessionStore: SessionStore
+
+    /// The live instance, for code that runs outside the SwiftUI environment.
+    ///
+    /// CarPlay connects on its own scene with its own delegate — it never sees
+    /// the app's view hierarchy, so it can't reach `@Environment`. Weak, because
+    /// the app owns this and the reference must not keep a dead one alive.
+    private(set) static weak var shared: AppState?
+
+    init(sessionStore: SessionStore = .shared) {
+        self.sessionStore = sessionStore
+        AppState.shared = self
+    }
+
+    /// Attempts to restore the last session; otherwise routes to onboarding.
+    func bootstrap() async {
+        guard let session = sessionStore.loadSession() else {
+            phase = .serverConnect
+            return
+        }
+        let client = JellyfinClient(server: session.server, accessToken: session.accessToken)
+        do {
+            try await client.checkConnection()
+            self.client = client
+            phase = .authenticated(session: session)
+            refreshCurrentUser(session)
+        } catch APIError.unauthorized {
+            // Server reachable, but the token expired — re-login.
+            sessionStore.clear()
+            phase = .login(server: session.server)
+        } catch {
+            // Server unreachable (offline, or its address changed). Keep the
+            // session and let the user retry or sign out to a new server.
+            phase = .connectionLost(session: session)
+        }
+    }
+
+    /// Re-attempt connecting with the saved session (from the connection-lost
+    /// screen).
+    func retryConnection() async {
+        phase = .launching
+        await bootstrap()
+    }
+
+    func didConnect(to server: ServerConnection) {
+        phase = .login(server: server)
+    }
+
+    func didAuthenticate(_ session: UserSession) {
+        let client = JellyfinClient(server: session.server, accessToken: session.accessToken)
+        self.client = client
+        sessionStore.save(session)
+        phase = .authenticated(session: session)
+        refreshCurrentUser(session)
+    }
+
+    /// Confirms a remembered profile's token still works for its user, without
+    /// applying it (the switcher applies via `didAuthenticate` at a
+    /// presentation-safe moment). Must be a USER-scoped check: Jellyfin revokes
+    /// the device's old token when the same device signs in as another user,
+    /// and a bare reachability probe can pass on a revoked token — which used
+    /// to "switch" into a session whose every library call then failed. A
+    /// revoked session is forgotten so the next attempt re-authenticates.
+    func validateSaved(_ session: UserSession) async -> Bool {
+        let candidate = JellyfinClient(server: session.server, accessToken: session.accessToken)
+        do {
+            try await candidate.requireUserAccess(userID: session.userID)
+            return true
+        } catch APIError.unauthorized {
+            sessionStore.forget(userID: session.userID, serverID: session.server.id)
+            return false
+        } catch {
+            return false // unreachable — keep the current session
+        }
+    }
+
+    /// Fetches the signed-in user's record (avatar tag + admin flag).
+    private func refreshCurrentUser(_ session: UserSession) {
+        Task { [weak self] in
+            guard let self, let client = self.client else { return }
+            let detail = await client.userDetail(userID: session.userID)
+            // Only apply if we're still on the same user (a fast switch could race).
+            if case .authenticated(let current) = self.phase, current.userID == session.userID {
+                self.currentUser = detail
+            }
+        }
+    }
+
+    /// The backend feeding the Music tab, per the user's Settings choice.
+    /// Navidrome only when a server is actually linked — otherwise Music falls
+    /// back to Jellyfin rather than going dark.
+    var musicSource: MusicSource? {
+        if SettingsStore.shared.musicSource == .navidrome,
+           let config = NavidromeStore.shared.config {
+            return NavidromeMusicSource(client: NavidromeClient(config: config))
+        }
+        guard case .authenticated(let session) = phase, let client else { return nil }
+        return JellyfinMusicSource(client: client, userID: session.userID)
+    }
+
+    func signOut() {
+        // Capture before clearing — the Task body runs after this method
+        // returns, by which point `client` is already nil and the server
+        // would never hear about the logout.
+        let departing = client
+        Task { await departing?.reportSessionEnded() }
+        sessionStore.clear()
+        client = nil
+        currentUser = nil
+        phase = .serverConnect
+    }
+}

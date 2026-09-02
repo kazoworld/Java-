@@ -1,0 +1,5 @@
+# Shared by the iOS and tvOS apps — both ship under one App Store Connect record.
+app_identifier(ENV["ULTRAFIN_BUNDLE_ID"] || "com.ultrafin.app")
+apple_id(ENV["FASTLANE_APPLE_ID"])
+itc_team_id(ENV["APP_STORE_CONNECT_TEAM_ID"])
+team_id(ENV["DEVELOPMENT_TEAM"])

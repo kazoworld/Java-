@@ -1,0 +1,88 @@
+import SwiftUI
+
+/// A button style that gives every tappable surface the right feel on each
+/// platform:
+///
+/// - **tvOS:** lifts and shadows on *focus* (the Siri Remote focus engine),
+///   which is the core interaction model Apple TV users expect — and exactly
+///   what makes Swiftfin feel native and Moonfin feel broken on tvOS.
+/// - **iOS:** a subtle press scale.
+///
+/// Driving focus visuals from a single style keeps the look consistent and
+/// fully themeable, instead of relying on the system's default focus chrome.
+struct UltrafinButtonStyle: ButtonStyle {
+    var focusScale: CGFloat = 1.06
+    var pressScale: CGFloat = 0.97
+    /// When true, adds a soft lift shadow on focus (used by poster cards).
+    var lift: Bool = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        StyleBody(configuration: configuration, focusScale: focusScale, pressScale: pressScale, lift: lift)
+    }
+
+    private struct StyleBody: View {
+        let configuration: ButtonStyleConfiguration
+        let focusScale: CGFloat
+        let pressScale: CGFloat
+        let lift: Bool
+
+        #if os(tvOS)
+        @Environment(\.isFocused) private var isFocused
+        #endif
+
+        var body: some View {
+            #if os(tvOS)
+            configuration.label
+                .scaleEffect(scale)
+                .shadow(color: .black.opacity(lift && isFocused ? 0.55 : 0),
+                        radius: lift && isFocused ? 26 : 0, y: lift && isFocused ? 16 : 0)
+                .zIndex(isFocused ? 1 : 0)
+                .animation(.smooth(duration: 0.28), value: isFocused)
+                .animation(.smooth(duration: 0.12), value: configuration.isPressed)
+            #else
+            configuration.label
+                .scaleEffect(configuration.isPressed ? pressScale : 1)
+                .animation(.smooth(duration: 0.14), value: configuration.isPressed)
+            #endif
+        }
+
+        #if os(tvOS)
+        private var scale: CGFloat {
+            if configuration.isPressed { return pressScale }
+            return isFocused ? focusScale : 1
+        }
+        #endif
+    }
+}
+
+extension View {
+    /// Convenience for the poster/card focus treatment. No lift shadow: the
+    /// card already draws its own accent glow on focus, and stacking a second
+    /// large blurred shadow per focus move is a real GPU cost across rails.
+    func mediaCardButtonStyle() -> some View {
+        buttonStyle(UltrafinButtonStyle(focusScale: 1.1, lift: false))
+    }
+
+    /// A music grid tile. On a television it has to answer the remote, so it
+    /// lifts under focus; on a phone there is no focus and a plain button keeps
+    /// the tap silent.
+    @ViewBuilder
+    func musicCardButtonStyle() -> some View {
+        #if os(tvOS)
+        buttonStyle(UltrafinButtonStyle(focusScale: 1.08, lift: false))
+        #else
+        buttonStyle(.plain)
+        #endif
+    }
+
+    /// A full-width music list row. Same reasoning as ``musicCardButtonStyle``,
+    /// but a row shouldn't grow much — it just needs to light up.
+    @ViewBuilder
+    func musicRowButtonStyle() -> some View {
+        #if os(tvOS)
+        buttonStyle(UltrafinButtonStyle(focusScale: 1.02, lift: false))
+        #else
+        buttonStyle(.plain)
+        #endif
+    }
+}

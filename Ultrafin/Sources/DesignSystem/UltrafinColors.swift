@@ -1,0 +1,136 @@
+import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Centralized, **appearance-adaptive** color tokens.
+///
+/// Every token resolves differently in light vs. dark so the app reads as
+/// frosted glass and a breath of fresh air either way: airy, near-white
+/// surfaces in light; deep, cool surfaces in dark. Translucent materials
+/// (`.ultraThinMaterial`) sit on top of these and adapt automatically.
+enum UltrafinColors {
+    // Light = airy off-white with a cool tint; Dark = deep near-black.
+    static var background: Color { dynamic(light: 0xEFF2F8, dark: 0x0A0B0F) }
+    static var surface: Color { dynamic(light: 0xFFFFFF, dark: 0x14161D) }
+    static var elevatedSurface: Color { dynamic(light: 0xE6EAF2, dark: 0x1C1F29) }
+
+    static var primaryText: Color { dynamic(light: 0x0F1320, dark: 0xF5F6FA) }
+    static var secondaryText: Color { dynamic(light: 0x5A6172, dark: 0x9AA0B0) }
+    static var tertiaryText: Color { dynamic(light: 0x9097A8, dark: 0x5C6173) }
+
+    /// Hairline divider/stroke that stays subtle on either background.
+    static var separator: Color { dynamicAlpha(light: (0x000000, 0.10), dark: (0xFFFFFF, 0.10)) }
+
+    /// Default accent; the live accent is resolved through `SettingsStore.accent`,
+    /// which also decides between the media palette and Music's red.
+    static var accent: Color { AccentColor.aurora.color }
+
+    /// Music's accent, and not a preference: Apple Music is red, and that side
+    /// of the app is built to feel like it. The media side keeps its own palette
+    /// so the two experiences stay visibly distinct.
+    static let musicAccent = Color(hex: 0xFA2D48)
+
+    static var accentGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: 0x6D8BFF), Color(hex: 0xB56DFF)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    /// Top/left-to-content scrim behind hero artwork; fades into the adaptive
+    /// background so overlaid text stays legible in light and dark.
+    static var heroScrim: LinearGradient {
+        LinearGradient(
+            colors: [.clear, background.opacity(0.55), background],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    // MARK: - Dynamic helpers
+
+    private static func dynamic(light: UInt32, dark: UInt32) -> Color {
+        #if canImport(UIKit)
+        return Color(UIColor { traits in
+            traits.userInterfaceStyle == .dark ? rgb(dark) : rgb(light)
+        })
+        #else
+        return Color(hex: dark)
+        #endif
+    }
+
+    private static func dynamicAlpha(light: (UInt32, Double), dark: (UInt32, Double)) -> Color {
+        #if canImport(UIKit)
+        return Color(UIColor { traits in
+            let spec = traits.userInterfaceStyle == .dark ? dark : light
+            return rgb(spec.0).withAlphaComponent(spec.1)
+        })
+        #else
+        return Color(hex: dark.0, alpha: dark.1)
+        #endif
+    }
+
+    #if canImport(UIKit)
+    private static func rgb(_ hex: UInt32) -> UIColor {
+        UIColor(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+    #endif
+}
+
+/// User-selectable accent colors exposed in the media side's Appearance
+/// settings. Music doesn't appear here — it's always Apple Music red, see
+/// ``UltrafinColors/musicAccent``.
+enum AccentColor: String, CaseIterable, Identifiable, Codable {
+    case aurora, ocean, mint, orchid, rose, ember, gold
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .aurora: "Aurora"
+        case .ocean: "Ocean"
+        case .mint: "Mint"
+        case .orchid: "Orchid"
+        case .rose: "Rose"
+        case .ember: "Ember"
+        case .gold: "Gold"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .aurora: Color(hex: 0x6D8BFF)
+        case .ocean: Color(hex: 0x38BDF8)
+        case .mint: Color(hex: 0x3DD9A0)
+        case .orchid: Color(hex: 0xB56DFF) // matches the brand accent gradient
+        case .rose: Color(hex: 0xFF6DAE)
+        case .ember: Color(hex: 0xFF6D5A)
+        case .gold: Color(hex: 0xFFC857)
+        }
+    }
+
+    /// Anything unrecognised — including the "ultrafinRed" the single-accent
+    /// build wrote into everyone's stored theme — comes back as the default
+    /// rather than failing to decode and resetting the whole theme group.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AccentColor(rawValue: raw) ?? .aurora
+    }
+}
+
+extension Color {
+    /// Convenience initializer for hex literals like `0x1C1F29`.
+    init(hex: UInt32, alpha: Double = 1.0) {
+        let r = Double((hex >> 16) & 0xFF) / 255.0
+        let g = Double((hex >> 8) & 0xFF) / 255.0
+        let b = Double(hex & 0xFF) / 255.0
+        self.init(.sRGB, red: r, green: g, blue: b, opacity: alpha)
+    }
+}

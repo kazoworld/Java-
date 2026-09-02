@@ -1,0 +1,556 @@
+import Foundation
+import Combine
+import Observation
+
+/// A user-selectable streaming quality. `auto` direct-plays when possible; the
+/// rest cap the stream at the given bitrate (transcoding when needed).
+enum QualityOption: String, CaseIterable, Identifiable, Codable {
+    case auto, highest, high, medium, low
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .auto: "Auto · Recommended"
+        case .highest: "4K · Highest"
+        case .high: "1080p · High"
+        case .medium: "720p · Medium"
+        case .low: "480p · Data Saver"
+        }
+    }
+    var bitrate: Int? {
+        switch self {
+        case .auto: nil               // adaptive / direct play
+        case .highest: 120_000_000    // 4K, effectively uncapped
+        case .high: 20_000_000
+        case .medium: 4_000_000
+        case .low: 1_500_000
+        }
+    }
+}
+
+/// A contextual "Skip Intro" / "Skip Credits" prompt derived from media segments.
+struct SkipAction: Equatable {
+    let label: String
+    let target: Double
+}
+
+/// Drives the player screen. Owns a queue of items (so episodes can advance),
+/// resolves each stream, picks the engine per policy, mirrors engine state, and
+/// reports progress back to the server.
+@Observable
+@MainActor
+final class VideoPlayerViewModel {
+    private(set) var state = PlaybackState()
+    private(set) var engine: PlaybackEngine?
+    private(set) var activeEngineName = ""
+    var errorMessage: String?
+
+    /// Bumped whenever the engine/track/quality selection changes, so SwiftUI
+    /// panels re-read live values from the engine.
+    private(set) var revision = 0
+
+    private(set) var queue: [MediaItem]
+    private(set) var index: Int
+    private(set) var quality: QualityOption = .auto
+    private(set) var segments: [MediaSegment] = []
+    /// Scrubber-preview sprites for the current item (nil until loaded / if the
+    /// server hasn't generated trickplay for it).
+    private(set) var trickplaySource: TrickplaySource?
+    /// Full item detail (logo art, parent logo) fetched for the current item.
+    private(set) var currentDetail: MediaItem?
+
+    // Episode browser (in-player season/episode picker for TV shows).
+    private(set) var browseSeasons: [MediaItem] = []
+    private(set) var browseSeasonID: String?
+    private(set) var browseEpisodes: [MediaItem] = []
+
+    private let userID: String
+    private let client: JellyfinClient
+    private let settings: PlaybackPreferences
+    private let captionMode: SubtitlePreferences.CaptionMode
+    /// When false, ignore any saved resume position and start from 0.
+    private let resumeEnabled: Bool
+
+    private var cancellable: AnyCancellable?
+    private var resolution: PlaybackResolution?
+    private var lastReportedSecond: Int = -1
+    private var appliedCaptions = false
+    private var captionDisengageTask: Task<Void, Never>?
+    /// Set once the player is dismissed, so an in-flight load that finishes after
+    /// you back out doesn't spin up an orphaned engine that keeps playing.
+    private var stopped = false
+
+    /// Publishes play/pause + metadata to the system so Control Center, the
+    /// Siri Remote and Home Assistant (pyatv) see this app's playback state.
+    private let nowPlaying = NowPlayingController()
+    private var nowPlayingIsPlaying: Bool?
+
+    init(queue: [MediaItem], startIndex: Int, userID: String, client: JellyfinClient,
+         settings: PlaybackPreferences, captionMode: SubtitlePreferences.CaptionMode,
+         defaultQuality: QualityOption = .auto, resume: Bool = true) {
+        self.queue = queue.isEmpty ? [] : queue
+        self.index = min(max(0, startIndex), max(0, queue.count - 1))
+        self.userID = userID
+        self.client = client
+        self.settings = settings
+        self.captionMode = captionMode
+        self.quality = defaultQuality
+        self.resumeEnabled = resume
+    }
+
+    /// Set true when the user dismisses the "Up Next" prompt, to stop the
+    /// automatic advance for the current item. Reset on each load.
+    private(set) var autoplayCancelled = false
+
+    // MARK: - Derived
+
+    var currentItem: MediaItem? { queue.indices.contains(index) ? queue[index] : nil }
+    var hasNext: Bool { index < queue.count - 1 }
+    var hasPrevious: Bool { index > 0 }
+
+    /// The next episode in the queue, if any.
+    var nextItem: MediaItem? { hasNext ? queue[index + 1] : nil }
+
+    /// Seconds left before the current item ends (for the Up Next countdown).
+    var timeRemaining: Int { max(0, Int((state.duration - state.currentTime).rounded())) }
+
+    /// Show the "Up Next" card over the credits of an episode that has a
+    /// following one queued (unless the user dismissed it). When the server has
+    /// detected the outro/credits segment, the card appears exactly as the
+    /// credits start; otherwise it falls back to the last ~25 seconds.
+    var showUpNext: Bool {
+        guard !autoplayCancelled, currentItem?.type == .episode, nextItem != nil,
+              state.duration > 0 else { return false }
+        let remaining = state.duration - state.currentTime
+        guard remaining > 0 else { return false }
+        if let outro = segments.first(where: { $0.kind == .outro }) {
+            return state.currentTime >= outro.start
+        }
+        return remaining <= 25
+    }
+
+    /// Whether the episode auto-advances when it ends (Settings → Playback).
+    /// With autoplay off the Up Next card still appears but waits for a click.
+    var autoplayEnabled: Bool { SettingsStore.shared.autoplayNextEpisode }
+
+    func cancelAutoplay() { autoplayCancelled = true }
+    var seekInterval: Double { Double(settings.seekInterval) }
+
+    var subtitleTracks: [MediaTrack] { engine?.subtitleTracks ?? [] }
+    var currentSubtitleID: Int? { engine?.currentSubtitleID }
+
+    /// True when the current item is a TV episode, so the in-player episode
+    /// browser button should appear.
+    var isEpisode: Bool { currentItem?.type == .episode && currentItem?.seriesId != nil }
+
+    /// Series name for episodes (e.g. "The Office"), otherwise the item title.
+    var displayTitle: String {
+        guard let item = currentItem else { return "" }
+        if item.type == .episode { return item.seriesName ?? item.name }
+        return item.name
+    }
+
+    /// For episodes: "Season 3: EP 1 - Weight Loss".
+    var displaySubtitle: String? {
+        guard let item = currentItem, item.type == .episode else { return nil }
+        let s = item.parentIndexNumber.map { "Season \($0)" }
+        let e = item.indexNumber.map { "EP \($0)" }
+        let prefix = [s, e].compactMap { $0 }.joined(separator: ": ")
+        return prefix.isEmpty ? item.name : "\(prefix) - \(item.name)"
+    }
+
+    /// A brief synopsis of what's playing (episode or movie), for the paused
+    /// overlay. Prefers the full detail record when it has arrived.
+    var displayOverview: String? {
+        let text = currentDetail?.overview ?? currentItem?.overview
+        guard let text, !text.isEmpty else { return nil }
+        return text
+    }
+
+    /// Logo art for the title bar — the item's own logo (movies) or the parent
+    /// series logo (episodes), matching the magical look of the Home hero.
+    var titleLogoURL: URL? {
+        guard let item = currentDetail ?? currentItem else { return nil }
+        if let tag = item.imageTags?["Logo"] {
+            return client.imageURL(itemID: item.id, kind: .logo, tag: tag, maxWidth: 600)
+        }
+        if let parentID = item.parentLogoItemId, let tag = item.parentLogoImageTag {
+            return client.imageURL(itemID: parentID, kind: .logo, tag: tag, maxWidth: 600)
+        }
+        return nil
+    }
+
+    // MARK: - Episode browser
+
+    nonisolated func episodeImageURL(_ item: MediaItem) -> URL? {
+        let tag = item.imageTags?["Primary"]
+        return client.imageURL(itemID: item.id, kind: .primary, tag: tag, maxWidth: 320)
+    }
+
+    /// Loads the seasons/episodes for the current series the first time the
+    /// browser is opened (or after the season changes).
+    func loadEpisodeBrowserIfNeeded() async {
+        guard let item = currentItem, let seriesID = item.seriesId else { return }
+        if browseSeasons.isEmpty {
+            browseSeasons = (try? await client.seasons(seriesID: seriesID, userID: userID)) ?? []
+        }
+        let target = browseSeasonID ?? item.seasonId ?? browseSeasons.first?.id
+        if let target, browseSeasonID != target || browseEpisodes.isEmpty {
+            browseSeasonID = target
+            browseEpisodes = (try? await client.episodes(seriesID: seriesID, seasonID: target, userID: userID)) ?? []
+        }
+    }
+
+    func selectBrowseSeason(_ id: String) async {
+        guard let seriesID = currentItem?.seriesId, id != browseSeasonID else { return }
+        browseSeasonID = id
+        browseEpisodes = (try? await client.episodes(seriesID: seriesID, seasonID: id, userID: userID)) ?? []
+    }
+
+    /// Switches playback to the chosen episode, making its season the new queue
+    /// so previous/next continue to work from there.
+    func playBrowsedEpisode(_ episode: MediaItem) async {
+        guard let idx = browseEpisodes.firstIndex(where: { $0.id == episode.id }) else { return }
+        if episode.id == currentItem?.id { return }
+        await reportStopped()
+        queue = browseEpisodes
+        index = idx
+        await loadCurrent(startAt: await freshResumeSeconds())
+    }
+
+    // MARK: - Lifecycle
+
+    func start() async {
+        stopped = false
+        // Clear and register as one step. The command centre and the Now Playing
+        // dictionary are shared process-wide, so whatever music left behind has
+        // to go before video's handlers land — doing it here, rather than from
+        // the music side as the view appears, is what makes the order certain.
+        nowPlaying.clear()
+        nowPlaying.configure(
+            onPlay: { [weak self] in self?.engine?.play() },
+            onPause: { [weak self] in self?.engine?.pause() },
+            onToggle: { [weak self] in self?.togglePlayPause() },
+            onSeek: { [weak self] in self?.engine?.seek(to: $0) }
+        )
+        await loadCurrent(startAt: await freshResumeSeconds())
+    }
+
+    /// The authoritative resume position, fetched from the server at playback
+    /// start. The item handed in by the launching screen carries userData as old
+    /// as that screen — resuming from it lands wherever the page was when it
+    /// loaded, not where you actually left off.
+    private func freshResumeSeconds() async -> Double {
+        guard resumeEnabled, let item = currentItem else { return 0 }
+        if let detail = await client.playbackDetail(itemID: item.id, userID: userID)?.item,
+           let ticks = detail.userData?.playbackPositionTicks {
+            return ticks > 0 ? Double(ticks) / 10_000_000.0 : 0
+        }
+        return resumeSeconds() // offline/stale fallback
+    }
+
+    /// Pushes the current title + play/pause state to the system Now Playing
+    /// center (so Control Center / Home Assistant see it).
+    private func updateNowPlaying() {
+        guard let item = currentItem else { return }
+        let subtitle = item.type == .episode ? item.seriesName : nil
+        nowPlaying.update(title: item.name, subtitle: subtitle,
+                          duration: state.duration, elapsed: state.currentTime,
+                          isPlaying: state.status == .playing, mediaType: .video)
+    }
+
+    /// Tears down any current engine and (re)loads the current queue item.
+    private func loadCurrent(startAt seconds: Double) async {
+        guard let item = currentItem else { return }
+        // Cancel the state sink BEFORE teardown: VLC's stop() posts a .stopped
+        // state that would otherwise map to .ended and trigger auto-advance.
+        cancellable?.cancel()
+        engine?.teardown()
+        appliedCaptions = false
+        autoplayCancelled = false
+        trickplaySource = nil
+        currentDetail = nil
+        errorMessage = nil
+        state = PlaybackState()
+
+        // Full detail (logo art) + scrubber-preview sprites (both best-effort).
+        let detailItemID = item.id
+        Task {
+            if let result = await client.playbackDetail(itemID: detailItemID, userID: userID) {
+                currentDetail = result.item
+                trickplaySource = result.trickplay
+            }
+        }
+
+        do {
+            let resolution = try await client.resolvePlayback(for: item, userID: userID, maxBitrate: quality.bitrate)
+            // The user may have backed out while we were resolving — don't start
+            // an engine that would play with no screen attached.
+            guard !stopped else { return }
+            self.resolution = resolution
+            let engine = makeEngine(for: resolution)
+            bind(to: engine)
+            self.engine = engine
+            revision += 1
+            engine.load(url: resolution.streamURL, startAt: seconds)
+            engine.play()
+            // Publish immediately rather than waiting for the first play/pause
+            // change. Without this the title only ever reached the system if the
+            // status happened to flip after the engine was bound.
+            updateNowPlaying()
+            // Register the play session so progress/stop reports stick.
+            Task {
+                await client.reportPlaybackStarted(itemID: item.id,
+                                                   positionTicks: Int64(seconds * 10_000_000),
+                                                   playSessionID: resolution.playSessionID)
+            }
+            // Intro/outro segments for the Skip Intro button (best-effort).
+            segments = await client.mediaSegments(itemID: item.id)
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? "Couldn't start playback."
+        }
+    }
+
+    /// The contextual skip prompt for the current playback position, if any.
+    var activeSkip: SkipAction? {
+        let t = state.currentTime
+        guard t > 0.5 else { return nil }
+        for seg in segments where t >= seg.start && t < seg.end - 1 {
+            switch seg.kind {
+            case .intro: return SkipAction(label: "Skip Intro", target: seg.end)
+            case .outro: return SkipAction(label: "Skip Credits", target: seg.end)
+            case .other: continue
+            }
+        }
+        return nil
+    }
+
+    func skipCurrentSegment() {
+        guard let target = activeSkip?.target else { return }
+        engine?.seek(to: target)
+    }
+
+    private func makeEngine(for resolution: PlaybackResolution) -> PlaybackEngine {
+        switch settings.enginePolicy {
+        case .nativeOnly:
+            activeEngineName = "AVPlayer"
+            return AVPlaybackEngine()
+        case .vlcOnly:
+            activeEngineName = "VLCKit"
+            return VLCPlaybackEngine()
+        case .hybrid:
+            if resolution.isDirectPlay || !VLCPlaybackEngine.isAvailable {
+                activeEngineName = "AVPlayer"
+                return AVPlaybackEngine()
+            } else {
+                activeEngineName = "VLCKit"
+                return VLCPlaybackEngine()
+            }
+        }
+    }
+
+    private func bind(to engine: PlaybackEngine) {
+        cancellable = engine.statePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newState in
+                guard let self else { return }
+                self.state = newState
+                // Tracks are only known once playback starts.
+                if newState.status == .playing, !self.appliedCaptions {
+                    self.appliedCaptions = true
+                    self.applyCaptionDefault()
+                    self.applyAudioDefault()
+                }
+                // Mirror play/pause to the system Now Playing center on change.
+                let isPlaying = newState.status == .playing
+                if isPlaying != self.nowPlayingIsPlaying {
+                    self.nowPlayingIsPlaying = isPlaying
+                    self.updateNowPlaying()
+                }
+                self.reportProgressIfNeeded(newState)
+            }
+    }
+
+    // MARK: - Transport
+
+    func togglePlayPause() {
+        guard let engine else { return }
+        // Treat buffering as "wants to play" so a quick pause while it's still
+        // loading actually pauses instead of being swallowed (and then re-played).
+        switch state.status {
+        case .playing, .buffering: engine.pause()
+        default: engine.play()
+        }
+    }
+
+    func skip(by seconds: Double) {
+        let target = max(0, min(state.duration, state.currentTime + seconds))
+        engine?.seek(to: target)
+        engageCaptionsIfNeeded()
+        updateNowPlaying()
+    }
+
+    func seek(toProgress progress: Double) {
+        engine?.seek(to: progress * state.duration)
+        engageCaptionsIfNeeded()
+        updateNowPlaying()
+    }
+
+    func playNext() async {
+        guard hasNext else { return }
+        await reportStopped()
+        index += 1
+        await loadCurrent(startAt: 0)
+    }
+
+    func playPrevious() async {
+        guard hasPrevious else { return }
+        await reportStopped()
+        index -= 1
+        await loadCurrent(startAt: 0)
+    }
+
+    /// Called when the current item ends — advance, or report end-of-queue.
+    /// Returns true if it advanced. Respects the autoplay setting: with it off,
+    /// ending an episode never silently rolls into the next one.
+    func handlePlaybackEnded() async -> Bool {
+        if autoplayCancelled || !autoplayEnabled { return false }
+        if hasNext {
+            await playNext()
+            return true
+        }
+        return false
+    }
+
+    func stop() {
+        guard !stopped else { return } // idempotent: dismiss + close both call this
+        stopped = true
+        captionDisengageTask?.cancel()
+        cancellable?.cancel()
+        engine?.pause()
+        engine?.teardown()
+        engine = nil
+        nowPlaying.clear()
+        Task { await reportStopped() }
+    }
+
+    // MARK: - Quality & subtitles
+
+    func setQuality(_ option: QualityOption) async {
+        guard option != quality else { return }
+        quality = option
+        await loadCurrent(startAt: state.currentTime)
+    }
+
+    func setSubtitle(id: Int?) {
+        engine?.selectSubtitle(id: id)
+        revision += 1
+    }
+
+    /// Single-press captions toggle: off → preferred (English) track, on → off.
+    func toggleCaptions() {
+        guard let engine else { return }
+        if engine.currentSubtitleID != nil {
+            engine.selectSubtitle(id: nil)
+        } else if let track = preferredSubtitleTrack() {
+            engine.selectSubtitle(id: track.id)
+        }
+        revision += 1
+    }
+
+    var captionsOn: Bool { engine?.currentSubtitleID != nil }
+
+    private func preferredSubtitleTrack() -> MediaTrack? {
+        let tracks = engine?.subtitleTracks ?? []
+        let code = SettingsStore.shared.subtitles.preferredLanguage
+        let label = MediaLanguage.options.first(where: { $0.code == code })?.label ?? "English"
+        let target = (code.isEmpty ? "english" : label.lowercased())
+        if let match = tracks.first(where: { $0.name.lowercased().contains(target) }) { return match }
+        if let eng = tracks.first(where: { $0.name.lowercased().contains("eng") }) { return eng }
+        return tracks.first
+    }
+
+    private func applyCaptionDefault() {
+        guard let engine else { return }
+        switch captionMode {
+        case .off, .whenEngaged:
+            engine.selectSubtitle(id: nil)
+        case .always:
+            engine.selectSubtitle(id: preferredSubtitleTrack()?.id)
+        }
+        revision += 1
+    }
+
+    /// Auto-select the preferred audio language (English by default) so a title
+    /// doesn't start in another language. An explicit preference wins.
+    private func applyAudioDefault() {
+        guard let engine else { return }
+        let tracks = engine.audioTracks
+        guard tracks.count > 1 else { return } // nothing to choose
+        let prefs = SettingsStore.shared
+        var terms: [String] = []
+        if !prefs.audio.preferredLanguage.isEmpty {
+            let code = prefs.audio.preferredLanguage
+            let label = MediaLanguage.options.first { $0.code == code }?.label.lowercased()
+            terms = [label, code].compactMap { $0 }
+        } else if prefs.preferEnglishAudio {
+            terms = ["english", "eng"]
+        }
+        guard !terms.isEmpty else { return }
+        if let match = tracks.first(where: { track in
+            terms.contains { track.name.lowercased().contains($0) }
+        }) {
+            engine.selectAudio(id: match.id)
+            revision += 1
+        }
+    }
+
+    /// "Off unless engaged": briefly enable captions while scrubbing, then hide.
+    private func engageCaptionsIfNeeded() {
+        guard captionMode == .whenEngaged, let engine,
+              let first = engine.subtitleTracks.first else { return }
+        engine.selectSubtitle(id: first.id)
+        revision += 1
+        captionDisengageTask?.cancel()
+        captionDisengageTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            self?.engine?.selectSubtitle(id: nil)
+            self?.revision += 1
+        }
+    }
+
+    // MARK: - Progress reporting
+
+    private func resumeSeconds() -> Double {
+        // `resumeEnabled` is the explicit choice (e.g. the Resume button vs.
+        // Restart); callers pass the auto-resume setting for default plays.
+        guard resumeEnabled,
+              let ticks = currentItem?.userData?.playbackPositionTicks, ticks > 0 else { return 0 }
+        return Double(ticks) / 10_000_000.0
+    }
+
+    private func reportProgressIfNeeded(_ state: PlaybackState) {
+        guard let item = currentItem else { return }
+        let second = Int(state.currentTime)
+        guard second != lastReportedSecond, second % 5 == 0, state.status == .playing else { return }
+        lastReportedSecond = second
+        // Keep the system Now Playing elapsed time honest as we go.
+        updateNowPlaying()
+        let ticks = Int64(state.currentTime * 10_000_000)
+        Task {
+            await client.reportPlaybackProgress(
+                itemID: item.id, positionTicks: ticks, isPaused: false, playSessionID: resolution?.playSessionID
+            )
+        }
+    }
+
+    private func reportStopped() async {
+        guard let item = currentItem else { return }
+        let ticks = Int64(state.currentTime * 10_000_000)
+        // A real Stopped report — the server persists the resume position from
+        // this immediately (a paused progress post doesn't carry that weight).
+        await client.reportPlaybackStopped(
+            itemID: item.id, positionTicks: ticks, playSessionID: resolution?.playSessionID
+        )
+    }
+}
