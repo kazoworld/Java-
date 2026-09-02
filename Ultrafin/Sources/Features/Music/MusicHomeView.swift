@@ -143,6 +143,7 @@ struct MusicHomeView: View {
         #if os(iOS)
         .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.large)
+        .adaptsChromeOnScroll()
         #endif
         .navigationDestination(for: MediaItem.self) { item in
             Group {

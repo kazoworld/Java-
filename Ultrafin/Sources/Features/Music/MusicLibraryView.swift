@@ -175,6 +175,7 @@ struct MusicLibraryView: View {
         .navigationTitle("Library")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
+        .adaptsChromeOnScroll()
         #endif
         .navigationDestination(for: MusicLibrarySection.self) { section in
             MusicSectionListView(section: section, model: model)

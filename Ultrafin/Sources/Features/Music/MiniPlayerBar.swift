@@ -10,6 +10,9 @@ import SwiftUI
 struct MiniPlayerBar: View {
     @Bindable var player: MusicPlayer
     let onExpand: () -> Void
+    /// Set while the tab bar is collapsed and this bar has the width to itself.
+    /// Only the skip button goes — the credit is the reason the bar exists.
+    var isCompact: Bool = false
 
     #if os(iOS)
     /// Live downward drag while swiping the bar away.
@@ -51,10 +54,12 @@ struct MiniPlayerBar: View {
                     player.togglePlayPause()
                 }
                 .fixedSize()
-                barButton("forward.fill", size: buttonSize) {
-                    player.next()
+                if !isCompact {
+                    barButton("forward.fill", size: buttonSize) {
+                        player.next()
+                    }
+                    .fixedSize()
                 }
-                .fixedSize()
 
                 #if os(tvOS)
                 // tvOS: an explicit expand control (container taps don't mix

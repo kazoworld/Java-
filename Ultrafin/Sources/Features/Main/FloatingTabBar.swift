@@ -108,6 +108,41 @@ struct FloatingTabBar: View {
         .accessibilityLabel("Switch to \(switchTitle)")
     }
 
+    /// The whole tab bar, collapsed to the tab you're on.
+    ///
+    /// Tapping it brings the bar back rather than navigating. Scrolling up does
+    /// too, but a control that can only be undone by scrolling is a trap — and
+    /// the circle is the obvious thing to press when you want the tabs again.
+    struct Collapsed: View {
+        let items: [Item]
+        let selection: Int
+        let onExpand: () -> Void
+
+        @Environment(SettingsStore.self) private var settings
+
+        private var current: Item? {
+            items.first { $0.tag == selection } ?? items.first
+        }
+
+        var body: some View {
+            Button {
+                Haptics.play(.selection)
+                onExpand()
+            } label: {
+                Image(systemName: current?.icon ?? "house")
+                    .symbolVariant(.fill)
+                    .font(.system(size: 23, weight: .regular))
+                    .foregroundStyle(settings.accent)
+                    .frame(width: 58, height: 58)
+                    .barGlass(shape: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(current?.title ?? "Tabs")
+            .accessibilityHint("Shows the tab bar")
+        }
+    }
+
     private var railPadding: CGFloat { 6 }
     /// Matched to the tab pill's height so the two read as one row.
     private var switcherSide: CGFloat { 58 }

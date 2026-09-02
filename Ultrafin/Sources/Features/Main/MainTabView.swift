@@ -40,6 +40,8 @@ struct MainTabView: View {
     @State private var chromeHeight: CGFloat = 0
     /// One namespace for every paired zoom transition in the app.
     @Namespace private var cardZoom
+    /// Whether the bottom chrome has pulled itself in as a page scrolls.
+    @State private var chrome = ChromeState.shared
 
     /// The switcher's tag. Selecting it flips modes instead of navigating.
     private static let switchTag = 90
@@ -63,6 +65,8 @@ struct MainTabView: View {
                 // switcher must never act here — merely moving focus onto it
                 // would flip modes. Its tab shows a screen with a real button.
                 resetPath(for: newValue)
+                // A fresh tab starts at the top, so the chrome starts expanded.
+                ChromeState.shared.reset()
                 selection = newValue
             }
         )
@@ -71,6 +75,7 @@ struct MainTabView: View {
     /// Flip to the other experience, landing on its first tab with clean stacks.
     private func switchMode() {
         Haptics.play(.success)
+        ChromeState.shared.reset()
         resetAllPaths()
         withAnimation(.smooth(duration: 0.35)) {
             mode = mode.opposite
@@ -228,27 +233,70 @@ struct MainTabView: View {
     #if os(iOS)
     // MARK: - Bottom chrome
 
-    /// Everything that floats at the bottom of the phone: the now-playing bar,
-    /// then the tab pill with the mode switcher beside it.
+    /// Everything that floats at the bottom of the phone.
+    ///
+    /// Two shapes. At rest the now-playing bar sits full width above the tab
+    /// pill and its switcher. Scroll down a page and the four tabs stand down to
+    /// a single circle showing where you are, letting the now-playing bar take
+    /// the width — the row goes from two lines to one without the switcher or
+    /// the music ever leaving.
     ///
     /// One animation drives the whole inset. Two — one here and one on the
     /// TabView keyed to `hasQueue` — were animating the same appearance against
     /// each other, which is the kind of fight that ends with a view settling
     /// somewhere it shouldn't.
     private var bottomChrome: some View {
-        VStack(spacing: Spacing.sm) {
-            if showsMiniPlayer {
-                MiniPlayerBar(player: music) { showNowPlaying = true }
+        Group {
+            if isChromeCondensed {
+                HStack(spacing: Spacing.sm) {
+                    FloatingTabBar.Collapsed(items: tabItems, selection: selection) {
+                        chrome.reset()
+                    }
+                    MiniPlayerBar(player: music, onExpand: { showNowPlaying = true },
+                                  isCompact: true)
+                    switcherButton
+                }
+            } else {
+                VStack(spacing: Spacing.sm) {
+                    if showsMiniPlayer {
+                        MiniPlayerBar(player: music) { showNowPlaying = true }
+                    }
+                    FloatingTabBar(items: tabItems,
+                                   selection: tabSelection,
+                                   switchTitle: mode.switchLabel,
+                                   switchIcon: mode.switchImage,
+                                   onSwitch: switchMode)
+                }
             }
-            FloatingTabBar(items: tabItems,
-                           selection: tabSelection,
-                           switchTitle: mode.switchLabel,
-                           switchIcon: mode.switchImage,
-                           onSwitch: switchMode)
         }
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.xs)
+        .animation(ChromeState.transition, value: isChromeCondensed)
         .animation(.snappy(duration: 0.3, extraBounce: 0.05), value: showsMiniPlayer)
+    }
+
+    /// Collapse only while something is playing.
+    ///
+    /// Without a now-playing bar there'd be nothing to hand the width to, and a
+    /// lone circle would leave no way to reach Library or Search until you
+    /// scrolled back up — a bar that hides the navigation and gives nothing back.
+    private var isChromeCondensed: Bool {
+        chrome.isCondensed && showsMiniPlayer
+    }
+
+    /// The switcher on its own, for the condensed row (the full bar draws its
+    /// own).
+    private var switcherButton: some View {
+        Button(action: switchMode) {
+            Image(systemName: mode.switchImage)
+                .font(.system(size: 23, weight: .regular))
+                .foregroundStyle(settings.accent)
+                .frame(width: 58, height: 58)
+                .barGlass(shape: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Switch to \(mode.switchLabel)")
     }
 
     /// The four tabs, per mode. Both modes carry the same shape so the bar

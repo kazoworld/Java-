@@ -29,6 +29,7 @@ struct SmartMixDetailView: View {
         #if os(iOS)
         .navigationTitle(mix.title)
         .navigationBarTitleDisplayMode(.inline)
+        .adaptsChromeOnScroll()
         #endif
         .tvPopsOnMenu()
         .task {
