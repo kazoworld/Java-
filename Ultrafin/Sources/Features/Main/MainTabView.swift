@@ -194,6 +194,13 @@ struct MainTabView: View {
                 .presentationBackground(.clear)
         }
         #else
+        // Bring back whatever was playing when the app was last killed. Waits
+        // for a source, because a queue with nothing to stream from is just a
+        // list. Runs once — `restoreSession` is idempotent.
+        .task(id: settings.musicSource) {
+            guard let source = appState.musicSource else { return }
+            music.restoreSession(source: source)
+        }
         .fullScreenCoverCompat(isPresented: $showNowPlaying) {
             nowPlayingPlayer
         }

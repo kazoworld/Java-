@@ -116,6 +116,12 @@ final class MusicPlayer {
                     self.duration = total
                 }
                 self.refreshLyricIndex()
+                // Keep the resume point roughly current without writing to disk
+                // twice a second for the length of a record.
+                if self.isPlaying,
+                   Date.now.timeIntervalSince(self.lastPositionWrite) > Self.positionWriteInterval {
+                    self.persistSession()
+                }
                 // NOTE: deliberately does NOT push Now Playing every tick. iOS
                 // extrapolates the lock-screen scrubber from elapsed + rate, so
                 // we only push on real changes (track / play-pause / seek).
@@ -151,6 +157,71 @@ final class MusicPlayer {
         loadCurrent(autoplay: true)
     }
 
+    // MARK: - Session persistence
+
+    /// What a listening session needs to come back after the app is killed.
+    ///
+    /// Queue entries carry a per-slot UUID that only matters while the app is
+    /// running, so the snapshot stores the tracks and their hand-picked flags as
+    /// parallel arrays and mints fresh identities on the way back in.
+    private struct SessionSnapshot: Codable {
+        var tracks: [MediaItem]
+        var manual: [Bool]
+        var index: Int
+        var position: Double
+        var contextTitle: String?
+        var sourceKind: String
+        var shuffled: Bool
+    }
+
+    private static let sessionKey = "music.session"
+    /// The playhead is written at most this often. Persisting on every tick
+    /// would mean a disk write twice a second for the length of an album.
+    private static let positionWriteInterval: TimeInterval = 5
+    private var lastPositionWrite: Date = .distantPast
+    private var didAttemptRestore = false
+
+    /// Bring back the queue the app was killed holding — paused, at the second
+    /// it left off.
+    ///
+    /// Paused deliberately. Restoring is a convenience, not an instruction; an
+    /// app that starts playing out loud because you opened it is a worse problem
+    /// than one that forgot where you were.
+    func restoreSession(source: MusicSource) {
+        guard !didAttemptRestore, queue.isEmpty else { return }
+        didAttemptRestore = true
+        guard let data = UserDefaults.standard.data(forKey: Self.sessionKey),
+              let snapshot = try? JSONDecoder().decode(SessionSnapshot.self, from: data),
+              snapshot.sourceKind == source.kind.rawValue,
+              !snapshot.tracks.isEmpty else { return }
+
+        self.source = source
+        contextTitle = snapshot.contextTitle
+        shuffleOn = snapshot.shuffled
+        queue = zip(snapshot.tracks, snapshot.manual).map { QueueEntry($0, isManual: $1) }
+        originalQueue = queue.filter { !$0.isManual }
+        index = min(max(0, snapshot.index), queue.count - 1)
+        configureRemote()
+        loadCurrent(autoplay: false, startAt: snapshot.position)
+    }
+
+    private func persistSession() {
+        guard let source, !queue.isEmpty else {
+            UserDefaults.standard.removeObject(forKey: Self.sessionKey)
+            return
+        }
+        let snapshot = SessionSnapshot(tracks: queue.map(\.track),
+                                       manual: queue.map(\.isManual),
+                                       index: index,
+                                       position: currentTime,
+                                       contextTitle: contextTitle,
+                                       sourceKind: source.kind.rawValue,
+                                       shuffled: shuffleOn)
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: Self.sessionKey)
+        lastPositionWrite = .now
+    }
+
     func togglePlayPause() {
         guard player.currentItem != nil else { return }
         if isPlaying { player.pause() } else {
@@ -159,6 +230,7 @@ final class MusicPlayer {
         }
         isPlaying.toggle()
         pushNowPlaying()
+        persistSession()
     }
 
     /// Video playback (or anything else) taking the stage — music yields.
@@ -197,6 +269,7 @@ final class MusicPlayer {
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
         currentTime = target
         pushNowPlaying()
+        persistSession()
     }
 
     func next() {
@@ -373,15 +446,16 @@ final class MusicPlayer {
         artworkImage = nil
         contextTitle = nil
         nowPlaying.clear()
+        UserDefaults.standard.removeObject(forKey: Self.sessionKey)
     }
 
     // MARK: - Loading
 
-    private func loadCurrent(autoplay: Bool) {
+    private func loadCurrent(autoplay: Bool, startAt seconds: Double = 0) {
         guard let track = currentTrack, let source else { return }
         loadGeneration += 1
         let generation = loadGeneration
-        currentTime = 0
+        currentTime = seconds
         duration = Double(track.runTimeTicks ?? 0) / 10_000_000
         lyrics = []
         currentLyricIndex = nil
@@ -419,13 +493,20 @@ final class MusicPlayer {
                 }
             }
             player.replaceCurrentItem(with: item)
+            if seconds > 1 {
+                await player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
+            }
             if autoplay {
                 AudioSession.ensureActive()
                 player.play()
                 isPlaying = true
             }
             pushNowPlaying()
-            reportStarted(track)
+            // A restored session hasn't started playing, so there's nothing to
+            // report — telling the server otherwise would inflate play counts
+            // every time the app is opened.
+            if autoplay { reportStarted(track) }
+            persistSession()
 
             // Lyrics + lock-screen artwork ride in behind the audio. The
             // artwork is fetched large (1400²) so the iPhone lock screen can use
