@@ -404,6 +404,56 @@ actor JellyfinClient {
         return (try? await perform(request)) != nil
     }
 
+    // MARK: - Playlists (writing)
+
+    /// Create a playlist, optionally seeded with songs. Returns its new id.
+    @discardableResult
+    func createPlaylist(named name: String, songIDs: [String] = [],
+                        userID: String) async -> String? {
+        struct Created: Decodable {
+            let id: String
+            enum CodingKeys: String, CodingKey { case id = "Id" }
+        }
+        var query: [URLQueryItem] = [
+            .init(name: "Name", value: name),
+            .init(name: "userId", value: userID),
+            // Without this Jellyfin makes a mixed playlist, which then refuses
+            // to accept songs.
+            .init(name: "mediaType", value: "Audio")
+        ]
+        if !songIDs.isEmpty { query.append(.init(name: "ids", value: songIDs.joined(separator: ","))) }
+        guard let request = try? makeRequest(path: "/Playlists", method: "POST", query: query),
+              let data = try? await perform(request),
+              let created = try? JSONDecoder().decode(Created.self, from: data)
+        else { return nil }
+        return created.id
+    }
+
+    /// Append songs to an existing playlist.
+    @discardableResult
+    func addToPlaylist(playlistID: String, songIDs: [String], userID: String) async -> Bool {
+        guard !songIDs.isEmpty,
+              let request = try? makeRequest(path: "/Playlists/\(playlistID)/Items", method: "POST",
+                                             query: [.init(name: "ids", value: songIDs.joined(separator: ",")),
+                                                     .init(name: "userId", value: userID)])
+        else { return false }
+        return (try? await perform(request)) != nil
+    }
+
+    /// Remove songs from a playlist.
+    ///
+    /// Jellyfin removes by ENTRY id, not song id — the same song can sit in a
+    /// playlist twice and the two entries are distinct. Callers pass the
+    /// `playlistItemId` the listing gave them.
+    @discardableResult
+    func removeFromPlaylist(playlistID: String, entryIDs: [String]) async -> Bool {
+        guard !entryIDs.isEmpty,
+              let request = try? makeRequest(path: "/Playlists/\(playlistID)/Items", method: "DELETE",
+                                             query: [.init(name: "entryIds", value: entryIDs.joined(separator: ","))])
+        else { return false }
+        return (try? await perform(request)) != nil
+    }
+
     /// Toggle an item's watched/played status.
     @discardableResult
     func setPlayed(itemID: String, userID: String, isPlayed: Bool) async -> Bool {

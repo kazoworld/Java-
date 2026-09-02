@@ -403,6 +403,44 @@ actor NavidromeClient {
         ])
     }
 
+    // MARK: - Playlists (writing)
+
+    /// Subsonic's createPlaylist. Returns the new playlist's id when the server
+    /// reports one.
+    @discardableResult
+    func createPlaylist(named name: String, songIDs: [String] = []) async -> String? {
+        struct Wrapper: Decodable {
+            struct Playlist: Decodable { let id: String? }
+            let playlist: Playlist?
+        }
+        var query: [URLQueryItem] = [.init(name: "name", value: name)]
+        // Subsonic repeats the parameter rather than comma-joining.
+        query += songIDs.map { URLQueryItem(name: "songId", value: $0) }
+        let result = try? await get(Wrapper.self, "createPlaylist", query: query)
+        return result?.playlist?.id
+    }
+
+    /// Subsonic's updatePlaylist, used here only to append.
+    @discardableResult
+    func addToPlaylist(playlistID: String, songIDs: [String]) async -> Bool {
+        struct Body: Decodable {}
+        guard !songIDs.isEmpty else { return false }
+        var query: [URLQueryItem] = [.init(name: "playlistId", value: playlistID)]
+        query += songIDs.map { URLQueryItem(name: "songIdToAdd", value: $0) }
+        return (try? await get(Body.self, "updatePlaylist", query: query)) != nil
+    }
+
+    /// Remove by INDEX within the playlist, which is what Subsonic takes —
+    /// there are no per-entry ids to remove by.
+    @discardableResult
+    func removeFromPlaylist(playlistID: String, indices: [Int]) async -> Bool {
+        struct Body: Decodable {}
+        guard !indices.isEmpty else { return false }
+        var query: [URLQueryItem] = [.init(name: "playlistId", value: playlistID)]
+        query += indices.map { URLQueryItem(name: "songIndexToRemove", value: String($0)) }
+        return (try? await get(Body.self, "updatePlaylist", query: query)) != nil
+    }
+
     /// Subsonic's star/unstar — the Navidrome equivalent of a Jellyfin favorite.
     func setFavorite(itemID: String, isFavorite: Bool) async {
         struct Body: Decodable {}

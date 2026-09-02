@@ -12,6 +12,10 @@ struct UpNextSection: View {
     /// Rows per page — Apple shows three.
     private let rowsPerPage = 3
 
+    #if os(iOS)
+    @State private var filing: [MediaItem]?
+    #endif
+
     private var pages: [[MediaItem]] {
         stride(from: 0, to: songs.count, by: rowsPerPage).map {
             Array(songs[$0 ..< min($0 + rowsPerPage, songs.count)])
@@ -39,6 +43,12 @@ struct UpNextSection: View {
         }
         .scrollTargetBehavior(.viewAligned)
         .contentMargins(.horizontal, 16, for: .scrollContent)
+        #if os(iOS)
+        .sheet(item: Binding(get: { filing.map(SongSelection.init) },
+                             set: { filing = $0?.songs })) { selection in
+            AddToPlaylistSheet(songs: selection.songs)
+        }
+        #endif
     }
 
     private func row(_ song: MediaItem) -> some View {
@@ -91,6 +101,12 @@ struct UpNextSection: View {
                 guard let source = appState.musicSource else { return }
                 MusicPlayer.shared.addToQueue(song, source: source)
             } label: { Label("Add to Queue", systemImage: "text.append") }
+
+            #if os(iOS)
+            Button {
+                filing = [song]
+            } label: { Label("Add to Playlist", systemImage: "music.note.list") }
+            #endif
 
             if let album = song.albumDestination {
                 Divider()

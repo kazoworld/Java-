@@ -16,6 +16,10 @@ struct AlbumDetailView: View {
     @State private var favoriteOverride: Bool?
     /// Offline storage, so the download button reflects live state.
     @State private var downloads = MusicLibraryCache.shared
+    #if os(iOS)
+    /// Songs waiting to be filed — non-nil while the playlist sheet is up.
+    @State private var filing: [MediaItem]?
+    #endif
 
     private var player: MusicPlayer { .shared }
 
@@ -44,6 +48,10 @@ struct AlbumDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { albumMenu } }
         .adaptsChromeOnScroll()
+        .sheet(item: Binding(get: { filing.map(SongSelection.init) },
+                             set: { filing = $0?.songs })) { selection in
+            AddToPlaylistSheet(songs: selection.songs)
+        }
         #endif
         .tvPopsOnMenu()
         .task {
@@ -227,6 +235,11 @@ struct AlbumDetailView: View {
                 player.addToQueue(tracks: tracks, source: source)
                 Haptics.play(.success)
             } label: { Label("Add to Queue", systemImage: "text.append") }
+
+            Button {
+                guard !tracks.isEmpty else { return }
+                filing = tracks
+            } label: { Label("Add to Playlist", systemImage: "music.note.list") }
 
             Button {
                 guard let source = appState.musicSource, !tracks.isEmpty else { return }
@@ -441,6 +454,10 @@ struct AlbumDetailView: View {
                 Haptics.play(.success)
                 player.addToQueue(track, source: source)
             } label: { Label("Add to Queue", systemImage: "text.append") }
+
+            Button {
+                filing = [track]
+            } label: { Label("Add to Playlist", systemImage: "music.note.list") }
 
             Divider()
 

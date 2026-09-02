@@ -44,6 +44,17 @@ protocol MusicSource: Sendable {
 
     /// Heart / star an album or track on the backing server.
     func setFavorite(itemID: String, isFavorite: Bool) async
+
+    // MARK: - Playlist editing
+
+    /// Create a playlist, optionally seeded. Returns its id where the server
+    /// gives one — Subsonic doesn't always.
+    @discardableResult
+    func createPlaylist(named name: String, songIDs: [String]) async -> String?
+
+    /// Append songs to a playlist.
+    @discardableResult
+    func addToPlaylist(playlistID: String, songIDs: [String]) async -> Bool
 }
 
 // MARK: - Jellyfin
@@ -104,6 +115,16 @@ struct JellyfinMusicSource: MusicSource {
     func setFavorite(itemID: String, isFavorite: Bool) async {
         _ = await client.setFavorite(itemID: itemID, userID: userID, isFavorite: isFavorite)
     }
+
+    @discardableResult
+    func createPlaylist(named name: String, songIDs: [String]) async -> String? {
+        await client.createPlaylist(named: name, songIDs: songIDs, userID: userID)
+    }
+
+    @discardableResult
+    func addToPlaylist(playlistID: String, songIDs: [String]) async -> Bool {
+        await client.addToPlaylist(playlistID: playlistID, songIDs: songIDs, userID: userID)
+    }
 }
 
 // MARK: - Navidrome
@@ -156,6 +177,16 @@ struct NavidromeMusicSource: MusicSource {
     }
     func setFavorite(itemID: String, isFavorite: Bool) async {
         await client.setFavorite(itemID: itemID, isFavorite: isFavorite)
+    }
+
+    @discardableResult
+    func createPlaylist(named name: String, songIDs: [String]) async -> String? {
+        await client.createPlaylist(named: name, songIDs: songIDs)
+    }
+
+    @discardableResult
+    func addToPlaylist(playlistID: String, songIDs: [String]) async -> Bool {
+        await client.addToPlaylist(playlistID: playlistID, songIDs: songIDs)
     }
 }
 
