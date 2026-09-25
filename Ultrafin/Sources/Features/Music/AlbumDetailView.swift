@@ -19,7 +19,13 @@ struct AlbumDetailView: View {
     #if os(iOS)
     /// Songs waiting to be filed — non-nil while the playlist sheet is up.
     @State private var filing: [MediaItem]?
+    /// Once the album's own title has scrolled up under the bar, the bar
+    /// takes over saying which record this is.
+    @State private var showsBarTitle = false
     #endif
+    /// Flips once the songs arrive, so they can settle in one after another.
+    @State private var tracksAppeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var player: MusicPlayer { .shared }
 
@@ -43,7 +49,7 @@ struct AlbumDetailView: View {
         // runs edge to edge, and the back button floats over it as a glass
         // circle. Repeating the album name above its own cover was the busiest
         // thing on the page.
-        .navigationTitle("")
+        .navigationTitle(showsBarTitle ? container.name : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { albumMenu } }
@@ -79,6 +85,12 @@ struct AlbumDetailView: View {
             .padding(.horizontal, edgePadding)
             .padding(.vertical, Spacing.xl)
             .frame(maxWidth: .infinity)
+        }
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            // Past the cover and the title block beneath it.
+            geometry.contentOffset.y + geometry.contentInsets.top > artSide + 90
+        } action: { _, past in
+            withAnimation(.smooth(duration: 0.25)) { showsBarTitle = past }
         }
         #endif
     }
@@ -233,7 +245,7 @@ struct AlbumDetailView: View {
             Button {
                 guard let source = appState.musicSource, !tracks.isEmpty else { return }
                 player.addToQueue(tracks: tracks, source: source)
-                Haptics.play(.success)
+                MusicHUD.shared.show("Added to Queue", systemImage: "text.append")
             } label: { Label("Add to Queue", systemImage: "text.append") }
 
             Button {
@@ -420,6 +432,12 @@ struct AlbumDetailView: View {
                         trackMenu(for: track, at: position)
                         #endif
                     }
+                    .opacity(tracksAppeared ? 1 : 0)
+                    .offset(y: tracksAppeared || reduceMotion ? 0 : 10)
+                    // The first dozen songs settle in one after another; the
+                    // rest are off screen and simply arrive.
+                    .animation(.smooth(duration: 0.4).delay(Double(min(position, 12)) * 0.028),
+                               value: tracksAppeared)
                     // Hairline separators between songs, inset to where the title
                     // starts and running out to the edge — the Apple Music rhythm.
                     if position < tracks.count - 1 {
@@ -429,9 +447,31 @@ struct AlbumDetailView: View {
                             .padding(.leading, separatorInset)
                     }
                 }
+                #if os(iOS)
+                trackFooter
+                #endif
             }
+            // Flipped after the rows exist, so there's a "before" to animate from.
+            .onAppear { tracksAppeared = true }
         }
     }
+
+    #if os(iOS)
+    /// The quiet line under the last song — year, count and running time —
+    /// where Apple Music puts the facts the header leaves out.
+    @ViewBuilder
+    private var trackFooter: some View {
+        let parts = [container.productionYear.map(String.init), metaLine].compactMap { $0 }
+        if !parts.isEmpty {
+            Text(parts.joined(separator: " · "))
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, Spacing.lg)
+                .padding(.leading, separatorInset)
+        }
+    }
+    #endif
 
     #if os(iOS)
     /// The per-song "..." menu: queue actions and a heart, like Apple Music.
@@ -445,14 +485,14 @@ struct AlbumDetailView: View {
 
             Button {
                 guard let source = appState.musicSource else { return }
-                Haptics.play(.success)
                 player.playNext(track, source: source)
+                MusicHUD.shared.show("Playing Next", systemImage: "text.line.first.and.arrowtriangle.forward")
             } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
 
             Button {
                 guard let source = appState.musicSource else { return }
-                Haptics.play(.success)
                 player.addToQueue(track, source: source)
+                MusicHUD.shared.show("Added to Queue", systemImage: "text.append")
             } label: { Label("Add to Queue", systemImage: "text.append") }
 
             Button {
@@ -483,6 +523,8 @@ struct AlbumDetailView: View {
                 guard let source = appState.musicSource else { return }
                 let next = !(track.userData?.isFavorite ?? false)
                 Task { await source.setFavorite(itemID: track.id, isFavorite: next) }
+                MusicHUD.shared.show(next ? "Added to Favorites" : "Removed from Favorites",
+                                     systemImage: next ? "heart.fill" : "heart.slash")
             } label: {
                 Label((track.userData?.isFavorite ?? false) ? "Remove from Favorites" : "Add to Favorites",
                       systemImage: (track.userData?.isFavorite ?? false) ? "heart.slash" : "heart")
@@ -676,9 +718,7 @@ struct AlbumTrackRow: View {
                 .frame(width: 36, height: 36)
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         } else if isCurrent {
-            Image(systemName: "waveform")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(settings.accent)
+            NowPlayingBars(isPlaying: MusicPlayer.shared.isPlaying, color: settings.accent, height: 14)
         } else {
             Text("\(position)")
                 .font(.system(size: 16))
@@ -708,9 +748,8 @@ struct TrackRow: View {
                     .frame(width: artSide, height: artSide)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else if isCurrent {
-                Image(systemName: "waveform")
-                    .font(.system(size: numberSize, weight: .semibold))
-                    .foregroundStyle(settings.accent)
+                NowPlayingBars(isPlaying: MusicPlayer.shared.isPlaying, color: settings.accent,
+                               height: numberSize)
                     .frame(width: numberSize * 1.6)
             } else {
                 Text("\(position)")

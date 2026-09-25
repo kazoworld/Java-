@@ -97,10 +97,13 @@ struct MusicHomeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.xl) {
                 if model.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, Spacing.xxl)
-                        .transition(.opacity)
+                    // The shape of what's coming, not a spinner over nothing.
+                    VStack(alignment: .leading, spacing: Spacing.xl) {
+                        MusicShelfSkeleton(tile: mixSide, edgePadding: edgePadding)
+                        MusicShelfSkeleton(tile: albumSide, edgePadding: edgePadding)
+                        MusicShelfSkeleton(tile: albumSide * 0.74, edgePadding: edgePadding, circular: true)
+                    }
+                    .transition(.opacity)
                 } else if model.isEmpty {
                     emptyState
                 } else {
@@ -108,12 +111,13 @@ struct MusicHomeView: View {
 
                     if !upNextSongs.isEmpty {
                         VStack(alignment: .leading, spacing: Spacing.md) {
-                            sectionHeader("Up Next")
+                            sectionHeader("Up Next", seeAll: nil)
                             UpNextSection(songs: upNextSongs)
                         }
                     }
                     if !model.recentlyPlayedAlbums.isEmpty {
                         albumRail(title: "Recently Played", albums: model.recentlyPlayedAlbums)
+                            .transition(.opacity)
                     }
                     if !model.recentAlbums.isEmpty {
                         albumRail(title: "Recently Added", albums: model.recentAlbums)
@@ -179,7 +183,7 @@ struct MusicHomeView: View {
     /// "Made For You" shelf, Apple Music-style. Tapping a tile plays it.
     private var madeForYou: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader("Made For You")
+            sectionHeader("Made For You", seeAll: nil)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(SmartMix.all) { mix in
@@ -199,17 +203,43 @@ struct MusicHomeView: View {
         }
     }
 
-    /// A shelf title with the Apple Music chevron beside it.
-    private func sectionHeader(_ title: String) -> some View {
-        HStack(spacing: 4) {
+    /// A shelf title. With something behind it, it carries Apple Music's
+    /// chevron and opens the whole shelf as a grid; without, it's just a
+    /// title — a chevron that goes nowhere is a promise the page breaks.
+    @ViewBuilder
+    private func sectionHeader(_ title: String, seeAll items: [MediaItem]?) -> some View {
+        let label = HStack(spacing: 4) {
             Text(title)
                 .font(sectionFont)
                 .foregroundStyle(UltrafinColors.primaryText)
-            Image(systemName: "chevron.right")
-                .font(.system(size: chevronSize, weight: .bold))
-                .foregroundStyle(UltrafinColors.tertiaryText)
+            if items != nil {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: chevronSize, weight: .bold))
+                    .foregroundStyle(UltrafinColors.tertiaryText)
+            }
         }
-        .padding(.horizontal, edgePadding)
+        #if os(iOS)
+        if let items {
+            NavigationLink {
+                MusicShelfGridView(title: title, items: items)
+            } label: {
+                label.contentShape(Rectangle())
+            }
+            .musicRowButtonStyle()
+            .accessibilityHint("Shows everything in \(title)")
+            .padding(.horizontal, edgePadding)
+        } else {
+            label
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, edgePadding)
+        }
+        #else
+        // On the TV a header that takes focus is one more stop between rails
+        // for the remote to step through; the shelves stay plain there.
+        label
+            .accessibilityAddTraits(.isHeader)
+            .padding(.horizontal, edgePadding)
+        #endif
     }
 
     /// A tappable banner into the Music Identity screen.
@@ -252,7 +282,7 @@ struct MusicHomeView: View {
 
     private func albumRail(title: String, albums: [MediaItem]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader(title)
+            sectionHeader(title, seeAll: albums)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(albums) { album in
@@ -261,6 +291,7 @@ struct MusicHomeView: View {
                         }
                         .mediaCardButtonStyle()
                         .cardZoomSource(album.id)
+                        .musicContainerMenu(album)
                     }
                 }
                 .padding(.horizontal, edgePadding)
@@ -272,7 +303,7 @@ struct MusicHomeView: View {
 
     private var artistRail: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader("Artists")
+            sectionHeader("Artists", seeAll: model.artists)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(model.artists) { artist in
@@ -294,7 +325,7 @@ struct MusicHomeView: View {
     /// whole list playing from there.
     private func songRail(title: String, songs: [MediaItem]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
-            sectionHeader(title)
+            sectionHeader(title, seeAll: nil)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: railSpacing) {
                     ForEach(Array(songs.enumerated()), id: \.element.id) { position, song in
@@ -378,6 +409,13 @@ struct MusicHomeView: View {
         22
         #else
         15
+        #endif
+    }
+    private var albumSide: CGFloat {
+        #if os(tvOS)
+        260
+        #else
+        138
         #endif
     }
     private var mixSide: CGFloat {

@@ -153,6 +153,7 @@ struct MusicLibraryView: View {
                             }
                             .musicCardButtonStyle()
                             .cardZoomSource(album.id)
+                            .musicContainerMenu(album)
                         }
                     }
                 }
@@ -279,6 +280,7 @@ struct MusicSectionListView: View {
                     NavigationLink(value: item) { GridAlbumCard(album: item) }
                         .musicCardButtonStyle()
                         .cardZoomSource(item.id)
+                        .musicContainerMenu(item)
                 }
             }
             .padding(MusicGrid.edgePadding)

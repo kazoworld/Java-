@@ -222,6 +222,8 @@ struct MainTabView: View {
         // change in Settings recolors the tab bar live (the static
         // SettingsStore.shared read didn't re-render).
         .tint(settings.accent)
+        // "Playing Next" / "Added to Queue" confirmations from any menu.
+        .musicHUD()
         .cardZoomNamespace(cardZoom)
     }
 

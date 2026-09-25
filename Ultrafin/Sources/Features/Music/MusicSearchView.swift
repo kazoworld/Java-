@@ -94,6 +94,7 @@ struct MusicSearchView: View {
                     ForEach(items) { album in
                         NavigationLink(value: album) { AlbumCard(album: album) }
                             .mediaCardButtonStyle()
+                            .musicContainerMenu(album)
                     }
                 }
                 .padding(.horizontal, edgePadding)

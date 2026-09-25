@@ -380,6 +380,17 @@ final class MusicPlayer {
         queue.insert(QueueEntry(track, isManual: true), at: min(index + 1, queue.count))
     }
 
+    /// "Play Next" for a whole record: its songs go in, in order, ahead of
+    /// everything else still waiting.
+    func playNext(tracks: [MediaItem], source: MusicSource) {
+        guard hasQueue else {
+            play(tracks: tracks, source: source)
+            return
+        }
+        let entries = tracks.map { QueueEntry($0, isManual: true) }
+        queue.insert(contentsOf: entries, at: min(index + 1, queue.count))
+    }
+
     /// "Add to Queue": the song joins the end of the hand-picked block, so it
     /// plays after anything already queued but still before the record resumes.
     /// Adding the same song twice is allowed — that's what a queue is for.

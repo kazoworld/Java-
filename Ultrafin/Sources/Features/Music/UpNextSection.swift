@@ -95,11 +95,13 @@ struct UpNextSection: View {
             Button {
                 guard let source = appState.musicSource else { return }
                 MusicPlayer.shared.playNext(song, source: source)
+                MusicHUD.shared.show("Playing Next", systemImage: "text.line.first.and.arrowtriangle.forward")
             } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
 
             Button {
                 guard let source = appState.musicSource else { return }
                 MusicPlayer.shared.addToQueue(song, source: source)
+                MusicHUD.shared.show("Added to Queue", systemImage: "text.append")
             } label: { Label("Add to Queue", systemImage: "text.append") }
 
             #if os(iOS)
