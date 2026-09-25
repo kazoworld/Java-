@@ -40,6 +40,7 @@ struct MainTabView: View {
     @State private var chromeHeight: CGFloat = 0
     /// One namespace for every paired zoom transition in the app.
     @Namespace private var cardZoom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Whether the bottom chrome has pulled itself in as a page scrolls.
     @State private var chrome = ChromeState.shared
 
@@ -186,6 +187,12 @@ struct MainTabView: View {
         #if os(iOS)
         .sheet(isPresented: $showNowPlaying) {
             nowPlayingPlayer
+                // The player grows out of the mini bar and shrinks back into
+                // it — one object changing size, not a sheet sliding over a
+                // bar that then reappears. The zoom tracks the drag the whole
+                // way down, just as the sheet did. Under Reduce Motion it's the
+                // plain sheet again.
+                .modifier(NowPlayingZoom(namespace: cardZoom, enabled: !reduceMotion))
                 .presentationDetents([.large])
                 // We draw our own grabber, which doubles as a tap target.
                 .presentationDragIndicator(.hidden)
@@ -232,10 +239,20 @@ struct MainTabView: View {
         }
     }
 
-    /// The bar only belongs to Music mode, and never behind the full player.
+    /// The bar only belongs to Music mode, and never behind the full player —
+    /// except on the phone, where it stays put underneath: it's what the
+    /// player zooms out of and back into, and a source that vanished mid-zoom
+    /// would leave the player shrinking toward nothing.
     private var showsMiniPlayer: Bool {
+        #if os(iOS)
+        mode == .music && music.hasQueue
+        #else
         mode == .music && music.hasQueue && !showNowPlaying
+        #endif
     }
+
+    /// Where the full player zooms from.
+    static let nowPlayingZoomID = "now-playing"
 
     #if os(iOS)
     // MARK: - Bottom chrome
@@ -261,12 +278,14 @@ struct MainTabView: View {
                     }
                     MiniPlayerBar(player: music, onExpand: { showNowPlaying = true },
                                   isCompact: true)
+                        .nowPlayingZoomSource(cardZoom, enabled: !reduceMotion)
                     switcherButton
                 }
             } else {
                 VStack(spacing: Spacing.sm) {
                     if showsMiniPlayer {
                         MiniPlayerBar(player: music) { showNowPlaying = true }
+                            .nowPlayingZoomSource(cardZoom, enabled: !reduceMotion)
                     }
                     FloatingTabBar(items: tabItems,
                                    selection: tabSelection,
@@ -535,3 +554,35 @@ private struct ModeSwitchScreen: View {
         #endif
     }
 }
+
+#if os(iOS)
+/// The full player's side of the mini-bar zoom.
+private struct NowPlayingZoom: ViewModifier {
+    let namespace: Namespace.ID
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.navigationTransition(.zoom(sourceID: MainTabView.nowPlayingZoomID, in: namespace))
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    /// The mini bar's side of the zoom: the capsule the player grows out of.
+    @ViewBuilder
+    func nowPlayingZoomSource(_ namespace: Namespace.ID, enabled: Bool) -> some View {
+        if enabled {
+            matchedTransitionSource(id: MainTabView.nowPlayingZoomID, in: namespace) { source in
+                // The bar is a capsule about 58pt tall; the zoom's clip only
+                // takes a rounded rectangle, and at half the height it is one.
+                source.clipShape(RoundedRectangle(cornerRadius: 29, style: .continuous))
+            }
+        } else {
+            self
+        }
+    }
+}
+#endif

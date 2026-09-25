@@ -6,7 +6,7 @@ import UIKit
 /// A color sampled from artwork, stored as plain components so it's `Sendable`
 /// and safe to hand back from a background task. `isDark` says whether white
 /// text reads well when this is used as a fill.
-struct ArtworkColor: Equatable, Sendable {
+struct ArtworkColor: Hashable, Sendable {
     let red: Double
     let green: Double
     let blue: Double
@@ -29,8 +29,23 @@ struct ArtworkColor: Equatable, Sendable {
                          alpha: 1)
         return Color(ui)
     }
+
+    /// This colour pulled into a band that white text can always sit on:
+    /// brightness clamped between `floor` and `ceiling`, saturation scaled.
+    /// Unlike ``shade`` it can't be defeated by a near-white or near-black
+    /// cover — a white sleeve comes out a soft stone grey, not a glare.
+    func toned(floor: Double = 0.16, ceiling: Double = 0.5, saturation sMul: Double = 1) -> Color {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(red: red, green: green, blue: blue, alpha: 1).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        let ui = UIColor(hue: h,
+                         saturation: min(1, max(0, s * CGFloat(sMul))),
+                         brightness: min(CGFloat(ceiling), max(CGFloat(floor), b)),
+                         alpha: 1)
+        return Color(ui)
+    }
     #else
     func shade(brightness bMul: Double = 1, saturation sMul: Double = 1, hue hShift: Double = 0) -> Color { color }
+    func toned(floor: Double = 0.16, ceiling: Double = 0.5, saturation sMul: Double = 1) -> Color { color }
     #endif
 }
 
@@ -75,6 +90,42 @@ enum ImageColor {
         return ArtworkColor(red: Double(vr), green: Double(vg), blue: Double(vb), isDark: luminance < 0.6)
         #else
         return nil
+        #endif
+    }
+
+    /// The cover melted down to a 3×3 grid of colours, row-major from the top
+    /// left — each one the average of that ninth of the artwork.
+    ///
+    /// Keeping the layout (rather than a sorted swatch list) is the point: fed
+    /// to a mesh gradient, the backdrop ends up shaped like the record — a sky
+    /// that's blue at the top of the sleeve is blue at the top of the screen.
+    /// Reads through ``ImageLoader`` so a cover already on screen costs nothing.
+    static func palette(from url: URL?) async -> [ArtworkColor] {
+        #if canImport(UIKit)
+        guard let url, let image = await ImageLoader.shared.image(for: url),
+              let cg = image.cgImage else { return [] }
+        let side = 3
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let drew: Bool = pixels.withUnsafeMutableBytes { buffer in
+            guard let ctx = CGContext(data: buffer.baseAddress, width: side, height: side,
+                                      bitsPerComponent: 8, bytesPerRow: side * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return false }
+            ctx.interpolationQuality = .medium
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        guard drew else { return [] }
+        return (0 ..< side * side).map { i in
+            let r = Double(pixels[i * 4]) / 255
+            let g = Double(pixels[i * 4 + 1]) / 255
+            let b = Double(pixels[i * 4 + 2]) / 255
+            let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            return ArtworkColor(red: r, green: g, blue: b, isDark: luminance < 0.6)
+        }
+        #else
+        return []
         #endif
     }
 }

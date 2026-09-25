@@ -92,6 +92,19 @@ final class MusicPlayer {
     /// list O(n²) per body evaluation, twice a second.
     private(set) var currentLyricIndex: Int?
 
+    /// When `currentTime` was last read off the player. Not observed: it moves
+    /// on every tick, and only ``estimatedTime(at:)`` needs it.
+    @ObservationIgnored private var currentTimeStamp: Date = .now
+
+    /// The playhead between ticks. `currentTime` only lands twice a second —
+    /// fine for a clock, visibly steppy for anything drawn per frame (the
+    /// lyric interlude dots), so this extrapolates from the last tick.
+    func estimatedTime(at date: Date) -> Double {
+        guard isPlaying else { return currentTime }
+        let elapsed = max(0, min(1, date.timeIntervalSince(currentTimeStamp)))
+        return duration > 0 ? min(duration, currentTime + elapsed) : currentTime + elapsed
+    }
+
     // MARK: - Internals
 
     private let player = AVPlayer()
@@ -112,6 +125,7 @@ final class MusicPlayer {
             Task { @MainActor in
                 guard let self else { return }
                 self.currentTime = time.seconds
+                self.currentTimeStamp = .now
                 if let total = self.player.currentItem?.duration.seconds, total.isFinite {
                     self.duration = total
                 }
@@ -268,6 +282,9 @@ final class MusicPlayer {
         let target = value * duration
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
         currentTime = target
+        currentTimeStamp = .now
+        // Tapping a lyric line should light it now, not on the next tick.
+        refreshLyricIndex()
         pushNowPlaying()
         persistSession()
     }

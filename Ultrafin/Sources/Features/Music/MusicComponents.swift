@@ -47,37 +47,3 @@ struct AlbumBackdrop: View {
         .animation(.easeInOut(duration: 0.6), value: color)
     }
 }
-
-/// The player's Apple Music-style backdrop: the record's own color, poured into
-/// a soft multi-tone wash that slowly drifts, with the blurred artwork itself
-/// underneath for texture. Falls back to a quiet neutral when no color is known
-/// yet, so it never flashes flat gray.
-struct NowPlayingBackdrop: View {
-    let color: ArtworkColor?
-    /// Kept for call-site compatibility; the backdrop no longer renders the
-    /// artwork. Apple's player is a flat field of the record's colour, not a
-    /// blurred copy of the cover — the blur read as murky and drew the eye away
-    /// from the art itself.
-    var artURL: URL? = nil
-
-    var body: some View {
-        ZStack {
-            base
-            // The faintest vertical shading, so it isn't a dead flat fill —
-            // brighter under the cover, settling darker behind the controls.
-            LinearGradient(stops: [
-                .init(color: .white.opacity(0.05), location: 0.0),
-                .init(color: .clear, location: 0.45),
-                .init(color: .black.opacity(0.10), location: 1.0)
-            ], startPoint: .top, endPoint: .bottom)
-        }
-        .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.7), value: color)
-    }
-
-    /// A muted, mid-dark version of the cover's colour: saturated enough to be
-    /// clearly "this record", dark enough for white text to sit on it.
-    private var base: Color {
-        color?.shade(brightness: 0.46, saturation: 0.55) ?? UltrafinColors.background
-    }
-}

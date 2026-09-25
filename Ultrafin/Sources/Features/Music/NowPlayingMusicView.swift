@@ -32,9 +32,27 @@ struct NowPlayingMusicView: View {
     @State private var breathing = false
     /// The color sampled from the current record — drives the Apple Music wash.
     @State private var artColor: ArtworkColor?
+    /// The cover melted to a 3×3 grid of its colours — the living backdrop.
+    @State private var palette: [ArtworkColor] = []
     /// Local heart state so the tap lands instantly; cleared on track change.
     @State private var favoriteOverride: Bool?
+    /// Taps on the skip buttons, so each one can nudge its arrows forward.
+    @State private var nextTaps = 0
+    @State private var previousTaps = 0
+    /// Set while the reader drags the lyrics themselves: auto-follow stands
+    /// down and every line comes into focus until they've been still a moment.
+    @State private var isBrowsingLyrics = false
+    @State private var browsingSince: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(iOS)
+    /// The cover flies between the stage and the compact header rather than
+    /// cross-fading — the one object on screen should visibly be one object.
+    @Namespace private var coverSpace
+    /// How far the cover is being dragged sideways, already rubber-banded.
+    @State private var artDrag: CGFloat = 0
+    @State private var isAdjustingVolume = false
+    @State private var volume = SystemVolume.shared
+    #endif
 
     #if os(tvOS)
     /// Which control the remote is on.
@@ -69,12 +87,19 @@ struct NowPlayingMusicView: View {
         }
         .background(backdrop)
         .environment(\.colorScheme, .dark)
-        .animation(.smooth(duration: 0.35), value: stage)
+        .animation(.spring(duration: 0.5, bounce: 0.14), value: stage)
         .task(id: player.currentTrack?.id) {
             favoriteOverride = nil // the new song has its own heart state
+            prefetchNeighbours()
             guard let track = player.currentTrack,
                   let url = player.artworkURL(for: track, maxWidth: 240) else { return }
-            artColor = await ImageColor.vibrant(from: url)
+            async let vivid = ImageColor.vibrant(from: url)
+            async let grid = ImageColor.palette(from: url)
+            let (color, colors) = await (vivid, grid)
+            guard !Task.isCancelled else { return }
+            // Both land together, so the backdrop turns over once, not twice.
+            artColor = color
+            palette = colors
         }
         #if os(iOS)
         // The app is otherwise portrait-locked; let the full player rotate so
@@ -99,13 +124,26 @@ struct NowPlayingMusicView: View {
     /// before the sheet ever saw it, which is exactly the kind of fight that
     /// makes a dismissal feel like it's sticking. Only acts on a clearly
     /// sideways drag, so a vertical swipe starting on the cover still dismisses.
+    ///
+    /// The cover follows the finger — with growing resistance, and a slight
+    /// turn into the room like a record on a shelf — so the gesture is
+    /// something you feel rather than a guess that either fires or doesn't.
     private var artworkSwipe: some Gesture {
-        DragGesture(minimumDistance: 24)
+        DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                let dx = value.translation.width, dy = value.translation.height
+                guard abs(dx) > abs(dy) * 1.4 else { return }
+                artDrag = ElasticSlider.rubberBand(dx, limit: 80)
+            }
             .onEnded { value in
                 let dx = value.translation.width, dy = value.translation.height
-                guard abs(dx) > abs(dy) * 1.6, abs(dx) > 50 else { return }
-                Haptics.play(.light)
-                if dx < 0 { player.next() } else { player.previous() }
+                let sideways = abs(dx) > abs(dy) * 1.6
+                let far = abs(dx) > 60 || abs(value.predictedEndTranslation.width) > 180
+                if sideways && far {
+                    Haptics.play(.light)
+                    if dx < 0 { player.next() } else { player.previous() }
+                }
+                withAnimation(.spring(duration: 0.55, bounce: 0.32)) { artDrag = 0 }
             }
     }
     #endif
@@ -321,10 +359,17 @@ struct NowPlayingMusicView: View {
     /// blurred art underneath — the Apple Music look, with a hint of the cover's
     /// own color even on near-monochrome art.
     private var backdrop: some View {
-        NowPlayingBackdrop(
-            color: artColor,
-            artURL: player.currentTrack.flatMap { player.artworkURL(for: $0, maxWidth: 400) }
-        )
+        LivingBackdrop(palette: palette, fallback: artColor, isAnimating: player.isPlaying)
+    }
+
+    /// Warm the covers either side of the playhead, so a skip dissolves
+    /// straight into the next record instead of waiting on the network.
+    private func prefetchNeighbours() {
+        for offset in [1, -1] {
+            guard let track = queueTrack(at: offset),
+                  let url = player.artworkURL(for: track) else { continue }
+            Task.detached(priority: .utility) { _ = await ImageLoader.shared.image(for: url) }
+        }
     }
 
     /// The sheet handle — a soft pill, as on Apple Music's player.
@@ -364,16 +409,29 @@ struct NowPlayingMusicView: View {
     }
 
     private func artStage(side: CGFloat) -> some View {
-        RemoteImage(url: player.currentTrack.flatMap { player.artworkURL(for: $0) })
+        let playing = player.isPlaying
+        return RemoteImage(url: player.currentTrack.flatMap { player.artworkURL(for: $0) },
+                           crossfades: true)
             .accessibilityHidden(true)
-            .frame(width: side, height: side)
             .clipShape(RoundedRectangle(cornerRadius: side * 0.06, style: .continuous))
             .specularRim(cornerRadius: side * 0.06, intensity: 0.8)
-            .shadow(color: .black.opacity(0.55), radius: 40, y: 22)
+            #if os(iOS)
+            .matchedGeometryEffect(id: "cover", in: coverSpace)
+            #endif
+            .frame(width: side, height: side)
+            // The shadow sinks with the record: a playing cover floats high over
+            // its own long shadow; a paused one settles close to the page.
+            .shadow(color: .black.opacity(playing ? 0.5 : 0.3),
+                    radius: playing ? 40 : 18, y: playing ? 24 : 10)
             // The Apple Music breath: full size while playing, settles back when
             // paused.
-            .scaleEffect(player.isPlaying ? 1 : 0.85)
-            .animation(.spring(duration: 0.5, bounce: 0.25), value: player.isPlaying)
+            .scaleEffect(playing ? 1 : 0.82)
+            .animation(.spring(duration: 0.6, bounce: 0.3), value: playing)
+            #if os(iOS)
+            .rotation3DEffect(.degrees(Double(artDrag) * 0.12), axis: (x: 0, y: 1, z: 0),
+                              perspective: 0.6)
+            .offset(x: artDrag)
+            #endif
             .frame(maxWidth: .infinity)
             #if os(iOS)
             // Sideways on the cover changes track; everything else the sheet
@@ -468,7 +526,8 @@ struct NowPlayingMusicView: View {
     }
 
     private var lyricsStage: some View {
-        ScrollViewReader { proxy in
+        let synced = player.lyrics.contains { $0.start != nil }
+        return ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: lyricSpacing) {
                     if player.lyrics.isEmpty {
@@ -478,28 +537,15 @@ struct NowPlayingMusicView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.top, Spacing.xxl)
                     }
+                    // A long intro gets the waiting dots too, so the page isn't
+                    // just a blurred verse sitting there until the singer comes in.
+                    if synced, let lead = player.lyrics.first(where: { $0.start != nil })?.start,
+                       lead > 4 {
+                        interlude(from: 0, to: lead, isActive: player.currentLyricIndex == nil)
+                            .id(Self.introLineID)
+                    }
                     ForEach(player.lyrics) { line in
-                        let distance = lyricDistance(to: line.id)
-                        let isCurrent = distance == 0
-                        Button {
-                            if let start = line.start, player.duration > 0 {
-                                player.seek(toProgress: start / player.duration)
-                            }
-                        } label: {
-                            Text(line.text.isEmpty ? "♪" : line.text)
-                                .font(.system(size: lyricSize, weight: .bold))
-                                .foregroundStyle(.white.opacity(isCurrent ? 1 : max(0.22, 0.5 - Double(distance) * 0.06)))
-                                // Apple's signature touch: lines fall out of
-                                // focus the further they are from the one being
-                                // sung, so your eye is pulled to the right place.
-                                .blur(radius: isCurrent ? 0 : min(4.5, Double(distance) * 1.1))
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(UltrafinButtonStyle(focusScale: 1.0, lift: false))
-                        .id(line.id)
-                        .animation(.smooth(duration: 0.35), value: player.currentLyricIndex)
+                        lyricLine(line, synced: synced)
                     }
                 }
                 .padding(.vertical, Spacing.xxl)
@@ -511,15 +557,117 @@ struct NowPlayingMusicView: View {
                     .init(color: .black, location: 0.88), .init(color: .clear, location: 1)
                 ], startPoint: .top, endPoint: .bottom)
             )
-            .onChange(of: player.currentLyricIndex) { _, current in
-                guard let current else { return }
-                // Sit the active line a little above centre, the way Apple does,
-                // so you can read ahead rather than only behind.
-                withAnimation(.smooth(duration: 0.5)) {
-                    proxy.scrollTo(current, anchor: UnitPoint(x: 0, y: 0.38))
+            // Reading ahead (or back) is allowed: the moment a finger moves the
+            // lyrics, following stops and the blur lifts so any line can be read.
+            .onScrollPhaseChange { _, phase in
+                guard synced, phase == .interacting else { return }
+                browsingSince = .now
+                if !isBrowsingLyrics {
+                    withAnimation(.smooth(duration: 0.3)) { isBrowsingLyrics = true }
                 }
             }
+            // ...and a few seconds after they let go, the page drifts back to
+            // the line being sung.
+            .task(id: browsingSince) {
+                guard isBrowsingLyrics else { return }
+                try? await Task.sleep(for: .seconds(3.5))
+                guard !Task.isCancelled else { return }
+                withAnimation(.smooth(duration: 0.5)) { isBrowsingLyrics = false }
+                withAnimation(.spring(duration: 0.9, bounce: 0.1)) {
+                    proxy.scrollTo(player.currentLyricIndex ?? Self.introLineID, anchor: lyricAnchor)
+                }
+            }
+            .onChange(of: player.currentLyricIndex) { _, current in
+                guard let current, !isBrowsingLyrics else { return }
+                withAnimation(.spring(duration: 0.8, bounce: 0.12)) {
+                    proxy.scrollTo(current, anchor: lyricAnchor)
+                }
+            }
+            .onAppear {
+                // Open on the line being sung, not the top of the song.
+                guard let current = player.currentLyricIndex else { return }
+                proxy.scrollTo(current, anchor: lyricAnchor)
+            }
         }
+    }
+
+    /// Scroll id for the intro's waiting dots (lyric ids start at zero).
+    private static let introLineID = -1
+
+    /// The active line sits a little above centre, the way Apple does, so you
+    /// can read ahead rather than only behind.
+    private var lyricAnchor: UnitPoint { UnitPoint(x: 0, y: 0.36) }
+
+    @ViewBuilder
+    private func lyricLine(_ line: LyricLine, synced: Bool) -> some View {
+        let distance = lyricDistance(to: line.id)
+        let isCurrent = synced && distance == 0
+        // Plain (unsynced) lyrics have no "current" line to focus on, so they
+        // read as a page — every line clear, none dimmed into a blur.
+        let clear = !synced || isBrowsingLyrics
+        let isGap = line.text.trimmingCharacters(in: .whitespaces).isEmpty
+        Button {
+            guard let start = line.start, player.duration > 0 else { return }
+            Haptics.play(.selection)
+            player.seek(toProgress: start / player.duration)
+            browsingSince = nil
+            isBrowsingLyrics = false
+        } label: {
+            if isGap, synced, let start = line.start {
+                interlude(from: start, to: nextLyricStart(after: line) ?? start + 8,
+                          isActive: isCurrent)
+            } else {
+                Text(isGap ? "♪" : line.text)
+                    .font(.system(size: lyricSize, weight: .bold))
+                    .foregroundStyle(.white.opacity(lyricOpacity(isCurrent: isCurrent,
+                                                                 distance: distance,
+                                                                 synced: synced)))
+                    // Apple's signature touch: lines fall out of focus the
+                    // further they are from the one being sung, so your eye is
+                    // pulled to the right place.
+                    .blur(radius: isCurrent || clear ? 0 : min(4, Double(distance) * 1.0))
+                    // The sung line stands a touch larger than its neighbours.
+                    .scaleEffect(isCurrent || !synced ? 1 : 0.955, anchor: .leading)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1.0, lift: false))
+        .id(line.id)
+        // Lines below the new one follow a beat behind each other, so the
+        // change ripples down the page instead of snapping all at once.
+        .animation(.spring(duration: 0.6, bounce: 0.18).delay(lyricStagger(for: line.id)),
+                   value: player.currentLyricIndex)
+    }
+
+    private func lyricOpacity(isCurrent: Bool, distance: Int, synced: Bool) -> Double {
+        if !synced { return 0.88 }
+        if isCurrent { return 1 }
+        if isBrowsingLyrics { return 0.62 }
+        return max(0.24, 0.52 - Double(distance) * 0.06)
+    }
+
+    private func lyricStagger(for id: Int) -> Double {
+        guard !reduceMotion, let current = player.currentLyricIndex else { return 0 }
+        return Double(min(6, max(0, id - current))) * 0.035
+    }
+
+    private func nextLyricStart(after line: LyricLine) -> Double? {
+        player.lyrics.first(where: { $0.id > line.id && $0.start != nil })?.start
+    }
+
+    /// The waiting dots across an instrumental gap, filling in step with the
+    /// music. Only the active one runs a clock.
+    private func interlude(from start: Double, to end: Double, isActive: Bool) -> some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isActive || !player.isPlaying)) { context in
+            let now = player.estimatedTime(at: context.date)
+            let progress = end > start ? (now - start) / (end - start) : 0
+            InterludeDots(progress: isActive ? progress : 0, isActive: isActive,
+                          size: lyricSize * 0.4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, lyricSize * 0.3)
     }
 
     /// How many lines this one sits from the line currently being sung — drives
@@ -551,6 +699,65 @@ struct NowPlayingMusicView: View {
             }
         }
         #else
+        VStack(spacing: Spacing.sm) {
+            queueModes
+            queueList
+        }
+        #endif
+    }
+
+    #if os(iOS)
+    /// Shuffle and Repeat as two wide toggles above the queue — where Apple
+    /// Music puts them, right beside the order they change, so you can watch
+    /// the list reshuffle under your thumb.
+    private var queueModes: some View {
+        HStack(spacing: Spacing.sm) {
+            modeToggle("Shuffle", icon: "shuffle", isOn: player.shuffleOn) {
+                player.toggleShuffle()
+            }
+            modeToggle("Repeat", icon: player.repeatMode.icon, isOn: player.repeatMode != .off) {
+                player.cycleRepeat()
+            }
+            .accessibilityValue(repeatSpokenValue)
+        }
+    }
+
+    private var repeatSpokenValue: String {
+        switch player.repeatMode {
+        case .off: "Off"
+        case .all: "All"
+        case .one: "One song"
+        }
+    }
+
+    private func modeToggle(_ title: String, icon: String, isOn: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.selection)
+            withAnimation(.spring(duration: 0.45, bounce: 0.18)) { action() }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .contentTransition(.symbolEffect(.replace))
+                // On, the glyph takes the record's own colour against the lit
+                // pill — the same trick Apple uses to keep the toggles part of
+                // the player rather than generic chrome.
+                .foregroundStyle(isOn ? (artColor?.shade(brightness: 0.55, saturation: 1.1) ?? .black)
+                                      : Color.white.opacity(0.85))
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.white.opacity(isOn ? 0.9 : 0.12))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(UltrafinButtonStyle(focusScale: 1, pressScale: 0.95, lift: false))
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "On" : "Off")
+    }
+
+    private var queueList: some View {
         List {
             if let current = player.currentEntry {
                 Section {
@@ -607,8 +814,8 @@ struct NowPlayingMusicView: View {
         // Always-on edit mode so the drag handles are simply there, the way
         // Spotify's queue works — no "Edit" button to hunt for first.
         .environment(\.editMode, .constant(.active))
-        #endif
     }
+    #endif
 
     #if os(iOS)
     /// "Next From: American Teen" — or a plain heading when the session didn't
@@ -654,11 +861,12 @@ struct NowPlayingMusicView: View {
         HStack(alignment: .center, spacing: Spacing.md) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(player.currentTrack?.name ?? "—")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    // A title too long for the row glides sideways to show the
+                    // rest, rather than being cut off mid-word.
+                    MarqueeText(text: player.currentTrack?.name ?? "—",
+                                font: .system(size: 20, weight: .semibold))
+                        .id(player.currentTrack?.id)
+                        .transition(.opacity)
                     if player.currentTrack?.isExplicit == true {
                         ExplicitBadge(size: 13)
                             .foregroundStyle(.white.opacity(0.7))
@@ -688,9 +896,13 @@ struct NowPlayingMusicView: View {
     /// thumbnail, the song beside it, heart and "…" still to hand.
     private var compactHeader: some View {
         HStack(spacing: Spacing.md) {
-            RemoteImage(url: player.currentTrack.flatMap { player.artworkURL(for: $0, maxWidth: 200) })
-                .frame(width: 52, height: 52)
+            // Same URL as the big cover, so it's the cached picture that flies
+            // up here — no reload mid-flight.
+            RemoteImage(url: player.currentTrack.flatMap { player.artworkURL(for: $0) },
+                        crossfades: true)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .matchedGeometryEffect(id: "cover", in: coverSpace)
+                .frame(width: 52, height: 52)
                 .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -723,13 +935,11 @@ struct NowPlayingMusicView: View {
         Button {
             open(track?.artistDestination)
         } label: {
-            Text(track?.artistText ?? " ")
-                // Same size as the title; only the weight and the dimming
-                // separate them, which is how Apple stacks the two lines.
-                .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(.white.opacity(0.68))
-                .lineLimit(1)
-                .truncationMode(.tail)
+            // Same size as the title; only the weight and the dimming separate
+            // them, which is how Apple stacks the two lines.
+            MarqueeText(text: track?.artistText ?? " ",
+                        font: .system(size: 20, weight: .regular),
+                        color: .white.opacity(0.68))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
@@ -784,9 +994,13 @@ struct NowPlayingMusicView: View {
             Image(systemName: icon)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(tint)
+                .contentTransition(.symbolEffect(.replace))
+                // The heart gives a little jump when it changes — the tap
+                // landed, whichever way it went.
+                .symbolEffect(.bounce, value: icon)
+                .animation(.snappy(duration: 0.25), value: icon)
                 .frame(width: 34, height: 34)
                 .background(.white.opacity(0.16), in: Circle())
-                .contentTransition(.symbolEffect(.replace))
                 .minimumHitTarget()
         }
         .buttonStyle(.plain)
@@ -816,24 +1030,43 @@ struct NowPlayingMusicView: View {
         Task { await source.setFavorite(itemID: track.id, isFavorite: next) }
     }
 
-    /// The system volume slider, flanked by speaker glyphs. The slider is a
-    /// UIKit view with no intrinsic width, so it's given the row's remaining
-    /// space explicitly rather than being left to claim whatever it likes.
+    /// Device volume on the same elastic bar as the scrubber, flanked by
+    /// speaker glyphs: the right one fills its waves as the level rises, and
+    /// each gives a small jump when you pin the volume against its end.
     private var volumeRow: some View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: "speaker.fill")
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(isAdjustingVolume ? 0.9 : 0.5))
+                .symbolEffect(.bounce.down, value: volume.level <= 0.001)
                 .fixedSize()
-            SystemVolumeSlider()
+            ElasticSlider(value: volume.level, isEditing: $isAdjustingVolume,
+                          restingHeight: 6, activeHeight: 11,
+                          onChange: { volume.set($0) })
                 .frame(maxWidth: .infinity)
                 .frame(height: 28)
-            Image(systemName: "speaker.wave.3.fill")
+                .accessibilityElement()
+                .accessibilityLabel("Volume")
+                .accessibilityValue("\(Int((volume.level * 100).rounded())) percent")
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment: volume.set(min(1, volume.level + 0.0625))
+                    case .decrement: volume.set(max(0, volume.level - 0.0625))
+                    @unknown default: break
+                    }
+                }
+            Image(systemName: "speaker.wave.3.fill", variableValue: volume.level)
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(isAdjustingVolume ? 0.9 : 0.5))
+                .symbolEffect(.bounce.up, value: volume.level >= 0.999)
                 .fixedSize()
         }
+        .scaleEffect(x: isAdjustingVolume ? 1.02 : 1, y: 1)
+        .animation(.spring(duration: 0.35, bounce: 0.3), value: isAdjustingVolume)
         .frame(maxWidth: .infinity)
+        // The hidden system control this row drives — and the reason the
+        // volume buttons move this bar instead of covering the art with a HUD.
+        .background { SystemVolumeBridge().frame(width: 1, height: 1).allowsHitTesting(false) }
     }
     #endif
 
@@ -876,45 +1109,22 @@ struct NowPlayingMusicView: View {
 
     private var scrubber: some View {
         VStack(spacing: 6) {
-            GeometryReader { geo in
-                let width = geo.size.width
-                let progress = (isScrubbing ? scrubValue : player.progress).clamped01Music()
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.2))
-                    Capsule().fill(.white.opacity(0.9)).frame(width: width * progress)
+            scrubBar
+                .frame(height: 24)
+                // A hand-drawn bar is invisible to VoiceOver unless it says what
+                // it is. As one adjustable element it reads its position aloud
+                // and moves on a swipe, which is the only way to scrub without
+                // sight.
+                .accessibilityElement()
+                .accessibilityLabel("Playback position")
+                .accessibilityValue(scrubberSpokenValue)
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment: nudgePlayhead(15)
+                    case .decrement: nudgePlayhead(-15)
+                    @unknown default: break
+                    }
                 }
-                .frame(height: isScrubbing ? 10 : 6)
-                .frame(maxHeight: .infinity, alignment: .center)
-                .contentShape(Rectangle())
-                #if os(iOS)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            isScrubbing = true
-                            scrubValue = (value.location.x / width).clamped01Music()
-                        }
-                        .onEnded { value in
-                            player.seek(toProgress: (value.location.x / width).clamped01Music())
-                            isScrubbing = false
-                        }
-                )
-                #endif
-            }
-            .frame(height: 24)
-            .animation(.smooth(duration: 0.18), value: isScrubbing)
-            // A hand-drawn bar is invisible to VoiceOver unless it says what it
-            // is. As one adjustable element it reads its position aloud and
-            // moves on a swipe, which is the only way to scrub without sight.
-            .accessibilityElement()
-            .accessibilityLabel("Playback position")
-            .accessibilityValue(scrubberSpokenValue)
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: nudgePlayhead(15)
-                case .decrement: nudgePlayhead(-15)
-                @unknown default: break
-                }
-            }
 
             HStack {
                 Text(timeText(isScrubbing ? scrubValue * player.duration : player.currentTime))
@@ -929,8 +1139,31 @@ struct NowPlayingMusicView: View {
             // Monospaced digits, NOT the monospaced typeface — the latter is a
             // visibly different font and only the numbers need to stop jittering.
             .font(.system(size: 13, weight: .medium).monospacedDigit())
-            .foregroundStyle(.white.opacity(0.7))
+            // The times brighten and step aside as the bar thickens under a
+            // finger — they're what you're reading while you scrub.
+            .foregroundStyle(.white.opacity(isScrubbing ? 0.95 : 0.62))
+            .offset(y: isScrubbing ? 3 : 0)
+            .animation(.spring(duration: 0.35, bounce: 0.3), value: isScrubbing)
         }
+    }
+
+    @ViewBuilder
+    private var scrubBar: some View {
+        #if os(iOS)
+        ElasticSlider(value: player.progress, isEditing: $isScrubbing,
+                      onChange: { scrubValue = $0 },
+                      onCommit: { player.seek(toProgress: $0) })
+        #else
+        GeometryReader { geo in
+            let progress = player.progress.clamped01Music()
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.2))
+                Capsule().fill(.white.opacity(0.9)).frame(width: geo.size.width * progress)
+            }
+            .frame(height: 6)
+            .frame(maxHeight: .infinity, alignment: .center)
+        }
+        #endif
     }
 
     /// "1 minute 21 seconds of 2 minutes 53 seconds" — spoken, not "1:21".
@@ -951,9 +1184,15 @@ struct NowPlayingMusicView: View {
 
     private var transport: some View {
         HStack(spacing: transportSpacing) {
-            transportButton("backward.fill", size: sideButtonSize) { player.previous() }
+            transportButton("backward.fill", size: sideButtonSize, nudge: -1, taps: previousTaps) {
+                previousTaps += 1
+                player.previous()
+            }
             playPauseButton
-            transportButton("forward.fill", size: sideButtonSize) { player.next() }
+            transportButton("forward.fill", size: sideButtonSize, nudge: 1, taps: nextTaps) {
+                nextTaps += 1
+                player.next()
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -973,8 +1212,13 @@ struct NowPlayingMusicView: View {
         #endif
     }
 
-    private func transportButton(_ icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
-        Button {
+    /// One transport control. Play and pause morph into each other rather than
+    /// swapping; the skip arrows lurch the way they point on each press, so a
+    /// skip feels like a push rather than a switch being flipped.
+    @ViewBuilder
+    private func transportButton(_ icon: String, size: CGFloat, nudge: CGFloat = 0, taps: Int = 0,
+                                 action: @escaping () -> Void) -> some View {
+        let button = Button {
             Haptics.play(.light)
             action()
         } label: {
@@ -984,10 +1228,24 @@ struct NowPlayingMusicView: View {
                 // why the transport read as clunky next to Apple Music's.
                 .font(.system(size: size, weight: .regular))
                 .foregroundStyle(.white)
+                .contentTransition(.symbolEffect(.replace))
+                .animation(.snappy(duration: 0.28), value: icon)
+                .keyframeAnimator(initialValue: CGFloat(0), trigger: taps) { content, x in
+                    content.offset(x: x)
+                } keyframes: { _ in
+                    KeyframeTrack {
+                        SpringKeyframe(nudge * size * 0.3, duration: 0.1)
+                        SpringKeyframe(0, duration: 0.45, spring: .bouncy)
+                    }
+                }
                 .frame(width: size * 1.7, height: size * 1.7)
                 .contentShape(Circle())
         }
-        .buttonStyle(UltrafinButtonStyle(focusScale: 1.2, lift: false))
+        #if os(iOS)
+        button.buttonStyle(TransportButtonStyle())
+        #else
+        button.buttonStyle(UltrafinButtonStyle(focusScale: 1.2, lift: false))
+        #endif
     }
 
     /// Lyrics · AirPlay · Queue, evenly spread. Shuffle and repeat live in the
@@ -1148,9 +1406,7 @@ struct QueueRow: View {
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
                             .fill(.black.opacity(0.5))
                             .frame(width: 46, height: 46)
-                        Image(systemName: "waveform")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
+                        NowPlayingBars(isPlaying: player.isPlaying, color: .white, height: 16)
                     }
                 }
 

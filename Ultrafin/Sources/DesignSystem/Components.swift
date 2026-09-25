@@ -276,6 +276,11 @@ struct RemoteImage: View {
     /// the title sits right beside it — so the default is to stay silent rather
     /// than announce "image" over and over down a list.
     var voiceOverLabel: String? = nil
+    /// Hold the current picture while the next URL loads, then dissolve into
+    /// it — for a single slot that changes content in place (the player's
+    /// cover), where dropping back to a placeholder between songs reads as a
+    /// flicker. Off by default: a list cell being reused wants the clean reset.
+    var crossfades: Bool = false
 
     @State private var image: UIImage?
     @State private var didFail = false
@@ -283,9 +288,19 @@ struct RemoteImage: View {
     var body: some View {
         Group {
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
+                if crossfades {
+                    ZStack {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: contentMode)
+                            .id(ObjectIdentifier(image))
+                            .transition(.opacity)
+                    }
+                } else {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: contentMode)
+                }
             } else if didFail {
                 placeholder.overlay(Image(systemName: "photo").foregroundStyle(UltrafinColors.tertiaryText))
             } else {
@@ -301,15 +316,19 @@ struct RemoteImage: View {
         guard let url else { didFail = true; return }
         // Instant paint when already decoded — no placeholder flash on scroll-back.
         if let hit = ImageLoader.shared.cached(url) {
-            image = hit
+            if crossfades && image != nil {
+                withAnimation(.easeInOut(duration: 0.4)) { image = hit }
+            } else {
+                image = hit
+            }
             return
         }
-        image = nil
+        if !crossfades { image = nil }
         didFail = false
         let loaded = await ImageLoader.shared.image(for: url)
         guard !Task.isCancelled else { return }
         if let loaded {
-            withAnimation(.easeOut(duration: 0.25)) { image = loaded }
+            withAnimation(.easeOut(duration: crossfades ? 0.4 : 0.25)) { image = loaded }
         } else {
             didFail = true
         }
